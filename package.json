@@ -1,0 +1,14 @@
+{
+  "name": "execution-ai-monorepo",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "python3 run_backend.py",
+    "build:frontend": "npm --prefix frontend run build -- --webpack",
+    "lint:frontend": "npm --prefix frontend run lint",
+    "qa:ui-smoke": "npm --prefix frontend run qa:ui-smoke"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}

@@ -1,0 +1,490 @@
+"""
+Gemini integration via Google AI Studio API key.
+
+Responsibilities:
+- Build structured prompts with temporal context + planning payload
+- Request JSON-structured responses
+- Validate output against Pydantic schemas
+- Retry on malformed output (up to 2 retries)
+- Log generation metadata
+- Keep model swappable
+
+The AI layer knows nothing about the database.
+It receives structured input and returns structured output.
+"""
+import json
+import time
+from typing import TypeVar, Type
+from pydantic import BaseModel, ValidationError
+
+from google import genai
+from google.genai import types as genai_types
+
+from app.core.config import get_settings
+from app.core.logging import logger
+from app.schemas.reports import (
+    AIMonthlyPlanOutput,
+    AIWeeklyPlanOutput,
+    AIDailyPlanOutput,
+    DailyNarrative,
+    WeeklyNarrative,
+    MonthlyNarrative,
+    YearlyNarrative,
+)
+
+T = TypeVar("T", bound=BaseModel)
+
+_client: genai.Client | None = None
+
+
+def _normalize_model_id(name: str) -> str:
+    """Strip any accidental `models/` prefix so AI Studio accepts the id."""
+    n = (name or "").strip()
+    if n.startswith("models/"):
+        return n[7:]
+    return n or "gemini-2.0-flash"
+
+
+def _get_client() -> genai.Client:
+    """
+    Returns a Google AI Studio-backed google-genai client.
+    """
+    global _client
+    if _client is not None:
+        return _client
+
+    settings = get_settings()
+    if not settings.google_ai_api_key:
+        raise RuntimeError(
+            "GOOGLE_AI_API_KEY is required for AI planning/report features. "
+            "Set it in backend/.env or your deployed backend environment."
+        )
+
+    http_options = genai_types.HttpOptions(timeout=settings.gemini_request_timeout_ms)
+
+    _client = genai.Client(
+        api_key=settings.google_ai_api_key,
+        http_options=http_options,
+    )
+    logger.info("gemini_client_mode", mode="google_ai_studio")
+
+    return _client
+
+
+def _call_gemini(prompt: str, max_retries: int = 1) -> str:
+    """
+    Call Gemini via the google-genai SDK with JSON output mode.
+    Retries on empty/failed responses. Returns raw text content.
+    """
+    settings = get_settings()
+    client = _get_client()
+    model_id = _normalize_model_id(settings.gemini_model)
+    config = genai_types.GenerateContentConfig(
+        temperature=0.4,
+        top_p=0.95,
+        max_output_tokens=min(8192, max(512, settings.gemini_max_output_tokens)),
+        response_mime_type="application/json",
+    )
+
+    last_error: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            start = time.monotonic()
+            response = client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+                config=config,
+            )
+            latency_ms = int((time.monotonic() - start) * 1000)
+            text = response.text.strip() if response.text else ""
+            if not text:
+                raise ValueError("Empty response from Gemini")
+            logger.info(
+                "gemini_response",
+                latency_ms=latency_ms,
+                attempt=attempt,
+                model=model_id,
+            )
+            return text
+        except Exception as exc:
+            last_error = exc
+            logger.warning("gemini_retry", attempt=attempt, error=str(exc))
+            if attempt < max_retries:
+                time.sleep(0.35 * (attempt + 1))
+
+    raise RuntimeError(f"Gemini call failed after {max_retries + 1} attempts: {last_error}")
+
+
+def _parse_and_validate(raw: str, schema: Type[T]) -> T:
+    """Parse JSON string and validate against a Pydantic schema."""
+    try:
+        data = json.loads(raw)
+        return schema.model_validate(data)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise ValueError(f"AI output failed validation: {exc}\nRaw: {raw[:400]}") from exc
+
+
+# ─── System role ──────────────────────────────────────────────────────────────
+
+_SYSTEM_ROLE = """You are an elite execution strategist AI embedded in a productivity platform called Execution AI.
+Your job is to produce structured, realistic, actionable planning output.
+You must:
+- Respect the workload budget given to you (max goals, max tasks)
+- Align outputs with the parent goals provided
+- Account for the temporal context (days remaining, late in month/week, etc.)
+- Return ONLY valid JSON matching the exact schema requested
+- Be concise and specific — not generic or vague
+- Never invent goals that contradict the user's stated intentions"""
+
+
+# ─── Monthly Plan Generation ──────────────────────────────────────────────────
+
+def generate_monthly_plan(planning_payload: dict) -> AIMonthlyPlanOutput:
+    """
+    Generate a realistic monthly plan from yearly goals and temporal context.
+    Returns validated AIMonthlyPlanOutput.
+    """
+    ctx = planning_payload["temporal_context"]
+    budget = planning_payload["workload_budget"]
+    yearly_goals = planning_payload["yearly_goals"]
+
+    goals_text = "\n".join(
+        f"- [{g['category']}] {g['title']} (progress: {g.get('progress_pct', 0)}%)"
+        for g in yearly_goals
+    )
+
+    prompt = f"""{_SYSTEM_ROLE}
+
+## Task: Generate Monthly Plan
+
+### Temporal Context
+- Month: {ctx['month']} {ctx['year']}
+- Days remaining in month: {ctx['days_remaining']} of {ctx['days_in_month']}
+- Month progress: {ctx['month_progress_pct']}%
+- Late in month: {ctx['is_late_in_month']}
+
+### Workload Budget
+- Max main goals: {budget['max_main_goals']}
+- Max secondary goals: {budget['max_secondary_goals']}
+- Workload label: {budget['workload_label']}
+- Rationale: {budget['rationale']}
+
+### Yearly Goals (parent context)
+{goals_text}
+
+### Instructions
+Generate ONLY main_goals and secondary_goals for this month. Do NOT suggest foundational habits — users define those separately in the app.
+Goals must be achievable within the remaining {ctx['days_remaining']} days.
+Each goal must set yearly_goal_ref to the exact title of a yearly goal above when possible.
+For EVERY goal, set target_date to a realistic deadline as YYYY-MM-DD within {ctx['year']}-{ctx['month']:02d} (use dates on or after today if this is the current month).
+
+### Required JSON Output Schema
+{{
+  "reasoning": "<brief explanation of your planning decisions>",
+  "main_goals": [
+    {{
+      "title": "<specific, achievable goal>",
+      "description": "<1-2 sentence description>",
+      "priority": "high",
+      "is_main": true,
+      "yearly_goal_ref": "<title of the yearly goal this serves>",
+      "estimated_effort": "<e.g. 10-15 hours total>",
+      "target_date": "<YYYY-MM-DD within this month>"
+    }}
+  ],
+  "secondary_goals": [
+    {{
+      "title": "<supporting goal>",
+      "description": "<1-2 sentence description>",
+      "priority": "medium",
+      "is_main": false,
+      "yearly_goal_ref": "<yearly goal ref or null>",
+      "estimated_effort": "<estimate>",
+      "target_date": "<YYYY-MM-DD within this month>"
+    }}
+  ]
+}}
+
+Return ONLY valid JSON. No markdown. No extra text."""
+
+    raw = _call_gemini(prompt)
+    parsed = _parse_and_validate(raw, AIMonthlyPlanOutput)
+    return parsed.model_copy(update={"foundational_habits": []})
+
+
+# ─── Weekly Plan Generation ───────────────────────────────────────────────────
+
+def generate_weekly_plan(planning_payload: dict) -> AIWeeklyPlanOutput:
+    ctx = planning_payload["temporal_context"]
+    budget = planning_payload["workload_budget"]
+    monthly_goals = planning_payload["monthly_goals"]
+
+    goals_text = "\n".join(
+        f"- [{'MAIN' if g['is_main'] else 'secondary'}] {g['title']} (progress: {g.get('progress_pct', 0)}%)"
+        for g in monthly_goals
+    )
+
+    prompt = f"""{_SYSTEM_ROLE}
+
+## Task: Generate Weekly Plan
+
+### Temporal Context
+- Week: {ctx['week_number']} ({ctx['week_start']} to {ctx['week_end']})
+- Days remaining in week: {ctx['days_remaining']}
+- Week progress: {ctx['week_progress_pct']}%
+- Late in week: {ctx['is_late_in_week']}
+- Month: {ctx['month']} {ctx['year']}
+
+### Workload Budget
+- Max main goals: {budget['max_main_goals']}
+- Max secondary goals: {budget['max_secondary_goals']}
+- Workload label: {budget['workload_label']}
+- Rationale: {budget['rationale']}
+
+### Monthly Goals (parent context)
+{goals_text}
+
+### Instructions
+Generate ONLY main_goals and secondary_goals for this week. Do NOT suggest foundational habits — users define those in the app.
+Each goal must be completable within {ctx['days_remaining']} days.
+Weekly goals must advance the monthly goals above. Set yearly_goal_ref to the monthly goal title when applicable.
+
+### Required JSON Output Schema
+{{
+  "reasoning": "<brief planning rationale>",
+  "main_goals": [
+    {{
+      "title": "<specific weekly deliverable>",
+      "description": "<1-2 sentences>",
+      "priority": "high",
+      "is_main": true,
+      "yearly_goal_ref": "<monthly goal title this serves>",
+      "estimated_effort": "<hours estimate>"
+    }}
+  ],
+  "secondary_goals": [
+    {{
+      "title": "<supporting task>",
+      "description": "<1-2 sentences>",
+      "priority": "medium",
+      "is_main": false,
+      "yearly_goal_ref": null,
+      "estimated_effort": "<estimate>"
+    }}
+  ]
+}}
+
+Return ONLY valid JSON."""
+
+    raw = _call_gemini(prompt)
+    parsed = _parse_and_validate(raw, AIWeeklyPlanOutput)
+    return parsed.model_copy(update={"foundational_habits": []})
+
+
+# ─── Daily Plan Generation ────────────────────────────────────────────────────
+
+def generate_daily_plan(planning_payload: dict) -> AIDailyPlanOutput:
+    ctx = planning_payload["temporal_context"]
+    budget = planning_payload["workload_budget"]
+    weekly_goals = planning_payload["weekly_goals"]
+    habits = planning_payload.get("active_habits", [])
+    remaining = planning_payload.get("weekly_tasks_remaining", 0)
+
+    goals_text = "\n".join(
+        f"- [{'MAIN' if g['is_main'] else 'secondary'}] {g['title']} (progress: {g.get('progress_pct', 0)}%)"
+        for g in weekly_goals
+    )
+    habits_text = ", ".join(habits) if habits else "none set"
+
+    prompt = f"""{_SYSTEM_ROLE}
+
+## Task: Generate Daily Plan
+
+### Temporal Context
+- Today: {ctx['today']} ({ctx['day_of_week']})
+- Days remaining in week: {ctx['days_remaining_in_week']}
+- Days remaining in month: {ctx['days_remaining_in_month']}
+- Late in week: {ctx['is_late_in_week']}
+
+### Workload Budget
+- Max priorities: {budget['max_daily_priorities']}
+- Max secondary tasks: {budget['max_secondary_tasks']}
+- Workload label: {budget['workload_label']}
+- Rationale: {budget['rationale']}
+
+### Weekly Goals (parent context)
+{goals_text}
+Weekly tasks remaining: {remaining}
+
+### Active Habits to reinforce today
+{habits_text}
+
+### Instructions
+Generate a daily plan for {ctx['today']}. Priorities must be concretely achievable in one day.
+Each priority should advance a specific weekly goal. Secondary tasks are quick wins or maintenance.
+Habits are the user's existing foundational habits — include them as a reminder list.
+
+### Required JSON Output Schema
+{{
+  "reasoning": "<planning rationale for today>",
+  "top_priorities": [
+    {{
+      "title": "<concrete task for today>",
+      "description": "<specific action>",
+      "priority": "high",
+      "is_main": true,
+      "yearly_goal_ref": "<weekly goal title>",
+      "estimated_effort": "<minutes, e.g. 90 min>"
+    }}
+  ],
+  "secondary_tasks": [
+    {{
+      "title": "<quick win or maintenance task>",
+      "description": null,
+      "priority": "medium",
+      "is_main": false,
+      "yearly_goal_ref": null,
+      "estimated_effort": "<minutes>"
+    }}
+  ],
+  "foundational_habits": ["<habit name>"]
+}}
+
+Return ONLY valid JSON."""
+
+    raw = _call_gemini(prompt)
+    return _parse_and_validate(raw, AIDailyPlanOutput)
+
+
+# ─── Daily Report Generation ──────────────────────────────────────────────────
+
+def generate_daily_report(metrics: dict, date_str: str) -> DailyNarrative:
+    prompt = f"""{_SYSTEM_ROLE}
+
+## Task: Generate Daily Execution Report
+
+### Date: {date_str}
+
+### Metrics (computed by code — do not recalculate)
+- Priorities completed: {metrics['priorities_completed']} / {metrics['priorities_total']}
+- Secondary tasks completed: {metrics['secondary_tasks_completed']} / {metrics['secondary_tasks_total']}
+- Habits completed: {metrics['habits_completed']} / {metrics['habits_total']}
+- Overall completion rate: {metrics['completion_rate']}%
+- Estimated minutes planned: {metrics['estimated_minutes_planned']}
+- Estimated minutes completed: {metrics['estimated_minutes_completed']}
+
+### Instructions
+Write a brief, honest, insight-driven daily reflection. Be direct. Avoid corporate filler.
+Identify the top win and the key miss if applicable. Give one concrete focus for tomorrow.
+
+### Required JSON Output Schema
+{{
+  "summary": "<2-3 sentence day summary>",
+  "top_win": "<best achievement of the day or null>",
+  "key_miss": "<biggest miss or null>",
+  "reflection": "<honest reflection on patterns or blockers>",
+  "tomorrow_focus": "<single most important focus for tomorrow>"
+}}
+
+Return ONLY valid JSON."""
+
+    raw = _call_gemini(prompt)
+    return _parse_and_validate(raw, DailyNarrative)
+
+
+# ─── Weekly Report Generation ─────────────────────────────────────────────────
+
+def generate_weekly_report(metrics: dict, week_label: str) -> WeeklyNarrative:
+    prompt = f"""{_SYSTEM_ROLE}
+
+## Task: Generate Weekly Execution Report
+
+### Week: {week_label}
+
+### Metrics (computed by code)
+- Goals completed: {metrics['goals_completed']} / {metrics['goals_total']}
+- Main goals completed: {metrics['main_goals_completed']} / {metrics['main_goals_total']}
+- Tasks completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
+- Avg daily completion: {metrics['avg_daily_completion']}%
+- Habit consistency: {metrics['habit_consistency']}%
+- Days with data: {metrics['days_with_data']}
+
+### Required JSON Output Schema
+{{
+  "summary": "<2-3 sentence week summary>",
+  "top_win": "<best achievement of the week or null>",
+  "key_pattern": "<observed pattern — positive or negative>",
+  "reflection": "<honest weekly reflection>",
+  "next_week_priority": "<single most important focus for next week>"
+}}
+
+Return ONLY valid JSON."""
+
+    raw = _call_gemini(prompt)
+    return _parse_and_validate(raw, WeeklyNarrative)
+
+
+# ─── Monthly Report Generation ────────────────────────────────────────────────
+
+def generate_monthly_report(metrics: dict, month_label: str) -> MonthlyNarrative:
+    prompt = f"""{_SYSTEM_ROLE}
+
+## Task: Generate Monthly Execution Report
+
+### Month: {month_label}
+
+### Metrics (computed by code)
+- Goals completed: {metrics['goals_completed']} / {metrics['goals_total']}
+- Main goals completed: {metrics['main_goals_completed']} / {metrics['main_goals_total']}
+- Tasks completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
+- Avg weekly completion: {metrics['avg_weekly_completion']}%
+- Best week: Week {metrics.get('best_week', 'N/A')}
+- Weeks tracked: {metrics['weeks_count']}
+
+### Required JSON Output Schema
+{{
+  "summary": "<2-3 sentence month summary>",
+  "top_pillar": "<strongest category/area this month or null>",
+  "biggest_win": "<most impactful achievement>",
+  "key_lesson": "<most important lesson learned>",
+  "reflection": "<honest monthly reflection>",
+  "next_month_focus": "<strategic priority for next month>"
+}}
+
+Return ONLY valid JSON."""
+
+    raw = _call_gemini(prompt)
+    return _parse_and_validate(raw, MonthlyNarrative)
+
+
+# ─── Yearly Report Generation ─────────────────────────────────────────────────
+
+def generate_yearly_report(metrics: dict, year: int) -> YearlyNarrative:
+    prompt = f"""{_SYSTEM_ROLE}
+
+## Task: Generate Yearly Execution Report
+
+### Year: {year}
+
+### Metrics (computed by code)
+- Months with data: {metrics['months_with_data']}
+- Tasks completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
+- Avg monthly completion: {metrics['avg_monthly_completion']}%
+- Best month: {metrics.get('best_month', 'N/A')}
+- Execution streak: {metrics['execution_streak']} days
+- Year-over-year change: {metrics.get('percent_change', 'N/A')}%
+
+### Required JSON Output Schema
+{{
+  "summary": "<2-3 sentence year summary>",
+  "top_pillar": "<strongest area this year>",
+  "biggest_win": "<most impactful achievement of the year>",
+  "key_pattern": "<dominant behavioral or execution pattern>",
+  "reflection": "<honest yearly reflection>",
+  "next_year_focus": "<strategic direction for next year>"
+}}
+
+Return ONLY valid JSON."""
+
+    raw = _call_gemini(prompt)
+    return _parse_and_validate(raw, YearlyNarrative)

@@ -1,0 +1,10 @@
+{
+  "name": "Execution AI",
+  "short_name": "Execution AI",
+  "description": "AI-assisted execution and accountability platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#006c4a",
+  "orientation": "portrait-primary"
+}

@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Emerald Zenith color palette ── */
+  --color-primary: #006c4a;
+  --color-primary-dim: #005f41;
+  --color-primary-container: #85f8c4;
+  --color-primary-fixed: #85f8c4;
+  --color-primary-fixed-dim: #76eab6;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #005e40;
+  --color-on-primary-fixed: #004931;
+
+  --color-secondary: #5d605d;
+  --color-secondary-container: #e1e3df;
+  --color-on-secondary: #f8f9f5;
+  --color-on-secondary-container: #4f5250;
+
+  --color-tertiary: #596342;
+  --color-tertiary-container: #edf9ce;
+  --color-on-tertiary: #f3fed3;
+  --color-on-tertiary-container: #56603f;
+
+  --color-surface: #f8f9fa;
+  --color-surface-bright: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f1f4f6;
+  --color-surface-container: #eaeff1;
+  --color-surface-container-high: #e2e9ec;
+  --color-surface-container-highest: #dbe4e7;
+  --color-surface-variant: #dbe4e7;
+  --color-surface-dim: #d1dce0;
+
+  --color-on-surface: #2b3437;
+  --color-on-surface-variant: #586064;
+  --color-outline: #737c7f;
+  --color-outline-variant: #abb3b7;
+
+  --color-error: #9f403d;
+  --color-error-container: #fe8983;
+  --color-on-error: #fff7f6;
+  --color-on-error-container: #752121;
+
+  --color-inverse-surface: #0c0f10;
+  --color-inverse-on-surface: #9b9d9e;
+  --color-inverse-primary: #7ff3be;
+
+  /* ── Typography ── */
+  --font-headline: "Manrope", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-label: "Inter", sans-serif;
+
+  /* ── Border radius ── */
+  --radius-sm: 0.375rem;
+  --radius-DEFAULT: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-full: 9999px;
+}
+
+/* ── Base styles ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-headline {
+  font-family: var(--font-headline);
+}
+
+/* ── Material Symbols ── */
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.material-symbols-outlined.filled {
+  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+/* ── Utility classes ── */
+.primary-gradient {
+  background: linear-gradient(135deg, #006c4a 0%, #005f41 100%);
+}
+
+.ghost-border {
+  border: 1px solid rgba(171, 179, 183, 0.15);
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-outline);
+}
+
+/* ── Focus ring ── */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ── Selection ── */
+::selection {
+  background: var(--color-primary-container);
+  color: var(--color-on-primary-container);
+}
+
+/* ── Animation utilities ── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-bottom {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in     { animation: fade-in 0.2s ease-out; }
+.animate-slide-up    { animation: slide-up 0.25s ease-out; }
+.animate-slide-in-bottom { animation: slide-in-bottom 0.3s ease-out; }
+
+/* ── Progress bar base ── */
+.progress-bar {
+  height: 6px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: var(--color-surface-container-highest);
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #006c4a 0%, #005f41 100%);
+  transition: width 0.8s ease-out;
+}

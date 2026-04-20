@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+/.git.frontend.backup/
+
+# Root-level Node tooling
+node_modules/
+
+# Frontend app
+frontend/.next/
+frontend/.env.local
+frontend/node_modules/
+frontend/.vercel/
+frontend/tsconfig.tsbuildinfo
+
+# Backend app
+backend/.env
+backend/venv/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/tmp/
+**/__pycache__/
+*.py[cod]
+
+# Local docs / exports kept outside the production repo
+info/
+info/**/.DS_Store

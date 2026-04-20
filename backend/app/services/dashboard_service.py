@@ -1,0 +1,486 @@
+"""
+Dashboard retrieval service.
+
+This module serves two dashboard-oriented read/write flows:
+
+1. `get_dashboard`
+   The main dashboard payload for the current day.
+2. `get_next_day_review` / `approve_next_day_review`
+   A persisted "next login" review flow that helps the user carry yesterday's
+   unfinished work into today before they continue execution.
+
+All metrics and suggestions are computed in Python — no AI involved here.
+"""
+from datetime import date, timedelta
+from datetime import datetime, timezone
+from uuid import UUID
+
+from supabase import Client
+
+import app.db.sessions as sessions_db
+from app.utils.date_utils import get_temporal_context, week_number_for
+from app.utils.metrics import (
+    compute_weighted_daily_completion,
+    compute_completion_rate,
+    compute_habit_streak,
+)
+import app.db.plans as plans_db
+import app.db.habits as habits_db
+import app.db.yearly_goals as yg_db
+
+
+def get_dashboard(db: Client, session_id: UUID) -> dict:
+    week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
+    ctx = get_temporal_context(week_starts_on=week_starts_on)
+
+    # ── Today's data ─────────────────────────────────────────────────────────
+    today = ctx.today
+    all_priorities = plans_db.list_daily_priorities(db, session_id, today)
+    main_priorities = [p for p in all_priorities if p.get("is_main")]
+    secondary_tasks = [p for p in all_priorities if not p.get("is_main")]
+
+    # ── Weekly goals ──────────────────────────────────────────────────────────
+    weekly_goals = plans_db.list_weekly_goals(
+        db, session_id, ctx.current_year, ctx.current_week_number
+    )
+
+    # ── Monthly context ────────────────────────────────────────────────────────
+    monthly_goals = plans_db.list_monthly_goals(
+        db, session_id, ctx.current_year, ctx.current_month
+    )
+
+    yearly_goals = yg_db.list_yearly_goals(db, session_id, ctx.current_year)
+
+    # ── Habits ────────────────────────────────────────────────────────────────
+    habits = habits_db.list_habits(db, session_id, active_only=True)
+    today_habit_logs = {
+        log["habit_id"]: log
+        for log in habits_db.list_habit_logs_for_session(db, session_id, today, today)
+    }
+
+    habits_completed_today = 0
+    habits_total_today = 0
+    enriched_habits = []
+
+    # Get 30 days of history for streak calculation
+    since = today - timedelta(days=30)
+    habit_history = habits_db.list_habit_logs_for_session(db, session_id, since, today)
+
+    for habit in habits:
+        hid = habit["id"]
+        log = today_habit_logs.get(hid)
+        completed_today = log["completed"] if log else False
+
+        if habit.get("frequency") == "daily":
+            habits_total_today += 1
+            if completed_today:
+                habits_completed_today += 1
+
+        # Compute streak
+        history = [(
+            date.fromisoformat(h["date"]),
+            h["completed"]
+        ) for h in habit_history if h["habit_id"] == hid]
+        streak = compute_habit_streak(
+            history,
+            habit.get("frequency", "daily"),
+            week_starts_on=week_starts_on,
+        )
+
+        enriched_habits.append({
+            **habit,
+            "completed_today": completed_today,
+            "streak": streak,
+        })
+
+    # ── Daily metrics ─────────────────────────────────────────────────────────
+    priorities_total = len(main_priorities)
+    priorities_completed = sum(1 for p in main_priorities if p.get("completed"))
+    secondary_total = len(secondary_tasks)
+    secondary_completed = sum(1 for t in secondary_tasks if t.get("completed"))
+
+    today_completion = compute_weighted_daily_completion(
+        priorities_completed, priorities_total,
+        secondary_completed, secondary_total,
+        habits_completed_today, habits_total_today,
+    )
+
+    # ── Weekly consistency (last 7 days) ─────────────────────────────────────
+    weekly_consistency = _compute_weekly_consistency(db, session_id, ctx.week_start)
+
+    # ── Yesterday's completion ────────────────────────────────────────────────
+    yesterday = today - timedelta(days=1)
+    yesterday_priorities = plans_db.list_daily_priorities(db, session_id, yesterday)
+    yesterday_main = [p for p in yesterday_priorities if p.get("is_main")]
+    yesterday_secondary = [p for p in yesterday_priorities if not p.get("is_main")]
+    yesterday_logs = {
+        log["habit_id"]: log
+        for log in habits_db.list_habit_logs_for_session(db, session_id, yesterday, yesterday)
+    }
+    yesterday_habits_done = sum(1 for hid, log in yesterday_logs.items() if log["completed"])
+    yesterday_habits_total = sum(1 for h in habits if h.get("frequency") == "daily")
+
+    yesterday_completion = compute_weighted_daily_completion(
+        sum(1 for p in yesterday_main if p.get("completed")), len(yesterday_main),
+        sum(1 for t in yesterday_secondary if t.get("completed")), len(yesterday_secondary),
+        yesterday_habits_done, yesterday_habits_total,
+    )
+
+    # ── Execution streak ──────────────────────────────────────────────────────
+    streak = _compute_execution_streak(db, session_id, today)
+
+    # ── Weekly/monthly completion rates ───────────────────────────────────────
+    weekly_goals_total = len(weekly_goals)
+    weekly_goals_done = sum(1 for g in weekly_goals if g.get("status") == "completed")
+    monthly_goals_total = len(monthly_goals)
+    monthly_goals_done = sum(1 for g in monthly_goals if g.get("status") == "completed")
+
+    # ── Assemble response ─────────────────────────────────────────────────────
+    return {
+        "session_id": str(session_id),
+        "today": today.isoformat(),
+        "week_number": ctx.current_week_number,
+        "month": ctx.current_month,
+        "year": ctx.current_year,
+        "week_start": ctx.week_start.isoformat(),
+        "week_end": ctx.week_end.isoformat(),
+        "days_left_in_week": ctx.days_remaining_in_week,
+        "days_left_in_month": ctx.days_remaining_in_month,
+        "daily_priorities": main_priorities,
+        "secondary_tasks": secondary_tasks,
+        "weekly_goals": weekly_goals,
+        "monthly_context": monthly_goals,
+        "yearly_goals": yearly_goals,
+        "habits": enriched_habits,
+        "metrics": {
+            "execution_streak": streak,
+            "yesterday_completion": yesterday_completion,
+            "weekly_consistency": weekly_consistency,
+            "tasks_completed_today": priorities_completed,
+            "tasks_total_today": priorities_total,
+            "habits_completed_today": habits_completed_today,
+            "habits_total_today": habits_total_today,
+            "weekly_completion_rate": compute_completion_rate(weekly_goals_done, weekly_goals_total),
+            "monthly_completion_rate": compute_completion_rate(monthly_goals_done, monthly_goals_total),
+        },
+        "weekly_objective": _summarize_weekly_objective(weekly_goals),
+        "monthly_context_text": _summarize_monthly_context(monthly_goals),
+    }
+
+
+def get_next_day_review(db: Client, session_id: UUID) -> dict:
+    """
+    Build the persisted morning-review payload.
+
+    The gate is intentionally simple and trustworthy:
+    - If today already has priorities, we do not force-open the review again.
+    - If today is empty, we use yesterday's real execution data plus the active
+      weekly goals to propose a clean starting point for today.
+    """
+    week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
+    ctx = get_temporal_context(week_starts_on=week_starts_on)
+    today = ctx.today
+    yesterday = today - timedelta(days=1)
+
+    today_plan = plans_db.get_daily_plan(db, session_id, today)
+    today_items = plans_db.list_daily_priorities(db, session_id, today)
+
+    yesterday_items = plans_db.list_daily_priorities(db, session_id, yesterday)
+    yesterday_main = [item for item in yesterday_items if item.get("is_main")]
+    yesterday_tasks = [item for item in yesterday_items if not item.get("is_main")]
+
+    habits = habits_db.list_habits(db, session_id, active_only=True)
+    yesterday_logs = {
+        log["habit_id"]: log
+        for log in habits_db.list_habit_logs_for_session(db, session_id, yesterday, yesterday)
+    }
+
+    weekly_goals = plans_db.list_weekly_goals(db, session_id, ctx.current_year, ctx.current_week_number)
+    weekly_main = [goal for goal in weekly_goals if goal.get("is_main")]
+    weekly_support = [goal for goal in weekly_goals if not goal.get("is_main")]
+
+    suggested_priorities = _build_suggested_priorities(yesterday_main, weekly_main, today.isoformat())
+    suggested_tasks = _build_suggested_tasks(yesterday_tasks, weekly_support, today.isoformat())
+
+    completed_main = [item for item in yesterday_main if item.get("completed")]
+    incomplete_main = [item for item in yesterday_main if not item.get("completed")]
+    completed_tasks = [item for item in yesterday_tasks if item.get("completed")]
+    incomplete_tasks = [item for item in yesterday_tasks if not item.get("completed")]
+
+    completed_habits = [
+        habit for habit in habits
+        if yesterday_logs.get(habit["id"], {}).get("completed")
+    ]
+    missed_habits = [
+        habit for habit in habits
+        if habit["id"] not in {h["id"] for h in completed_habits}
+    ]
+
+    yesterday_completion = compute_weighted_daily_completion(
+        len(completed_main),
+        len(yesterday_main),
+        len(completed_tasks),
+        len(yesterday_tasks),
+        len(completed_habits),
+        len(habits),
+    )
+
+    should_open = len(today_items) == 0 and (
+        bool(yesterday_items) or bool(weekly_goals) or bool(habits)
+    )
+
+    return {
+        "today": today.isoformat(),
+        "source_date": yesterday.isoformat(),
+        "should_open": should_open,
+        "already_planned_today": bool(today_plan and today_items),
+        "yesterday_summary": {
+            "completion_rate": yesterday_completion,
+            "completed_main_count": len(completed_main),
+            "main_count": len(yesterday_main),
+            "completed_task_count": len(completed_tasks),
+            "task_count": len(yesterday_tasks),
+            "completed_habit_count": len(completed_habits),
+            "habit_count": len(habits),
+            "completed_main_titles": [item["title"] for item in completed_main[:5]],
+            "incomplete_main_titles": [item["title"] for item in incomplete_main[:5]],
+            "incomplete_task_titles": [item["title"] for item in incomplete_tasks[:5]],
+        },
+        "insights": _build_review_insights(
+            yesterday_completion=yesterday_completion,
+            incomplete_main=incomplete_main,
+            incomplete_tasks=incomplete_tasks,
+            weekly_main=weekly_main,
+        ),
+        "proposal": {
+            "priorities": suggested_priorities,
+            "tasks": suggested_tasks,
+            "weekly_objective": _summarize_weekly_objective(weekly_goals),
+            "monthly_context": _summarize_monthly_context(
+                plans_db.list_monthly_goals(db, session_id, ctx.current_year, ctx.current_month)
+            ),
+        },
+    }
+
+
+def approve_next_day_review(
+    db: Client,
+    session_id: UUID,
+    plan_date: date,
+    priorities: list[dict],
+    tasks: list[dict],
+) -> dict:
+    """
+    Save the user-approved next-day plan.
+
+    We intentionally overwrite any existing priorities for the day so the review
+    modal becomes the single source of truth for today's kickoff.
+    """
+    week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
+    week_number = week_number_for(plan_date, week_starts_on)
+    weekly_plan = plans_db.get_weekly_plan(db, session_id, plan_date.year, week_number)
+
+    plan = plans_db.upsert_daily_plan(
+        db,
+        session_id,
+        {
+            "weekly_plan_id": weekly_plan["id"] if weekly_plan else None,
+            "date": plan_date.isoformat(),
+            "status": "active",
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+    plans_db.delete_daily_priorities_for_plan(db, UUID(plan["id"]))
+
+    records: list[dict] = []
+    for item in priorities:
+        records.append(
+            {
+                "session_id": str(session_id),
+                "daily_plan_id": plan["id"],
+                "title": item["title"],
+                "description": item.get("description"),
+                "date": plan_date.isoformat(),
+                "status": "active",
+                "completed": False,
+                "priority": item.get("priority", "high"),
+                "estimated_minutes": item.get("estimated_minutes"),
+                "is_main": True,
+                "tag": item.get("tag"),
+                "weekly_goal_id": item.get("weekly_goal_id"),
+                "ai_suggested": False,
+                "notes": "Approved from next-day review",
+            }
+        )
+    for item in tasks:
+        records.append(
+            {
+                "session_id": str(session_id),
+                "daily_plan_id": plan["id"],
+                "title": item["title"],
+                "description": item.get("description"),
+                "date": plan_date.isoformat(),
+                "status": "active",
+                "completed": False,
+                "priority": item.get("priority", "medium"),
+                "estimated_minutes": item.get("estimated_minutes"),
+                "is_main": False,
+                "tag": item.get("tag"),
+                "weekly_goal_id": item.get("weekly_goal_id"),
+                "ai_suggested": False,
+                "notes": "Approved from next-day review",
+            }
+        )
+
+    if records:
+        plans_db.bulk_create_daily_priorities(db, records)
+
+    return {
+        "id": plan["id"],
+        "status": "active",
+        "saved_priorities": len(priorities),
+        "saved_tasks": len(tasks),
+        "date": plan_date.isoformat(),
+    }
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _compute_weekly_consistency(db: Client, session_id: UUID, week_start: date) -> list[int]:
+    """Returns 7 integers (Sun-Sat) representing daily completion % for this week."""
+    result = []
+    for i in range(7):
+        day = week_start + timedelta(days=i)
+        if day > date.today():
+            result.append(0)
+            continue
+        priorities = plans_db.list_daily_priorities(db, session_id, day)
+        main = [p for p in priorities if p.get("is_main")]
+        if not main:
+            result.append(0)
+            continue
+        done = sum(1 for p in main if p.get("completed"))
+        result.append(compute_completion_rate(done, len(main)))
+    return result
+
+
+def _compute_execution_streak(db: Client, session_id: UUID, today: date) -> int:
+    """Count consecutive days where at least one priority was completed."""
+    streak = 0
+    check_date = today
+    for _ in range(90):  # check up to 90 days back
+        priorities = plans_db.list_daily_priorities(db, session_id, check_date)
+        main = [p for p in priorities if p.get("is_main")]
+        if not main:
+            if check_date == today:
+                check_date -= timedelta(days=1)
+                continue
+            break
+        completed = sum(1 for p in main if p.get("completed"))
+        if completed > 0:
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+    return streak
+
+
+def _titles_for_summary(goals: list[dict]) -> list[str]:
+    """Prefer is_main goals; otherwise any titled goals (manual adds may omit is_main)."""
+    mains = [g["title"] for g in goals if g.get("title") and g.get("is_main")]
+    if mains:
+        return mains
+    return [g["title"] for g in goals if g.get("title")]
+
+
+def _summarize_weekly_objective(weekly_goals: list[dict]) -> str | None:
+    main = _titles_for_summary(weekly_goals)
+    if not main:
+        return None
+    if len(main) == 1:
+        return main[0]
+    return f"{main[0]} and {len(main) - 1} more"
+
+
+def _summarize_monthly_context(monthly_goals: list[dict]) -> str | None:
+    main = _titles_for_summary(monthly_goals)
+    if not main:
+        return None
+    if len(main) == 1:
+        return main[0]
+    return f"{main[0]} (+{len(main) - 1} more)"
+
+
+def _carry_forward_item(item: dict, plan_date_iso: str, is_main: bool) -> dict:
+    """Normalize an existing DB priority/task into a proposed next-day item."""
+    return {
+        "title": item["title"],
+        "description": item.get("description"),
+        "date": plan_date_iso,
+        "priority": item.get("priority") or ("high" if is_main else "medium"),
+        "estimated_minutes": item.get("estimated_minutes"),
+        "tag": item.get("tag"),
+        "weekly_goal_id": item.get("weekly_goal_id"),
+        "is_main": is_main,
+    }
+
+
+def _goal_to_item(goal: dict, plan_date_iso: str, is_main: bool) -> dict:
+    """Turn an active weekly goal into a proposed today item."""
+    return {
+        "title": goal["title"],
+        "description": goal.get("description"),
+        "date": plan_date_iso,
+        "priority": "high" if is_main else "medium",
+        "estimated_minutes": None,
+        "tag": "Weekly goal",
+        "weekly_goal_id": goal.get("id"),
+        "is_main": is_main,
+    }
+
+
+def _build_suggested_priorities(yesterday_main: list[dict], weekly_main: list[dict], plan_date_iso: str) -> list[dict]:
+    suggestions = [
+        _carry_forward_item(item, plan_date_iso, True)
+        for item in yesterday_main
+        if not item.get("completed")
+    ][:3]
+    if suggestions:
+        return suggestions
+    return [_goal_to_item(goal, plan_date_iso, True) for goal in weekly_main[:3]]
+
+
+def _build_suggested_tasks(yesterday_tasks: list[dict], weekly_support: list[dict], plan_date_iso: str) -> list[dict]:
+    suggestions = [
+        _carry_forward_item(item, plan_date_iso, False)
+        for item in yesterday_tasks
+        if not item.get("completed")
+    ][:5]
+    if len(suggestions) >= 3:
+        return suggestions
+    taken_titles = {item["title"] for item in suggestions}
+    for goal in weekly_support:
+        if goal["title"] in taken_titles:
+            continue
+        suggestions.append(_goal_to_item(goal, plan_date_iso, False))
+        if len(suggestions) >= 5:
+            break
+    return suggestions
+
+
+def _build_review_insights(
+    yesterday_completion: int,
+    incomplete_main: list[dict],
+    incomplete_tasks: list[dict],
+    weekly_main: list[dict],
+) -> list[str]:
+    insights: list[str] = []
+    insights.append(f"Yesterday closed at {yesterday_completion}% overall completion.")
+    if incomplete_main:
+        insights.append(f"{len(incomplete_main)} main priority item(s) are still unfinished and worth deciding on before you start.")
+    if incomplete_tasks:
+        insights.append(f"{len(incomplete_tasks)} supporting task(s) can be carried forward or dropped intentionally.")
+    if weekly_main:
+        insights.append(f"Your active weekly focus is {weekly_main[0]['title']}.")
+    return insights[:3]
