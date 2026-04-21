@@ -93,6 +93,15 @@ async def pydantic_validation_handler(request: Request, exc: ValidationError):
 
 # ─── Health check ─────────────────────────────────────────────────────────────
 
+@app.get("/", tags=["Health"])
+def root():
+    return {
+        "status": "ok",
+        "service": "execution-ai",
+        "health": "/health",
+    }
+
+
 @app.get("/health", tags=["Health"])
 def health_check():
     return {"status": "ok", "service": "execution-ai"}
