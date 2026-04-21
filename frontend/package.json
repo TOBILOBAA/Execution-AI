@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "node scripts/create-vercel-routes-manifest.mjs & next build --webpack",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test:otp": "node scripts/test-supabase-otp.mjs",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
-    "next": "16.2.2",
+    "next": "^15.5.15",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "zustand": "^5.0.12"
@@ -23,7 +23,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.2",
+    "eslint-config-next": "^15.5.15",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
