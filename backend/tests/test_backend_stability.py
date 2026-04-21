@@ -136,7 +136,10 @@ class BackendStabilityTests(unittest.TestCase):
             _parse_cors_origin_regex("", "production"),
             r"^https://[a-z0-9-]+\.vercel\.app$",
         )
-        self.assertIsNone(_parse_cors_origin_regex("", "development"))
+        self.assertEqual(
+            _parse_cors_origin_regex("", "development"),
+            r"^https://[a-z0-9-]+\.vercel\.app$",
+        )
 
     def test_session_start_reuses_existing_auth_user_workspace(self):
         auth_user_id = "user-123"

@@ -36,9 +36,7 @@ def _parse_cors_origin_regex(raw_regex: str, app_env: str) -> str | None:
     regex = raw_regex.strip()
     if regex:
         return regex
-    if app_env == "production":
-        return DEFAULT_PRODUCTION_CORS_ORIGIN_REGEX
-    return None
+    return DEFAULT_PRODUCTION_CORS_ORIGIN_REGEX
 
 
 @asynccontextmanager
