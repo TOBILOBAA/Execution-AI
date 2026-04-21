@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build --webpack",
+    "build": "next build --webpack && cp .next/routes-manifest.json .next/routes-manifest-deterministic.json",
     "start": "next start",
     "lint": "eslint",
     "test:otp": "node scripts/test-supabase-otp.mjs",

@@ -24,3 +24,4 @@ backend/tmp/
 # Local docs / exports kept outside the production repo
 info/
 info/**/.DS_Store
+.vercel
