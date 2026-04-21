@@ -39,6 +39,10 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("CORS_ORIGINS"),
     )
+    cors_origin_regex: str = Field(
+        default="",
+        validation_alias=AliasChoices("CORS_ORIGIN_REGEX"),
+    )
     report_cutoff_hour: int = 18  # 18:00 UTC default
 
 

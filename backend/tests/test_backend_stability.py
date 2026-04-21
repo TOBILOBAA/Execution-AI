@@ -29,7 +29,7 @@ from app.api.routes import execution as execution_routes
 from app.db import habits as habits_db
 from app.db import reports as reports_db
 from app.db import sessions as sessions_db
-from app.main import app, _parse_cors_origins
+from app.main import app, _parse_cors_origin_regex, _parse_cors_origins
 
 
 class FakeResult:
@@ -126,6 +126,17 @@ class BackendStabilityTests(unittest.TestCase):
             ["https://a.example", "https://b.example"],
         )
         self.assertEqual(_parse_cors_origins("", "development"), ["*"])
+
+    def test_parse_cors_origin_regex(self):
+        self.assertEqual(
+            _parse_cors_origin_regex(r"^https://app\.example$", "production"),
+            r"^https://app\.example$",
+        )
+        self.assertEqual(
+            _parse_cors_origin_regex("", "production"),
+            r"^https://[a-z0-9-]+\.vercel\.app$",
+        )
+        self.assertIsNone(_parse_cors_origin_regex("", "development"))
 
     def test_session_start_reuses_existing_auth_user_workspace(self):
         auth_user_id = "user-123"

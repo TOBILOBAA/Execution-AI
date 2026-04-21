@@ -22,11 +22,23 @@ from app.api.routes import (
 )
 
 
+DEFAULT_PRODUCTION_CORS_ORIGIN_REGEX = r"^https://[a-z0-9-]+\.vercel\.app$"
+
+
 def _parse_cors_origins(raw_origins: str, app_env: str) -> list[str]:
     origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
     if app_env == "development" and not origins:
         return ["*"]
     return origins
+
+
+def _parse_cors_origin_regex(raw_regex: str, app_env: str) -> str | None:
+    regex = raw_regex.strip()
+    if regex:
+        return regex
+    if app_env == "production":
+        return DEFAULT_PRODUCTION_CORS_ORIGIN_REGEX
+    return None
 
 
 @asynccontextmanager
@@ -55,12 +67,14 @@ app = FastAPI(
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 
 cors_origins = _parse_cors_origins(settings.cors_origins, settings.app_env)
-if settings.app_env == "production" and not cors_origins:
+cors_origin_regex = _parse_cors_origin_regex(settings.cors_origin_regex, settings.app_env)
+if settings.app_env == "production" and not cors_origins and not cors_origin_regex:
     logger.warning("cors_origins_not_configured", env=settings.app_env)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
