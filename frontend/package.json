@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build --webpack && cp .next/routes-manifest.json .next/routes-manifest-deterministic.json",
+    "build": "node scripts/create-vercel-routes-manifest.mjs & next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "test:otp": "node scripts/test-supabase-otp.mjs",
