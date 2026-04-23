@@ -4,7 +4,7 @@
   "scripts": {
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "python3 run_backend.py",
-    "build:frontend": "npm --prefix frontend run build -- --webpack",
+    "build:frontend": "npm --prefix frontend run build",
     "lint:frontend": "npm --prefix frontend run lint",
     "qa:ui-smoke": "npm --prefix frontend run qa:ui-smoke",
     "qa:ui-smoke-ai": "npm --prefix frontend run qa:ui-smoke-ai"

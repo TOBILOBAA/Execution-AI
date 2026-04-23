@@ -36,7 +36,7 @@ NEXT_PUBLIC_SUPABASE_OTP_AUTH=false
 
 ```bash
 npm run lint
-npm run build -- --webpack
+npm run build
 ```
 
 ## Returning User Smoke Test
