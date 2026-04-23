@@ -182,12 +182,22 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiError(null);
     setAiDraft(null);
     const result = await generateMonthlyPlan(CURRENT_YEAR, CURRENT_MONTH);
-    if (result?.draft) {
+    if (result.ok && result.draft) {
       const draft = result.draft as AIDraft;
       setAiDraft(draft);
       setAiRowKeys(buildAiRowKeys(draft));
+    } else if (!result.ok && result.code === "no_yearly_on_server") {
+      setAiError(
+        "The server has no yearly goals for this year yet. Go back to step 1, tap Next only after the green banner is clear (or fix any sync error), then try AI again.",
+      );
+    } else if (!result.ok && result.code === "no_session") {
+      setAiError("Your workspace session is not ready. Refresh the page or sign in again, then retry.");
     } else {
-      setAiError("AI generation failed. Make sure you have yearly goals saved first, then try again.");
+      const detail = useAppStore.getState().syncError;
+      setAiError(
+        detail ??
+          "Could not generate a monthly plan. Check NEXT_PUBLIC_API_URL, network, and backend logs, then try again.",
+      );
     }
     setAiLoading(false);
   };

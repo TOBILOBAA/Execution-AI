@@ -20,6 +20,7 @@ import {
 import { isUuid } from "./uuid";
 import type { DashboardMetrics, YearReport } from "./types";
 import {
+  ApiError,
   categoriesApi,
   yearlyGoalsApi,
   monthlyPlanApi,
@@ -151,7 +152,7 @@ interface AppState {
   updateYearlyGoal: (id: string, updates: Partial<YearlyGoal>) => void;
   removeYearlyGoal: (id: string) => void;
   /** Persist yearly goals that only exist locally (e.g. mock ids) before leaving step 1. */
-  syncYearlyGoalsToServer: () => Promise<void>;
+  syncYearlyGoalsToServer: () => Promise<boolean>;
   /** Persist monthly goals with local-only ids before weekly AI / leaving step 2. */
   syncMonthlyGoalsToServer: (year: number, month: number) => Promise<boolean>;
   /** Persist weekly goals with local-only ids before daily AI / leaving step 3. */
@@ -183,7 +184,13 @@ interface AppState {
   removeHabit: (id: string) => void;
 
   // ── AI Plan generation ───────────────────────────────────────────────────────
-  generateMonthlyPlan: (year: number, month: number) => Promise<{ draft: unknown } | null>;
+  generateMonthlyPlan: (
+    year: number,
+    month: number,
+  ) => Promise<
+    | { ok: true; draft: unknown }
+    | { ok: false; code: "no_session" | "no_yearly_on_server" | "api_error" }
+  >;
   approveMonthlyPlan: (year: number, month: number, goals?: unknown[]) => Promise<boolean>;
   generateWeeklyPlan: (year: number, weekNumber: number) => Promise<{ draft: unknown } | null>;
   approveWeeklyPlan: (year: number, weekNumber: number, goals?: unknown[]) => Promise<boolean>;
@@ -1050,7 +1057,13 @@ export const useAppStore = create<AppState>()(
       },
       syncYearlyGoalsToServer: async () => {
         const { sessionId, yearlyGoals } = get();
-        if (!sessionId) return;
+        if (!sessionId) {
+          if (requiresServerPersistence()) {
+            set({ syncError: "Sync yearly goals: Backend session is not ready." });
+            return false;
+          }
+          return true;
+        }
         const localIds = yearlyGoals
           .filter((g) => g.year === CURRENT_YEAR && !isUuid(g.id))
           .map((g) => g.id);
@@ -1066,12 +1079,24 @@ export const useAppStore = create<AppState>()(
               target_date: g.targetDate,
             });
             set((s) => ({
-              yearlyGoals: s.yearlyGoals.map((yg) => (yg.id === g.id ? { ...yg, id: created.id, categoryId: created.category_id ?? yg.categoryId } : yg)),
+              yearlyGoals: s.yearlyGoals.map((yg) =>
+                yg.id === g.id ? { ...yg, id: created.id, categoryId: created.category_id ?? yg.categoryId } : yg,
+              ),
             }));
-          } catch {
-            /* leave local row; user can retry */
+          } catch (e) {
+            set({ syncError: formatApiError(`Sync yearly goal "${g.title}"`, e) });
+            return false;
           }
         }
+        const stillLocal = get().yearlyGoals.filter((g) => g.year === CURRENT_YEAR && !isUuid(g.id));
+        if (stillLocal.length > 0) {
+          set({
+            syncError: `${stillLocal.length} yearly goal(s) could not be synced (still local-only). Check your connection and try again.`,
+          });
+          return false;
+        }
+        set({ syncError: null });
+        return true;
       },
 
       syncMonthlyGoalsToServer: async (year, month) => {
@@ -1637,14 +1662,23 @@ export const useAppStore = create<AppState>()(
       // ── AI Plan generation ────────────────────────────────────────────────────
       generateMonthlyPlan: async (year, month) => {
         const { sessionId } = get();
-        if (!sessionId) return null;
+        if (!sessionId) {
+          return { ok: false as const, code: "no_session" };
+        }
         try {
           const result = await monthlyPlanApi.generate(sessionId, year, month);
           set({ syncError: null });
-          return { draft: result.ai_draft };
+          return { ok: true as const, draft: result.ai_draft };
         } catch (e) {
+          if (
+            e instanceof ApiError &&
+            e.status === 404 &&
+            (e.message.includes("Yearly goals") || e.message.includes("yearly"))
+          ) {
+            return { ok: false as const, code: "no_yearly_on_server" };
+          }
           set({ syncError: formatApiError("Monthly plan (AI generate)", e) });
-          return null;
+          return { ok: false as const, code: "api_error" };
         }
       },
       approveMonthlyPlan: async (year, month, goals) => {

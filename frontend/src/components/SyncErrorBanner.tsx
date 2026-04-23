@@ -2,12 +2,35 @@
 
 import { useAppStore } from "@/lib/store";
 
+function bannerMeta(syncError: string): { title: string; footer: string } {
+  const isAiOrLoad =
+    syncError.includes("(AI generate)") ||
+    syncError.startsWith("Load ") ||
+    syncError.startsWith("Monthly plan (AI") ||
+    syncError.startsWith("Weekly plan (AI") ||
+    syncError.startsWith("Daily plan (AI");
+  if (isAiOrLoad) {
+    return {
+      title: "Server request failed",
+      footer:
+        "This call did not finish successfully. Check NEXT_PUBLIC_API_URL, network, and backend status, then retry. Data in this browser may still be cached locally until sync succeeds.",
+    };
+  }
+  return {
+    title: "Could not save to server",
+    footer:
+      "Goals and onboarding may still be cached in this browser until the request above succeeds. Fix the API or URL (NEXT_PUBLIC_API_URL), then retry.",
+  };
+}
+
 /** Shows backend / sync failures so users are not misled when local UI looks saved. */
 export function SyncErrorBanner() {
   const syncError = useAppStore((s) => s.syncError);
   const clearSyncError = useAppStore((s) => s.clearSyncError);
 
   if (!syncError) return null;
+
+  const { title, footer } = bannerMeta(syncError);
 
   return (
     <div
@@ -23,13 +46,13 @@ export function SyncErrorBanner() {
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-[11px] font-bold uppercase tracking-wider mb-0.5" style={{ color: "#b91c1c" }}>
-          Could not save to server
+          {title}
         </p>
         <p className="text-xs leading-relaxed break-words" style={{ color: "#7f1d1d" }}>
           {syncError}
         </p>
         <p className="text-[11px] mt-1.5" style={{ color: "#991b1b" }}>
-          Goals and onboarding are still saved in this browser (localStorage). The line above is which server request failed — fix the API or URL (NEXT_PUBLIC_API_URL), then retry.
+          {footer}
         </p>
       </div>
       <button

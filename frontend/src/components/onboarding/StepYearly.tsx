@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { CURRENT_YEAR } from "@/lib/mockData";
+import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
 import { AddGoalModal } from "./AddGoalModal";
 import { AddCategoryModal } from "./AddCategoryModal";
 import { formatShortDate } from "./MiniCalendar";
@@ -79,6 +80,7 @@ export function StepYearly({ onNext }: Props) {
   const [goalModal, setGoalModal] = useState<null | "new" | YearlyGoal>(null);
   const [modalCatId, setModalCatId] = useState<string>("");
   const [showCatModal, setShowCatModal] = useState(false);
+  const [leaveBusy, setLeaveBusy] = useState(false);
 
   const fallbackCategoryId = categories[0]?.id ?? "";
   const getGoalsForCat = (catId: string) =>
@@ -120,7 +122,14 @@ export function StepYearly({ onNext }: Props) {
   const isEditMode = goalModal !== null && typeof goalModal !== "string";
 
   const handleLeaveYearly = async () => {
-    await syncYearlyGoalsToServer();
+    setLeaveBusy(true);
+    const ok = await syncYearlyGoalsToServer();
+    const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
+    if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
+      setLeaveBusy(false);
+      return;
+    }
+    setLeaveBusy(false);
     onNext();
   };
 
@@ -186,11 +195,12 @@ export function StepYearly({ onNext }: Props) {
         <div className="flex justify-end pt-8 pb-2">
           <button
             type="button"
+            disabled={leaveBusy}
             onClick={() => void handleLeaveYearly()}
-            className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90"
+            className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none"
             style={{ background: "#006c4a", boxShadow: "0 2px 12px rgba(0,108,74,0.22)" }}
           >
-            Next Step
+            {leaveBusy ? "Saving…" : "Next Step"}
             <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
           </button>
         </div>
