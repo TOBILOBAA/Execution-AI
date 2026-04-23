@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:otp": "node scripts/test-supabase-otp.mjs",
-    "qa:ui-smoke": "node scripts/ui-smoke.mjs"
+    "qa:ui-smoke": "node scripts/ui-smoke.mjs",
+    "qa:ui-smoke-ai": "env UI_SMOKE_TEST_MONTHLY_AI=1 node scripts/ui-smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
