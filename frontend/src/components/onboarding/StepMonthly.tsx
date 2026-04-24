@@ -107,6 +107,7 @@ interface AIDraft {
 export function StepMonthly({ onNext, onBack }: Props) {
   const {
     categories,
+    yearlyGoals,
     monthlyGoals,
     addMonthlyGoal,
     updateMonthlyGoal,
@@ -121,6 +122,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
   } = useAppStore(
     useShallow((state) => ({
       categories: state.categories,
+      yearlyGoals: state.yearlyGoals,
       monthlyGoals: state.monthlyGoals,
       addMonthlyGoal: state.addMonthlyGoal,
       updateMonthlyGoal: state.updateMonthlyGoal,
@@ -188,7 +190,13 @@ export function StepMonthly({ onNext, onBack }: Props) {
       setAiRowKeys(buildAiRowKeys(draft));
     } else if (!result.ok && result.code === "no_yearly_on_server") {
       setAiError(
-        "The server has no yearly goals for this year yet. Go back to step 1, tap Next only after the green banner is clear (or fix any sync error), then try AI again.",
+        "The server does not have yearly goals for this year yet. Go back to Step 1 and save at least one yearly goal, then try AI again.",
+      );
+    } else if (!result.ok && result.code === "yearly_sync_failed") {
+      const detail = useAppStore.getState().syncError;
+      setAiError(
+        detail ??
+          "Yearly goals could not be confirmed on the server yet. Fix the sync issue above, then try AI again.",
       );
     } else if (!result.ok && result.code === "no_session") {
       setAiError("Your workspace session is not ready. Refresh the page or sign in again, then retry.");
@@ -231,6 +239,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
   const handleGoalSubmit = (
     title: string,
     categoryId: string,
+    yearlyGoalId: string,
     targetDate: string,
     description: string,
     workload: string,
@@ -242,6 +251,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       updateMonthlyGoal(g.id, {
         title,
         categoryId,
+        yearlyGoalId: yearlyGoalId || undefined,
         targetDate,
         description: desc,
         workload: wl,
@@ -250,6 +260,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       addMonthlyGoal({
         title,
         categoryId,
+        yearlyGoalId: yearlyGoalId || undefined,
         targetDate,
         ...(desc ? { description: desc } : {}),
         ...(wl ? { workload: wl } : {}),
@@ -573,8 +584,10 @@ export function StepMonthly({ onNext, onBack }: Props) {
         <AddMonthlyGoalModal
           mode={isEditMode ? ((goalModal as MonthlyGoal).isMain ? "main" : "secondary") : (addMode as "main" | "secondary")}
           categories={categories}
+          yearlyGoals={yearlyGoals.filter((g) => g.year === CURRENT_YEAR)}
           initialTitle={isEditMode ? (goalModal as MonthlyGoal).title : ""}
           initialCategoryId={isEditMode ? (goalModal as MonthlyGoal).categoryId : undefined}
+          initialYearlyGoalId={isEditMode ? (goalModal as MonthlyGoal).yearlyGoalId : undefined}
           initialDate={isEditMode ? (goalModal as MonthlyGoal).targetDate : undefined}
           initialDescription={isEditMode ? (goalModal as MonthlyGoal).description : undefined}
           initialWorkload={isEditMode ? (goalModal as MonthlyGoal).workload : undefined}

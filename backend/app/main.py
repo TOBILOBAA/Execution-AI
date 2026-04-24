@@ -23,12 +23,24 @@ from app.api.routes import (
 
 
 DEFAULT_PRODUCTION_CORS_ORIGIN_REGEX = r"^https://[a-z0-9-]+\.vercel\.app$"
+LOCAL_DEVELOPMENT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
 
 
 def _parse_cors_origins(raw_origins: str, app_env: str) -> list[str]:
     origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
-    if app_env == "development" and not origins:
-        return ["*"]
+    if app_env == "development":
+        if not origins:
+            return LOCAL_DEVELOPMENT_CORS_ORIGINS.copy()
+        seen = set(origins)
+        for origin in LOCAL_DEVELOPMENT_CORS_ORIGINS:
+            if origin not in seen:
+                origins.append(origin)
+                seen.add(origin)
     return origins
 
 

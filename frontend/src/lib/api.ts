@@ -43,7 +43,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (aborted) {
       throw new ApiError(
         408,
-        "Request timed out. The server took too long to respond (often the AI step). Try again, or set GEMINI_MODEL=gemini-2.0-flash on the backend.",
+        "Request timed out. The server took too long to respond (often the AI step). Try again, or set GEMINI_MODEL to a supported Gemini model like gemini-2.5-flash on the backend.",
       );
     }
     throw e;
@@ -462,6 +462,7 @@ export const tasksApi = {
     priority: string;
     estimated_minutes: number;
     tag: string;
+    weekly_goal_id: string | null;
   }>) => patch<ApiDailyPriority>(`/tasks/${taskId}?session_id=${sessionId}`, data),
 
   create: (sessionId: string, date: string, data: {

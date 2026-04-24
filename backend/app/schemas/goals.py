@@ -162,6 +162,7 @@ class DailyPriorityCreate(BaseModel):
 
 
 class DailyPriorityUpdate(BaseModel):
+    weekly_goal_id: UUID | None = None
     title: str | None = None
     description: str | None = None
     status: GoalStatus | None = None

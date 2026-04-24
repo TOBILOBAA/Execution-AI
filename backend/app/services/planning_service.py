@@ -88,6 +88,35 @@ def _match_monthly_goal_by_ref(ref: str | None, monthly_goals: list[dict]) -> di
     return None
 
 
+def _match_weekly_goal_by_ref(ref: str | None, weekly_goals: list[dict]) -> dict | None:
+    """Match AI parent ref text to a weekly goal row."""
+    if not ref or not weekly_goals:
+        return None
+    ref_l = ref.strip().lower()
+    if not ref_l:
+        return None
+    for g in weekly_goals:
+        title = (g.get("title") or "").strip().lower()
+        if title and title == ref_l:
+            return g
+    for g in weekly_goals:
+        title = (g.get("title") or "").strip().lower()
+        if title and (ref_l in title or title in ref_l):
+            return g
+    return None
+
+
+def _linked_id_from_item(item: dict, key: str, allowed_rows: list[dict]) -> str | None:
+    raw = item.get(key)
+    if not raw:
+        return None
+    try:
+        value = str(uuid.UUID(str(raw)))
+    except (TypeError, ValueError):
+        return None
+    return value if any(str(row.get("id")) == value for row in allowed_rows) else None
+
+
 # ─── Monthly Plan ─────────────────────────────────────────────────────────────
 
 def generate_monthly_plan(
@@ -198,9 +227,12 @@ def approve_monthly_plan(
     # Map and insert goals
     goal_records = []
     for g in goals_to_create:
-        yg = _match_yearly_goal_by_ref(g.get("yearly_goal_ref"), yearly_list)
-        yid = yg.get("id") if yg else None
-        cid = yg.get("category_id") if yg else None
+        yid = _linked_id_from_item(g, "yearly_goal_id", yearly_list)
+        yg = next((row for row in yearly_list if str(row.get("id")) == yid), None) if yid else None
+        if not yg:
+            yg = _match_yearly_goal_by_ref(g.get("yearly_goal_ref"), yearly_list)
+        yid = yg.get("id") if yg else yid
+        cid = g.get("category_id") or (yg.get("category_id") if yg else None)
         target_date = _normalize_monthly_target_date(g.get("target_date"), year, month)
         goal_records.append({
             "session_id": str(session_id),
@@ -339,8 +371,14 @@ def approve_weekly_plan(
 
     goal_records = []
     for g in goals_to_create:
-        mg = _match_monthly_goal_by_ref(g.get("yearly_goal_ref"), monthly_list)
-        mid = mg.get("id") if mg else None
+        mid = _linked_id_from_item(g, "monthly_goal_id", monthly_list)
+        mg = next((row for row in monthly_list if str(row.get("id")) == mid), None) if mid else None
+        if not mg:
+            mg = _match_monthly_goal_by_ref(
+                g.get("monthly_goal_ref") or g.get("yearly_goal_ref"),
+                monthly_list,
+            )
+        mid = mg.get("id") if mg else mid
         workload = g.get("estimated_effort") or g.get("workload")
         goal_records.append({
             "session_id": str(session_id),
@@ -454,13 +492,25 @@ def approve_daily_plan(
             for p in draft.get("secondary_tasks", [])
         ]
 
+    week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
+    week_number = week_number_for(plan_date, week_starts_on)
+    weekly_goals = plans_db.list_weekly_goals(db, session_id, plan_date.year, week_number)
+
     priority_records = []
     for item in items_to_create:
         effort_str = item.get("estimated_effort", "") or ""
         estimated_minutes = _parse_minutes(effort_str)
+        wid = _linked_id_from_item(item, "weekly_goal_id", weekly_goals)
+        if not wid:
+            wg = _match_weekly_goal_by_ref(
+                item.get("weekly_goal_ref") or item.get("yearly_goal_ref"),
+                weekly_goals,
+            )
+            wid = wg.get("id") if wg else None
         priority_records.append({
             "session_id": str(session_id),
             "daily_plan_id": plan_id,
+            "weekly_goal_id": str(wid) if wid else None,
             "title": item["title"],
             "description": item.get("description"),
             "date": plan_date.isoformat(),

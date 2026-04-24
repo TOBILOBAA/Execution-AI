@@ -306,6 +306,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
     removeSecondaryTask,
     habits,
     categories,
+    weeklyGoals,
     addHabit,
     updateHabit,
     removeHabit,
@@ -324,6 +325,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       removeSecondaryTask: state.removeSecondaryTask,
       habits: state.habits,
       categories: state.categories,
+      weeklyGoals: state.weeklyGoals,
       addHabit: state.addHabit,
       updateHabit: state.updateHabit,
       removeHabit: state.removeHabit,
@@ -744,12 +746,14 @@ export function StepDaily({ onFinish, onBack }: Props) {
       {priorityModal !== null && (
         <AddDailyPriorityModal
           categories={categories}
+          weeklyGoals={weeklyGoals}
           initialTitle={isEditingPriority ? (priorityModal as DailyPriority).title : ""}
           initialCategoryId={
             isEditingPriority
               ? categories.find((c) => c.name === (priorityModal as DailyPriority).tag)?.id
               : undefined
           }
+          initialWeeklyGoalId={isEditingPriority ? (priorityModal as DailyPriority).weeklyGoalId : undefined}
           initialAllocation={isEditingPriority ? (priorityModal as DailyPriority).estimatedMinutes : 30}
           initialDescription={isEditingPriority ? (priorityModal as DailyPriority).description : undefined}
           onSubmit={(data) => {
@@ -758,6 +762,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
+                weeklyGoalId: data.weeklyGoalId,
                 description: data.description,
               });
             } else {
@@ -765,6 +770,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
+                weeklyGoalId: data.weeklyGoalId,
                 ...(data.description ? { description: data.description } : {}),
                 date: TODAY,
                 status: "active",
@@ -783,10 +789,12 @@ export function StepDaily({ onFinish, onBack }: Props) {
       {taskModal !== null && (
         <AddSecondaryTaskModal
           categories={categories}
+          weeklyGoals={weeklyGoals}
           initialTitle={isEditingTask ? (taskModal as DailyPriority).title : ""}
           initialCategoryId={isEditingTask
             ? categories.find((c) => c.name === (taskModal as DailyPriority).tag)?.id
             : undefined}
+          initialWeeklyGoalId={isEditingTask ? (taskModal as DailyPriority).weeklyGoalId : undefined}
           initialAllocation={isEditingTask ? (taskModal as DailyPriority).estimatedMinutes : 30}
           initialDescription={isEditingTask ? (taskModal as DailyPriority).description : undefined}
           onSubmit={(data) => {
@@ -795,6 +803,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
+                weeklyGoalId: data.weeklyGoalId,
                 description: data.description,
               });
             } else {
@@ -802,6 +811,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
+                weeklyGoalId: data.weeklyGoalId,
                 ...(data.description ? { description: data.description } : {}),
                 date: TODAY,
                 status: "active",

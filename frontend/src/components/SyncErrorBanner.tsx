@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/store";
 function bannerMeta(syncError: string): { title: string; footer: string } {
   const isAiOrLoad =
     syncError.includes("(AI generate)") ||
+    syncError.includes("AI generate") ||
     syncError.startsWith("Load ") ||
     syncError.startsWith("Monthly plan (AI") ||
     syncError.startsWith("Weekly plan (AI") ||
@@ -13,13 +14,13 @@ function bannerMeta(syncError: string): { title: string; footer: string } {
     return {
       title: "Server request failed",
       footer:
-        "This call did not finish successfully. Check NEXT_PUBLIC_API_URL, network, and backend status, then retry. Data in this browser may still be cached locally until sync succeeds.",
+        "This request did not finish successfully. Check NEXT_PUBLIC_API_URL, network, and backend status, then retry.",
     };
   }
   return {
-    title: "Could not save to server",
+    title: "Save sync failed",
     footer:
-      "Goals and onboarding may still be cached in this browser until the request above succeeds. Fix the API or URL (NEXT_PUBLIC_API_URL), then retry.",
+      "Your latest local edit is still visible in this browser. Retry after the API or network issue is fixed to confirm it on the server.",
   };
 }
 

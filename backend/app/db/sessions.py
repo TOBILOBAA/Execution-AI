@@ -1,5 +1,6 @@
 """Session / workspace repository."""
 from uuid import UUID
+from postgrest.exceptions import APIError
 from supabase import Client
 
 from app.db._utils import serialize_payload
@@ -7,6 +8,13 @@ from app.utils.date_utils import resolve_week_starts_on
 
 
 TABLE = "sessions"
+
+
+def _is_missing_week_starts_on_column(exc: APIError) -> bool:
+    details = str(exc)
+    return "week_starts_on" in details and (
+        "PGRST204" in details or "schema cache" in details
+    )
 
 
 def _hydrate_session_defaults(session: dict | None) -> dict | None:
@@ -48,9 +56,13 @@ def create_session(
     }
     if week_starts_on is not None:
         payload["week_starts_on"] = resolve_week_starts_on(week_starts_on, timezone)
-    result = (
-        db.table(TABLE).insert(serialize_payload(payload)).execute()
-    )
+    try:
+        result = db.table(TABLE).insert(serialize_payload(payload)).execute()
+    except APIError as exc:
+        if "week_starts_on" not in payload or not _is_missing_week_starts_on_column(exc):
+            raise
+        legacy_payload = {key: value for key, value in payload.items() if key != "week_starts_on"}
+        result = db.table(TABLE).insert(serialize_payload(legacy_payload)).execute()
     return _hydrate_session_defaults(result.data[0])
 
 
@@ -94,9 +106,20 @@ def update_session(db: Client, session_id: UUID, updates: dict) -> dict:
         db.table(TABLE)
         .update(serialize_payload(payload))
         .eq("id", str(session_id))
-        .execute()
     )
-    return _hydrate_session_defaults(result.data[0])
+    try:
+        updated = result.execute()
+    except APIError as exc:
+        if "week_starts_on" not in payload or not _is_missing_week_starts_on_column(exc):
+            raise
+        legacy_payload = {key: value for key, value in payload.items() if key != "week_starts_on"}
+        updated = (
+            db.table(TABLE)
+            .update(serialize_payload(legacy_payload))
+            .eq("id", str(session_id))
+            .execute()
+        )
+    return _hydrate_session_defaults(updated.data[0])
 
 
 def get_effective_week_starts_on(db: Client, session_id: UUID) -> str:

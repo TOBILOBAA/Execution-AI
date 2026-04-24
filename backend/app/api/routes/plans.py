@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from supabase import Client
 
 from app.api.deps import get_db
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import AIGenerationError, NotFoundError
 from app.schemas.plans import (
     MonthlyPlanGenerateRequest, MonthlyPlanApproveRequest,
     WeeklyPlanGenerateRequest, WeeklyPlanApproveRequest,
@@ -86,9 +86,12 @@ def generate_monthly_plan(
     db: Client = Depends(get_db),
 ):
     """Generate an AI monthly plan draft. Does not approve it."""
-    return planning_service.generate_monthly_plan(
-        db, body.session_id, body.year, body.month
-    )
+    try:
+        return planning_service.generate_monthly_plan(
+            db, body.session_id, body.year, body.month
+        )
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc
 
 
 @router.post("/monthly-plan/save")
@@ -176,9 +179,12 @@ def generate_weekly_plan(
     db: Client = Depends(get_db),
 ):
     """Generate an AI weekly plan draft."""
-    return planning_service.generate_weekly_plan(
-        db, body.session_id, body.year, body.week_number
-    )
+    try:
+        return planning_service.generate_weekly_plan(
+            db, body.session_id, body.year, body.week_number
+        )
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc
 
 
 @router.post("/weekly-plan/save")
@@ -268,7 +274,10 @@ def generate_daily_plan(
     db: Client = Depends(get_db),
 ):
     """Generate an AI daily plan draft."""
-    return planning_service.generate_daily_plan(db, body.session_id, body.date)
+    try:
+        return planning_service.generate_daily_plan(db, body.session_id, body.date)
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc
 
 
 @router.post("/daily-plan/save")
