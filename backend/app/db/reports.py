@@ -8,6 +8,21 @@ from app.db._utils import serialize_payload
 TABLE = "report_snapshots"
 
 
+def _natural_lookup_fields(
+    report_type: str,
+    period_month: int | None = None,
+    period_week: int | None = None,
+    period_date: date | None = None,
+) -> dict[str, int | str]:
+    if report_type == "daily":
+        return {"period_date": period_date.isoformat()} if period_date is not None else {}
+    if report_type == "weekly":
+        return {"period_week": period_week} if period_week is not None else {}
+    if report_type == "monthly":
+        return {"period_month": period_month} if period_month is not None else {}
+    return {}
+
+
 def get_report(
     db: Client,
     session_id: UUID,
@@ -24,12 +39,13 @@ def get_report(
         .eq("report_type", report_type)
         .eq("period_year", period_year)
     )
-    if period_month is not None:
-        query = query.eq("period_month", period_month)
-    if period_week is not None:
-        query = query.eq("period_week", period_week)
-    if period_date is not None:
-        query = query.eq("period_date", period_date.isoformat())
+    for field, value in _natural_lookup_fields(
+        report_type,
+        period_month=period_month,
+        period_week=period_week,
+        period_date=period_date,
+    ).items():
+        query = query.eq(field, value)
     result = query.execute()
     return result.data[0] if result.data else None
 

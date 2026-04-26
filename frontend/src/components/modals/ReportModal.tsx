@@ -15,16 +15,18 @@ function ModalShell({
   onClose,
   children,
   wide = false,
+  extraWide = false,
   labelledBy,
 }: {
   onClose: () => void;
   children: React.ReactNode;
   wide?: boolean;
+  extraWide?: boolean;
   labelledBy?: string;
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
       style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
       onClick={onClose}
       role="dialog"
@@ -32,8 +34,8 @@ function ModalShell({
       aria-labelledby={labelledBy}
     >
       <div
-        className="bg-white rounded-3xl shadow-2xl w-full overflow-y-auto max-h-[90vh]"
-        style={{ maxWidth: wide ? 720 : 520 }}
+        className="bg-white rounded-3xl shadow-2xl w-full overflow-y-auto max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overscroll-contain"
+        style={{ maxWidth: extraWide ? 880 : wide ? 720 : 560 }}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -77,7 +79,7 @@ const DAY_DATA = {
 
 function DayRecapModal({ onClose }: { onClose: () => void }) {
   return (
-    <ModalShell onClose={onClose} labelledBy="day-recap-title">
+    <ModalShell onClose={onClose} wide labelledBy="day-recap-title">
       <div className="p-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-5">
@@ -91,7 +93,7 @@ function DayRecapModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Efficiency + Focus Time */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
           <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Efficiency</p>
             <div className="flex items-baseline gap-1 mb-2">
@@ -178,7 +180,7 @@ const WEEK_DATA = {
 function WeeklyReportModal({ onClose }: { onClose: () => void }) {
   const focusPct = Math.round((WEEK_DATA.focusHours / WEEK_DATA.focusTarget) * 100);
   return (
-    <ModalShell onClose={onClose} labelledBy="weekly-report-title">
+    <ModalShell onClose={onClose} wide labelledBy="weekly-report-title">
       <div className="p-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-1">
@@ -191,7 +193,7 @@ function WeeklyReportModal({ onClose }: { onClose: () => void }) {
         <p className="text-sm mb-5" style={{ color: "#8a9e97" }}>{WEEK_DATA.dateRange}</p>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
           <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
             <div className="flex items-center gap-1.5 mb-2">
               <span className="material-symbols-outlined text-[14px]" style={{ color: "#006c4a" }}>bolt</span>
@@ -273,7 +275,7 @@ function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unk
   const nextMonth = d?.month ? (MONTH_NAMES[d.month] ?? "Next Month") : "July";
 
   return (
-    <ModalShell onClose={onClose} wide labelledBy="monthly-insight-title">
+    <ModalShell onClose={onClose} extraWide labelledBy="monthly-insight-title">
       <div className="p-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-5">
@@ -392,7 +394,7 @@ function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unk
 function YearlyReportModal({ onClose, data }: { onClose: () => void; data: unknown }) {
   const d = data as { year?: number; completionRate?: number; topPillar?: string; streak?: number } | undefined;
   return (
-    <ModalShell onClose={onClose} labelledBy="yearly-report-title">
+    <ModalShell onClose={onClose} wide labelledBy="yearly-report-title">
       <div className="p-6">
         <div className="flex items-start justify-between mb-5">
           <div>
@@ -403,7 +405,7 @@ function YearlyReportModal({ onClose, data }: { onClose: () => void; data: unkno
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
           {[{ label: "Completion Rate", value: `${d?.completionRate ?? 94}%` }, { label: "Best Streak", value: `${d?.streak ?? 42}d` }].map((s) => (
             <div key={s.label} className="rounded-2xl p-4 text-center" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>{s.label}</p>
