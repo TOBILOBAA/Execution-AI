@@ -274,6 +274,7 @@ export interface ApiGoalsHierarchy {
   current_week_number: number;
   weekly_goals: ApiWeeklyGoal[];
   today: string;
+  year_daily_priorities: ApiDailyPriority[];
   selected_week_number: number | null;
   selected_week_start: string | null;
   selected_week_end: string | null;

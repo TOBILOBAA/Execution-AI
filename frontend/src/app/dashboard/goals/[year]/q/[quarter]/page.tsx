@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use } from "react";
 import { useRouter } from "next/navigation";
+import { GoalCompletionButton } from "@/components/goals/GoalCompletionButton";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
 import { useAppStore } from "@/lib/store";
@@ -34,6 +35,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
   const quarter = quarterNumberFromId(quarterId);
   const router = useRouter();
   const openModal = useAppStore((state) => state.openModal);
+  const updateMonthlyGoal = useAppStore((state) => state.updateMonthlyGoal);
   const {
     ready,
     loading,
@@ -127,7 +129,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
               style={{ color: "#8a9e97" }}
             >
               <span className="material-symbols-outlined text-[15px]">arrow_back</span>
-              {year} strategy view
+              Yearly goals
             </button>
             <span style={{ color: "#d1d9d5" }}>/</span>
             <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "#006c4a" }}>
@@ -277,15 +279,26 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
 
                     <div className="flex items-center gap-2 flex-wrap">
                       {card.mainGoal ? (
-                        <button
-                          type="button"
-                          onClick={() => openModal("edit-monthly-goal", card.mainGoal)}
-                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
-                          style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
-                        >
-                          <span className="material-symbols-outlined text-[16px]">edit</span>
-                          Edit main goal
-                        </button>
+                        <>
+                          <GoalCompletionButton
+                            completed={card.mainGoal.status === "completed" || card.mainGoal.progress >= 100}
+                            onClick={() =>
+                              updateMonthlyGoal(card.mainGoal!.id, {
+                                status: card.mainGoal!.status === "completed" || card.mainGoal!.progress >= 100 ? "active" : "completed",
+                                progress: card.mainGoal!.status === "completed" || card.mainGoal!.progress >= 100 ? Math.min(card.mainGoal!.progress, 99) : 100,
+                              })
+                            }
+                          />
+                          <button
+                            type="button"
+                            onClick={() => openModal("edit-monthly-goal", card.mainGoal)}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+                            style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                          >
+                            <span className="material-symbols-outlined text-[16px]">edit</span>
+                            Edit main goal
+                          </button>
+                        </>
                       ) : (
                         <button
                           type="button"
@@ -364,14 +377,25 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                                 {fmtDate(goal.targetDate)} · {(weeklyByMonthly.get(goal.id)?.length ?? 0)} linked weekly goal{(weeklyByMonthly.get(goal.id)?.length ?? 0) === 1 ? "" : "s"}
                               </p>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => openModal("edit-monthly-goal", goal)}
-                              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                              style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
-                            >
-                              <span className="material-symbols-outlined text-[16px]" style={{ color: "#6b7c75" }}>edit</span>
-                            </button>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <GoalCompletionButton
+                                completed={goal.status === "completed" || goal.progress >= 100}
+                                onClick={() =>
+                                  updateMonthlyGoal(goal.id, {
+                                    status: goal.status === "completed" || goal.progress >= 100 ? "active" : "completed",
+                                    progress: goal.status === "completed" || goal.progress >= 100 ? Math.min(goal.progress, 99) : 100,
+                                  })
+                                }
+                              />
+                              <button
+                                type="button"
+                                onClick={() => openModal("edit-monthly-goal", goal)}
+                                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                                style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+                              >
+                                <span className="material-symbols-outlined text-[16px]" style={{ color: "#6b7c75" }}>edit</span>
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
