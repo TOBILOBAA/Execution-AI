@@ -73,7 +73,7 @@ export function SecondaryTaskRow({ task, onToggle, onRemove, onEdit }: Secondary
           </span>
           <span
             className="material-symbols-outlined text-[13px] transition-opacity"
-            style={{ color: "#a8b5af", opacity: hovered ? 1 : 0 }}
+            style={{ color: "#a8b5af", opacity: hovered ? 1 : 0.45 }}
           >
             edit
           </span>
@@ -108,7 +108,7 @@ export function SecondaryTaskRow({ task, onToggle, onRemove, onEdit }: Secondary
       <button
         onClick={(e) => { e.stopPropagation(); onRemove(); }}
         className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-all"
-        style={{ opacity: hovered ? 1 : 0, color: "#c4d0cb" }}
+        style={{ opacity: hovered ? 1 : 0.72, color: "#c4d0cb" }}
         onMouseEnter={(e) => { e.currentTarget.style.background = "#fff0f0"; e.currentTarget.style.color = "#ef4444"; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#c4d0cb"; }}
         aria-label="Remove task"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
@@ -11,6 +11,7 @@ import { ModalController } from "@/components/modals/ModalController";
 import { DashboardKickoffModal } from "@/components/dashboard/DashboardKickoffModal";
 import { DashboardEveningReminder } from "@/components/dashboard/DashboardEveningReminder";
 import { DashboardNextDayReview } from "@/components/dashboard/DashboardNextDayReview";
+import { DashboardPeriodReviewPrompts } from "@/components/dashboard/DashboardPeriodReviewPrompts";
 import { SyncErrorBanner } from "@/components/SyncErrorBanner";
 import { useBackendSync } from "@/hooks/useBackendSync";
 
@@ -65,8 +66,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <ModalController />
       <DashboardKickoffModal />
-      <DashboardNextDayReview />
       <DashboardEveningReminder />
+      <DashboardNextDayReview />
+      <Suspense fallback={null}>
+        <DashboardPeriodReviewPrompts />
+      </Suspense>
     </div>
   );
 }

@@ -4,15 +4,12 @@ import { useEffect, useState } from "react";
 import type { DashboardMetrics } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { getDayLabels, getWeekdayIndex } from "@/lib/utils";
-import { isDayRecapPeriodComplete, isWeekRecapPeriodComplete } from "@/lib/reportAvailability";
 
 interface AnalyticsPanelProps {
   metrics: DashboardMetrics;
-  onDayReport?: () => void;
-  onWeekReport?: () => void;
 }
 
-export function AnalyticsPanel({ metrics, onDayReport, onWeekReport }: AnalyticsPanelProps) {
+export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
   const maxVal = Math.max(...metrics.weeklyConsistency, 1);
   const [now, setNow] = useState<Date>(() => new Date());
   const weekStartsOn = useAppStore((state) => state.sessionWeekStartsOn);
@@ -23,19 +20,41 @@ export function AnalyticsPanel({ metrics, onDayReport, onWeekReport }: Analytics
     return () => window.clearInterval(id);
   }, []);
 
-  const dayOpen = isDayRecapPeriodComplete(now);
-  const weekOpen = isWeekRecapPeriodComplete(now, weekStartsOn);
   const todayIndex = getWeekdayIndex(now, weekStartsOn);
   const hasWeeklyData = metrics.weeklyConsistency.some((value) => value > 0);
   const hasWeeklyObjective = Boolean(metrics.weeklyObjective?.trim());
 
+  const todayTaskSummary =
+    metrics.tasksTotalToday && metrics.tasksTotalToday > 0
+      ? `${metrics.tasksCompletedToday ?? 0}/${metrics.tasksTotalToday}`
+      : "No plan";
+  const todayHabitSummary =
+    metrics.habitsTotalToday && metrics.habitsTotalToday > 0
+      ? `${metrics.habitsCompletedToday ?? 0}/${metrics.habitsTotalToday}`
+      : "No habits";
+
   return (
     <div
-      className="text-white rounded-2xl p-6 space-y-7"
+      className="text-white rounded-2xl p-5 sm:p-6 space-y-6 sm:space-y-7"
       style={{ background: "#1a1f1e", boxShadow: "0 4px 24px rgba(0,0,0,0.18)" }}
     >
+      <div className="grid grid-cols-2 gap-3 md:hidden">
+        <div className="rounded-2xl px-4 py-3" style={{ background: "rgba(255,255,255,0.05)" }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>
+            Today&apos;s Tasks
+          </p>
+          <p className="text-2xl font-headline font-extrabold text-white">{todayTaskSummary}</p>
+        </div>
+        <div className="rounded-2xl px-4 py-3" style={{ background: "rgba(255,255,255,0.05)" }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>
+            Habits
+          </p>
+          <p className="text-2xl font-headline font-extrabold text-white">{todayHabitSummary}</p>
+        </div>
+      </div>
+
       {/* Streak */}
-      <div>
+      <div className="hidden md:block">
         <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>
           Execution Streak
         </p>
@@ -71,7 +90,7 @@ export function AnalyticsPanel({ metrics, onDayReport, onWeekReport }: Analytics
         <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.4)" }}>
           Weekly Consistency
         </p>
-        <div className="flex justify-between items-end h-16 gap-1.5">
+        <div className="flex justify-between items-end h-[72px] md:h-16 gap-1.5">
           {metrics.weeklyConsistency.map((val, i) => {
             const pct = Math.round((val / maxVal) * 100);
             const isToday = i === todayIndex;
@@ -91,7 +110,7 @@ export function AnalyticsPanel({ metrics, onDayReport, onWeekReport }: Analytics
             );
           })}
         </div>
-        <div className="flex justify-between text-[10px] font-bold" style={{ color: "rgba(255,255,255,0.3)" }}>
+        <div className="flex justify-between text-[10px] font-bold" style={{ color: "rgba(255,255,255,0.34)" }}>
           {dayLabels.map((d, i) => (
             <span key={i} className="flex-1 text-center">
               {d}
@@ -123,74 +142,6 @@ export function AnalyticsPanel({ metrics, onDayReport, onWeekReport }: Analytics
         <p className="text-sm font-medium leading-snug" style={{ color: "rgba(255,255,255,0.6)" }}>
           {metrics.monthlyContext || "No monthly context is connected yet."}
         </p>
-      </div>
-
-      <div style={{ height: "1px", background: "rgba(255,255,255,0.07)" }} />
-
-      <div className="space-y-2">
-        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.4)" }}>
-          Quick Reports
-        </p>
-        {onDayReport && (
-          <button
-            type="button"
-            onClick={() => dayOpen && onDayReport()}
-            disabled={!dayOpen}
-            title={dayOpen ? "Open day recap" : "Available after today ends (local time)."}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all"
-            style={{
-              background: dayOpen ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
-              color: dayOpen ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.35)",
-              cursor: dayOpen ? "pointer" : "not-allowed",
-            }}
-            onMouseEnter={(e) => {
-              if (!dayOpen) return;
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.10)";
-            }}
-            onMouseLeave={(e) => {
-              if (!dayOpen) return;
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.06)";
-            }}
-          >
-            <span className="flex items-center gap-2 text-xs font-semibold">
-              <span className="material-symbols-outlined text-[15px]">today</span>
-              Day Recap
-            </span>
-            <span className="material-symbols-outlined text-[16px]" style={{ color: "rgba(255,255,255,0.3)" }}>
-              chevron_right
-            </span>
-          </button>
-        )}
-        {onWeekReport && (
-          <button
-            type="button"
-            onClick={() => weekOpen && onWeekReport()}
-            disabled={!weekOpen}
-            title={weekOpen ? "Open weekly recap" : "Available after this week ends (local time)."}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all"
-            style={{
-              background: weekOpen ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
-              color: weekOpen ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.35)",
-              cursor: weekOpen ? "pointer" : "not-allowed",
-            }}
-            onMouseEnter={(e) => {
-              if (!weekOpen) return;
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.10)";
-            }}
-            onMouseLeave={(e) => {
-              if (!weekOpen) return;
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.06)";
-            }}
-          >
-            <span className="flex items-center gap-2 text-xs font-semibold">
-              <span className="material-symbols-outlined text-[15px]">date_range</span>
-              Weekly Recap
-            </span>
-            <span className="material-symbols-outlined text-[16px]" style={{ color: "rgba(255,255,255,0.3)" }}>
-              chevron_right
-            </span>
-          </button>
-        )}
       </div>
     </div>
   );
