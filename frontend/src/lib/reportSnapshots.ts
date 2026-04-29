@@ -17,6 +17,13 @@ export interface QuarterReportSnapshot {
   summary: string | null;
 }
 
+export interface QuarterReviewNarrative {
+  summary: string;
+  reflection: string;
+  nextFocus: string | null;
+  coveredMonths: string[];
+}
+
 function asRecord(value: unknown): AnyRecord {
   return value && typeof value === "object" ? (value as AnyRecord) : {};
 }
@@ -152,6 +159,44 @@ export function listQuarterSnapshots(reports: ApiReport[], year: number): Quarte
       summary,
     };
   });
+}
+
+export function buildQuarterReviewNarrative(
+  snapshot: QuarterReportSnapshot | null | undefined,
+  opts: {
+    year: number;
+    quarter: 1 | 2 | 3 | 4;
+    nextQuarter?: 1 | 2 | 3 | 4;
+    nextYear?: number;
+  },
+): QuarterReviewNarrative | null {
+  if (!snapshot || snapshot.months.length === 0) return null;
+
+  const coveredMonths = snapshot.months.map((monthReport) => monthName(monthReport.period_month));
+  const coveredMonthsLabel = coveredMonths.join(", ");
+  const summary =
+    snapshot.summary ??
+    `Q${opts.quarter} pulled together ${snapshot.months.length} monthly report${
+      snapshot.months.length === 1 ? "" : "s"
+    } across ${coveredMonthsLabel}.`;
+
+  const reflectionParts = [
+    snapshot.avgCompletion !== null ? `Average completion landed at ${snapshot.avgCompletion}%.` : null,
+    snapshot.topPillar ? `The strongest pillar was ${snapshot.topPillar}.` : null,
+    `This quarter covered ${coveredMonthsLabel}.`,
+  ].filter(Boolean);
+
+  const nextFocus =
+    opts.nextQuarter && opts.nextYear
+      ? `Open Q${opts.nextQuarter} ${opts.nextYear} and decide the operating focus before the quarter starts drifting month by month.`
+      : null;
+
+  return {
+    summary,
+    reflection: reflectionParts.join(" "),
+    nextFocus,
+    coveredMonths,
+  };
 }
 
 export function yearlyCompletionRate(report: ApiReport | null): number | null {

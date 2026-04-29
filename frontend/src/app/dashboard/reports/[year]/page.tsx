@@ -19,6 +19,7 @@ import {
   listQuarterSnapshots,
   monthName,
   monthlyCompletionRate,
+  buildQuarterReviewNarrative,
   monthlySummary,
   monthlyTopPillar,
   yearlyCompletionRate,
@@ -245,6 +246,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   const router = useRouter();
   const sessionId = useAppStore((state) => state.sessionId);
   const monthlyGoals = useAppStore((state) => state.monthlyGoals);
+  const openModal = useAppStore((state) => state.openModal);
   const [reports, setReports] = useState<ApiReport[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ArchiveTab>("overview");
@@ -1073,6 +1075,14 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 }
 
                 const tone = archiveCardTone(quarter.snapshot.avgCompletion);
+                const nextQuarter = quarter.quarter === 4 ? 1 : (quarter.quarter + 1) as 1 | 2 | 3 | 4;
+                const nextYear = quarter.quarter === 4 ? year + 1 : year;
+                const quarterNarrative = buildQuarterReviewNarrative(quarter.snapshot, {
+                  year,
+                  quarter: quarter.quarter as 1 | 2 | 3 | 4,
+                  nextQuarter,
+                  nextYear,
+                });
 
                 return (
                   <div
@@ -1114,6 +1124,30 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       {quarter.snapshot.summary ??
                         "Monthly reports exist in this quarter, but no stitched quarter narrative has been formed yet."}
                     </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openModal("quarterly-report", {
+                          year,
+                          quarter: quarter.quarter,
+                          coveredMonths: quarterNarrative?.coveredMonths ?? [],
+                          avgCompletion: quarter.snapshot.avgCompletion,
+                          topPillar: quarter.snapshot.topPillar,
+                          summary:
+                            quarterNarrative?.summary ??
+                            "Monthly reports exist in this quarter, but the AI review could not be formed yet.",
+                          reflection:
+                            quarterNarrative?.reflection ??
+                            "The quarter reflection is waiting on stronger monthly reporting depth.",
+                          nextFocus: quarterNarrative?.nextFocus ?? null,
+                        })
+                      }
+                      className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-85"
+                      style={{ background: "#003d2b" }}
+                    >
+                      AI generate quarterly review
+                      <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                    </button>
                   </div>
                 );
               })}
