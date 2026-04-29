@@ -200,6 +200,7 @@ export type ModalType =
   | "edit-daily-priority"
   | "manage-habits"
   | "daily-report"
+  | "quarterly-report"
   | "weekly-report"
   | "monthly-report"
   | "yearly-report";

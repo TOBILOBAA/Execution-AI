@@ -13,7 +13,7 @@ const PAGE_TITLES: Record<string, { title: string; label: string }> = {
 };
 
 export function TopBar() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const router = useRouter();
   const { currentUser, signOut } = useAppStore(
     useShallow((state) => ({
