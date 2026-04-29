@@ -38,6 +38,22 @@ import app.db.reports as reports_db
 import app.db.categories as categories_db
 
 
+def _report_identity(
+    report_type: str,
+    period_year: int | None,
+    period_month: int | None = None,
+    period_week: int | None = None,
+    period_date: str | None = None,
+) -> tuple[str, int | None, int | None, int | None, str | None]:
+    if report_type == "daily":
+        return (report_type, period_year, None, None, period_date)
+    if report_type == "weekly":
+        return (report_type, period_year, None, period_week, None)
+    if report_type == "monthly":
+        return (report_type, period_year, period_month, None, None)
+    return (report_type, period_year, None, None, None)
+
+
 # ─── Daily Report ─────────────────────────────────────────────────────────────
 
 def generate_daily_report(db: Client, session_id: UUID, report_date: date) -> dict:
@@ -111,6 +127,7 @@ def generate_weekly_report(
     week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
     week_start, week_end = get_week_boundaries(year, week_number, week_starts_on)
     week_label = week_date_range_label(week_start, week_end)
+    weekly_plan = plans_db.get_weekly_plan(db, session_id, year, week_number)
 
     # Collect all daily data for the week
     daily_plans = plans_db.list_daily_plans_for_week(db, session_id, week_start, week_end)
@@ -149,6 +166,7 @@ def generate_weekly_report(
         "report_type": "weekly",
         "period_week": week_number,
         "period_year": year,
+        "period_month": weekly_plan.get("month") if weekly_plan else week_start.month,
         "metrics": metrics,
         "ai_narrative": ai_narrative,
         "ai_generated_at": datetime.now(timezone.utc).isoformat() if ai_narrative else None,
@@ -302,7 +320,7 @@ def list_reports(db: Client, session_id: UUID) -> list[dict]:
     existing_reports = reports_db.list_reports(db, session_id)
     generated_reports = ensure_historical_reports(db, session_id, existing_reports)
     merged = {
-        (
+        _report_identity(
             report["report_type"],
             report.get("period_year"),
             report.get("period_month"),
@@ -346,7 +364,7 @@ def ensure_historical_reports(
     """
     existing_reports = existing_reports or reports_db.list_reports(db, session_id)
     existing_keys = {
-        (
+        _report_identity(
             report["report_type"],
             report.get("period_year"),
             report.get("period_month"),
@@ -361,6 +379,15 @@ def ensure_historical_reports(
         row["id"]: row["name"]
         for row in categories_db.list_categories(db, session_id)
     }
+    daily_plan_rows = (
+        db.table("daily_plans")
+        .select("date")
+        .eq("session_id", str(session_id))
+        .order("date")
+        .execute()
+        .data
+        or []
+    )
 
     weekly_plans = (
         db.table("weekly_plans")
@@ -392,12 +419,45 @@ def ensure_historical_reports(
     weekly_summaries_by_key: dict[tuple[int, int], dict] = {}
     monthly_summaries_by_key: dict[tuple[int, int], dict] = {}
 
+    for row in daily_plan_rows:
+        plan_date = date.fromisoformat(row["date"])
+        report_key = _report_identity("daily", plan_date.year, period_date=plan_date.isoformat())
+
+        if report_key in existing_keys:
+            continue
+
+        metrics = _build_daily_summary(db, session_id, plan_date)
+        metrics["date"] = plan_date.isoformat()
+        generated_reports.append(
+            _upsert_or_stage_report(
+                db,
+                session_id,
+                {
+                    "report_type": "daily",
+                    "period_date": plan_date.isoformat(),
+                    "period_month": plan_date.month,
+                    "period_year": plan_date.year,
+                    "metrics": metrics,
+                    "ai_narrative": {
+                        "summary": f"Execution snapshot for {plan_date.isoformat()} reconstructed from saved priorities and habits.",
+                        "top_win": f"Completed {metrics['priorities_completed']} of {metrics['priorities_total']} main priorities.",
+                        "key_miss": f"{metrics['secondary_tasks_total'] - metrics['secondary_tasks_completed']} secondary tasks were left unfinished.",
+                        "reflection": "This historical daily report was reconstructed from saved execution data.",
+                        "tomorrow_focus": "Carry the most important unfinished work into the next planned day.",
+                    },
+                    "ai_generated_at": None,
+                    "status": "ready",
+                },
+            )
+        )
+        existing_keys.add(report_key)
+
     for plan in weekly_plans:
         year = plan["year"]
         week_number = plan["week_number"]
         week_start = date.fromisoformat(plan["week_start"])
         week_end = date.fromisoformat(plan["week_end"])
-        report_key = ("weekly", year, None, week_number, None)
+        report_key = _report_identity("weekly", year, period_week=week_number)
 
         summary = _build_weekly_summary(
             db,
@@ -421,6 +481,7 @@ def ensure_historical_reports(
                     "report_type": "weekly",
                     "period_week": week_number,
                     "period_year": year,
+                    "period_month": plan.get("month") or week_start.month,
                     "metrics": summary["metrics"],
                     "ai_narrative": summary["ai_narrative"],
                     "ai_generated_at": None,
@@ -441,7 +502,7 @@ def ensure_historical_reports(
     }
 
     for year, month in sorted(months):
-        report_key = ("monthly", year, month, None, None)
+        report_key = _report_identity("monthly", year, period_month=month)
         summary = _build_monthly_summary(
             db,
             session_id,
@@ -494,7 +555,7 @@ def ensure_historical_reports(
 
     previous_completion: dict[int, int] = {}
     for year in sorted(years):
-        report_key = ("yearly", year, None, None, None)
+        report_key = _report_identity("yearly", year)
         summary = _build_yearly_summary(
             db,
             session_id,

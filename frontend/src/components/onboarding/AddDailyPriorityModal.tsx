@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { Category } from "@/lib/types";
+import type { Category, WeeklyGoal } from "@/lib/types";
 
 interface Props {
   categories: Category[];
+  weeklyGoals: WeeklyGoal[];
   initialTitle?: string;
   initialCategoryId?: string;
+  initialWeeklyGoalId?: string;
   initialAllocation?: number;
   initialDescription?: string;
   onSubmit: (data: {
@@ -14,6 +16,7 @@ interface Props {
     categoryId?: string;
     estimatedMinutes: number;
     tag?: string;
+    weeklyGoalId?: string;
     description: string;
   }) => void;
   onClose: () => void;
@@ -27,8 +30,10 @@ const ALLOC_OPTIONS = [
 
 export function AddDailyPriorityModal({
   categories,
+  weeklyGoals,
   initialTitle = "",
   initialCategoryId,
+  initialWeeklyGoalId,
   initialAllocation = 30,
   initialDescription = "",
   onSubmit,
@@ -37,6 +42,7 @@ export function AddDailyPriorityModal({
   const isEdit = !!initialTitle;
   const [title, setTitle] = useState(initialTitle);
   const [categoryId, setCategoryId] = useState(initialCategoryId ?? "");
+  const [weeklyGoalId, setWeeklyGoalId] = useState(initialWeeklyGoalId ?? weeklyGoals[0]?.id ?? "");
   const [description, setDescription] = useState(initialDescription);
   const [allocation, setAllocation] = useState(
     ALLOC_OPTIONS.some((o) => o.value === initialAllocation) ? initialAllocation : 30
@@ -59,6 +65,7 @@ export function AddDailyPriorityModal({
       categoryId: categoryId || undefined,
       estimatedMinutes: mins,
       tag: cat?.name,
+      weeklyGoalId: weeklyGoalId || undefined,
       description: description.trim(),
     });
   };
@@ -144,6 +151,32 @@ export function AddDailyPriorityModal({
                 className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[18px]"
                 style={{ color: "#8a9e97" }}
               >
+                unfold_more
+              </span>
+            </div>
+          </div>
+
+          <div className="mb-5">
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
+              Link to Weekly Goal
+            </label>
+            <div className="relative">
+              <select
+                value={weeklyGoalId}
+                onChange={(e) => setWeeklyGoalId(e.target.value)}
+                className="w-full appearance-none rounded-xl px-4 py-3 text-sm font-medium pr-10 focus:outline-none cursor-pointer"
+                style={{
+                  background: "#f5f7f6",
+                  border: "1px solid rgba(0,0,0,0.06)",
+                  color: weeklyGoalId ? "#1a1f1e" : "#a8b5af",
+                }}
+              >
+                <option value="">No weekly parent selected</option>
+                {weeklyGoals.map((g) => (
+                  <option key={g.id} value={g.id}>{g.title}</option>
+                ))}
+              </select>
+              <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[18px]" style={{ color: "#8a9e97" }}>
                 unfold_more
               </span>
             </div>

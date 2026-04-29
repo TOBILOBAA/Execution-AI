@@ -35,6 +35,13 @@ from app.schemas.reports import (
 T = TypeVar("T", bound=BaseModel)
 
 _client: genai.Client | None = None
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+MODEL_FALLBACKS: dict[str, str] = {
+    "gemini-2.0-flash": "gemini-2.5-flash",
+    "gemini-2.0-flash-001": "gemini-2.5-flash",
+    "gemini-2.0-flash-lite": "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-lite-001": "gemini-2.5-flash-lite",
+}
 
 
 def _normalize_model_id(name: str) -> str:
@@ -42,7 +49,7 @@ def _normalize_model_id(name: str) -> str:
     n = (name or "").strip()
     if n.startswith("models/"):
         return n[7:]
-    return n or "gemini-2.0-flash"
+    return n or DEFAULT_GEMINI_MODEL
 
 
 def _get_client() -> genai.Client:
@@ -71,18 +78,22 @@ def _get_client() -> genai.Client:
     return _client
 
 
-def _call_gemini(prompt: str, max_retries: int = 1) -> str:
-    """
-    Call Gemini via the google-genai SDK with JSON output mode.
-    Retries on empty/failed responses. Returns raw text content.
-    """
-    settings = get_settings()
-    client = _get_client()
-    model_id = _normalize_model_id(settings.gemini_model)
+def _is_unavailable_model_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return "not_found" in message or "no longer available" in message
+
+
+def _call_gemini_with_model(
+    client: genai.Client,
+    model_id: str,
+    prompt: str,
+    max_retries: int,
+    max_output_tokens: int,
+) -> str:
     config = genai_types.GenerateContentConfig(
         temperature=0.4,
         top_p=0.95,
-        max_output_tokens=min(8192, max(512, settings.gemini_max_output_tokens)),
+        max_output_tokens=min(8192, max(512, max_output_tokens)),
         response_mime_type="application/json",
     )
 
@@ -108,11 +119,46 @@ def _call_gemini(prompt: str, max_retries: int = 1) -> str:
             return text
         except Exception as exc:
             last_error = exc
-            logger.warning("gemini_retry", attempt=attempt, error=str(exc))
+            logger.warning("gemini_retry", attempt=attempt, error=str(exc), model=model_id)
             if attempt < max_retries:
                 time.sleep(0.35 * (attempt + 1))
 
     raise RuntimeError(f"Gemini call failed after {max_retries + 1} attempts: {last_error}")
+
+
+def _call_gemini(prompt: str, max_retries: int = 1) -> str:
+    """
+    Call Gemini via the google-genai SDK with JSON output mode.
+    Retries on empty/failed responses. Returns raw text content.
+    """
+    settings = get_settings()
+    client = _get_client()
+    model_id = _normalize_model_id(settings.gemini_model)
+    try:
+        return _call_gemini_with_model(
+            client,
+            model_id,
+            prompt,
+            max_retries=max_retries,
+            max_output_tokens=settings.gemini_max_output_tokens,
+        )
+    except RuntimeError as exc:
+        fallback_model = MODEL_FALLBACKS.get(model_id)
+        if not fallback_model or not _is_unavailable_model_error(exc):
+            raise
+        logger.warning(
+            "gemini_model_fallback",
+            from_model=model_id,
+            to_model=fallback_model,
+            error=str(exc),
+        )
+        return _call_gemini_with_model(
+            client,
+            fallback_model,
+            prompt,
+            max_retries=max_retries,
+            max_output_tokens=settings.gemini_max_output_tokens,
+        )
 
 
 def _parse_and_validate(raw: str, schema: Type[T]) -> T:

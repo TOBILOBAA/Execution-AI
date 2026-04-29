@@ -43,7 +43,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (aborted) {
       throw new ApiError(
         408,
-        "Request timed out. The server took too long to respond (often the AI step). Try again, or set GEMINI_MODEL=gemini-2.0-flash on the backend.",
+        "Request timed out. The server took too long to respond (often the AI step). Try again, or set GEMINI_MODEL to a supported Gemini model like gemini-2.5-flash on the backend.",
       );
     }
     throw e;
@@ -252,9 +252,13 @@ export interface ApiNextDayReview {
     completed_habit_count: number;
     habit_count: number;
     completed_main_titles: string[];
+    completed_task_titles: string[];
+    completed_habit_names: string[];
     incomplete_main_titles: string[];
     incomplete_task_titles: string[];
+    missed_habit_names: string[];
   };
+  reflection?: string;
   insights: string[];
   proposal: {
     priorities: ApiNextDayReviewItem[];
@@ -274,6 +278,7 @@ export interface ApiGoalsHierarchy {
   current_week_number: number;
   weekly_goals: ApiWeeklyGoal[];
   today: string;
+  year_daily_priorities: ApiDailyPriority[];
   selected_week_number: number | null;
   selected_week_start: string | null;
   selected_week_end: string | null;
@@ -398,6 +403,9 @@ export const monthlyPlanApi = {
 
   updateGoal: (sessionId: string, goalId: string, data: Partial<ApiMonthlyGoal>) =>
     patch<ApiMonthlyGoal>(`/monthly-goals/${goalId}?session_id=${sessionId}`, data),
+
+  deleteGoal: (sessionId: string, goalId: string) =>
+    del<void>(`/monthly-goals/${goalId}?session_id=${sessionId}`),
 };
 
 // ─── Weekly Plans ─────────────────────────────────────────────────────────────
@@ -429,6 +437,9 @@ export const weeklyPlanApi = {
 
   updateGoal: (sessionId: string, goalId: string, data: Partial<ApiWeeklyGoal>) =>
     patch<ApiWeeklyGoal>(`/weekly-goals/${goalId}?session_id=${sessionId}`, data),
+
+  deleteGoal: (sessionId: string, goalId: string) =>
+    del<void>(`/weekly-goals/${goalId}?session_id=${sessionId}`),
 };
 
 // ─── Daily Plans ──────────────────────────────────────────────────────────────
@@ -462,6 +473,7 @@ export const tasksApi = {
     priority: string;
     estimated_minutes: number;
     tag: string;
+    weekly_goal_id: string | null;
   }>) => patch<ApiDailyPriority>(`/tasks/${taskId}?session_id=${sessionId}`, data),
 
   create: (sessionId: string, date: string, data: {
@@ -521,11 +533,13 @@ export const habitsApi = {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export const dashboardApi = {
-  get: (sessionId: string) =>
-    get<ApiDashboard>(`/dashboard/${sessionId}`),
+  get: (sessionId: string, planDate?: string) =>
+    get<ApiDashboard>(`/dashboard/${sessionId}${planDate ? `?plan_date=${encodeURIComponent(planDate)}` : ""}`),
 
-  getNextDayReview: (sessionId: string) =>
-    get<ApiNextDayReview>(`/dashboard/${sessionId}/next-day-review`),
+  getNextDayReview: (sessionId: string, planDate?: string) =>
+    get<ApiNextDayReview>(
+      `/dashboard/${sessionId}/next-day-review${planDate ? `?plan_date=${encodeURIComponent(planDate)}` : ""}`,
+    ),
 
   approveNextDayReview: (
     sessionId: string,

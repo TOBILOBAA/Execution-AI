@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from supabase import Client
 
 from app.api.deps import get_db
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import AIGenerationError, NotFoundError
 from app.schemas.plans import (
     MonthlyPlanGenerateRequest, MonthlyPlanApproveRequest,
     WeeklyPlanGenerateRequest, WeeklyPlanApproveRequest,
@@ -86,9 +86,12 @@ def generate_monthly_plan(
     db: Client = Depends(get_db),
 ):
     """Generate an AI monthly plan draft. Does not approve it."""
-    return planning_service.generate_monthly_plan(
-        db, body.session_id, body.year, body.month
-    )
+    try:
+        return planning_service.generate_monthly_plan(
+            db, body.session_id, body.year, body.month
+        )
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc
 
 
 @router.post("/monthly-plan/save")
@@ -168,6 +171,19 @@ def update_monthly_goal(
     )
 
 
+@router.delete("/monthly-goals/{goal_id}", status_code=204)
+def delete_monthly_goal(
+    goal_id: UUID,
+    session_id: UUID,
+    db: Client = Depends(get_db),
+):
+    goal = plans_db.get_monthly_goal(db, goal_id, session_id)
+    if not goal:
+        raise NotFoundError("Monthly goal", str(goal_id))
+    plans_db.delete_monthly_goal(db, goal_id, session_id)
+    return None
+
+
 # ─── Weekly Plans ─────────────────────────────────────────────────────────────
 
 @router.post("/weekly-plan/generate")
@@ -176,9 +192,12 @@ def generate_weekly_plan(
     db: Client = Depends(get_db),
 ):
     """Generate an AI weekly plan draft."""
-    return planning_service.generate_weekly_plan(
-        db, body.session_id, body.year, body.week_number
-    )
+    try:
+        return planning_service.generate_weekly_plan(
+            db, body.session_id, body.year, body.week_number
+        )
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc
 
 
 @router.post("/weekly-plan/save")
@@ -260,6 +279,19 @@ def update_weekly_goal(
     )
 
 
+@router.delete("/weekly-goals/{goal_id}", status_code=204)
+def delete_weekly_goal(
+    goal_id: UUID,
+    session_id: UUID,
+    db: Client = Depends(get_db),
+):
+    goal = plans_db.get_weekly_goal(db, goal_id, session_id)
+    if not goal:
+        raise NotFoundError("Weekly goal", str(goal_id))
+    plans_db.delete_weekly_goal(db, goal_id, session_id)
+    return None
+
+
 # ─── Daily Plans ──────────────────────────────────────────────────────────────
 
 @router.post("/daily-plan/generate")
@@ -268,7 +300,10 @@ def generate_daily_plan(
     db: Client = Depends(get_db),
 ):
     """Generate an AI daily plan draft."""
-    return planning_service.generate_daily_plan(db, body.session_id, body.date)
+    try:
+        return planning_service.generate_daily_plan(db, body.session_id, body.date)
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc
 
 
 @router.post("/daily-plan/save")

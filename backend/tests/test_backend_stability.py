@@ -12,7 +12,7 @@ for key, value in {
     "SUPABASE_ANON_KEY": "test-anon-key",
     "SUPABASE_SERVICE_ROLE_KEY": "test-service-role-key",
     "GOOGLE_AI_API_KEY": "",
-    "GEMINI_MODEL": "gemini-2.0-flash",
+    "GEMINI_MODEL": "gemini-2.5-flash",
     "GEMINI_REQUEST_TIMEOUT_MS": "120000",
     "GEMINI_MAX_OUTPUT_TOKENS": "4096",
     "GCP_PROJECT_ID": "",

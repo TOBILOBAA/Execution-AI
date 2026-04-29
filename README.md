@@ -35,6 +35,12 @@ Run the browser smoke script:
 npm run qa:ui-smoke
 ```
 
+Include **monthly AI Generate** (needs working backend + Gemini; asserts the old misleading “yearly goals” error copy never appears):
+
+```bash
+npm run qa:ui-smoke-ai
+```
+
 ## Notes
 
 - Frontend environment variables live in `frontend/.env.local`

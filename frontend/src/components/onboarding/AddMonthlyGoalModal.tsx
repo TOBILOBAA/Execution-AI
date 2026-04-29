@@ -3,18 +3,27 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { CURRENT_MONTH, CURRENT_YEAR } from "@/lib/mockData";
-import type { Category } from "@/lib/types";
+import type { Category, YearlyGoal } from "@/lib/types";
 
 interface Props {
   mode: "main" | "secondary";
   categories: Category[];
+  yearlyGoals: YearlyGoal[];
   /** Pre-fill for edit */
   initialTitle?: string;
   initialCategoryId?: string;
+  initialYearlyGoalId?: string;
   initialDate?: string;
   initialDescription?: string;
   initialWorkload?: string;
-  onSubmit: (title: string, categoryId: string, targetDate: string, description: string, workload: string) => void;
+  onSubmit: (
+    title: string,
+    categoryId: string,
+    yearlyGoalId: string,
+    targetDate: string,
+    description: string,
+    workload: string,
+  ) => void;
   onClose: () => void;
 }
 
@@ -39,8 +48,10 @@ function endOfMonth(year: number, month: number) {
 export function AddMonthlyGoalModal({
   mode,
   categories,
+  yearlyGoals,
   initialTitle = "",
   initialCategoryId,
+  initialYearlyGoalId,
   initialDate,
   initialDescription = "",
   initialWorkload = "",
@@ -53,6 +64,7 @@ export function AddMonthlyGoalModal({
 
   const [title, setTitle] = useState(initialTitle);
   const [categoryId, setCategoryId] = useState(initialCategoryId ?? categories[0]?.id ?? "");
+  const [yearlyGoalId, setYearlyGoalId] = useState(initialYearlyGoalId ?? yearlyGoals[0]?.id ?? "");
   const [targetDate, setTargetDate] = useState(defaultDate);
   const [description, setDescription] = useState(initialDescription);
   const [workload, setWorkload] = useState(initialWorkload);
@@ -63,7 +75,7 @@ export function AddMonthlyGoalModal({
 
   const handleSubmit = () => {
     if (!title.trim()) { setError("Goal name is required."); return; }
-    onSubmit(title.trim(), categoryId, targetDate, description.trim(), workload.trim());
+    onSubmit(title.trim(), categoryId, yearlyGoalId, targetDate, description.trim(), workload.trim());
   };
 
   return (
@@ -124,6 +136,37 @@ export function AddMonthlyGoalModal({
                 );
               })}
             </div>
+          </div>
+
+          {/* Parent yearly goal selector */}
+          <div className="mb-5">
+            <label className="block mb-2" style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8a9e97" }}>
+              Link to Yearly Goal
+            </label>
+            <div className="relative">
+              <select
+                value={yearlyGoalId}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  setYearlyGoalId(nextId);
+                  const parent = yearlyGoals.find((g) => g.id === nextId);
+                  if (parent?.categoryId) setCategoryId(parent.categoryId);
+                }}
+                className="w-full appearance-none px-4 py-3 rounded-xl border text-sm focus:outline-none focus:border-[#006c4a] transition"
+                style={{ borderColor: "#e2e8e4", background: "#f7f9f8", color: yearlyGoalId ? "#1a1f1e" : "#8a9e97" }}
+              >
+                <option value="">No yearly parent selected</option>
+                {yearlyGoals.map((goal) => (
+                  <option key={goal.id} value={goal.id}>{goal.title}</option>
+                ))}
+              </select>
+              <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[18px]" style={{ color: "#8a9e97" }}>
+                expand_more
+              </span>
+            </div>
+            <p className="text-[11px] mt-1.5" style={{ color: "#a8b5af" }}>
+              This keeps the yearly → monthly hierarchy visible across the dashboard.
+            </p>
           </div>
 
           {/* Goal name */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   goalsApi,
   habitsApi,
@@ -52,6 +52,7 @@ export interface UseGoalsHierarchyResult {
   yearlyGoals: YearlyGoal[];
   monthlyGoals: MonthlyGoal[];
   weeklyGoals: WeeklyGoal[];
+  yearDailyPriorities: DailyPriority[];
   selectedWeekDailyPriorities: DailyPriority[];
   habits: FoundationalHabit[];
   refresh: () => Promise<void>;
@@ -153,9 +154,9 @@ function hydrateGoalsStore(snapshot: ApiGoalsHierarchy, habits: ApiHabit[]) {
   const nextYearlyGoals = snapshot.yearly_goals.map(mapApiYearlyGoal);
   const nextMonthlyGoals = snapshot.monthly_goals.map(mapApiMonthlyGoal);
   const nextWeeklyGoals = snapshot.weekly_goals.map(mapApiWeeklyGoal);
-  const nextDailyPriorities = snapshot.selected_week_daily_priorities.map(mapApiDailyPriority);
+  const nextDailyPriorities = snapshot.year_daily_priorities.map(mapApiDailyPriority);
   const nextHabits = habits.map(mapApiHabit);
-  const selectedDates = new Set(nextDailyPriorities.map((priority) => priority.date));
+  const targetYearPrefix = `${snapshot.year}-`;
 
   useAppStore.setState((state) => ({
     categories: nextCategories,
@@ -172,7 +173,7 @@ function hydrateGoalsStore(snapshot: ApiGoalsHierarchy, habits: ApiHabit[]) {
       ...nextWeeklyGoals,
     ],
     dailyPriorities: [
-      ...state.dailyPriorities.filter((priority) => !selectedDates.has(priority.date)),
+      ...state.dailyPriorities.filter((priority) => !priority.date.startsWith(targetYearPrefix)),
       ...nextDailyPriorities,
     ].sort((a, b) => {
       if (a.date === b.date) {
@@ -203,6 +204,7 @@ export function useGoalsHierarchy(
   year: number,
   opts?: { weekNumber?: number },
 ): UseGoalsHierarchyResult {
+  const requestedWeekNumber = opts?.weekNumber;
   const sessionId = useAppStore((state): GoalsSlice["sessionId"] => state.sessionId);
   const backendReady = useAppStore((state): GoalsSlice["backendReady"] => state.backendReady);
   const workspaceHydrating = useAppStore((state): GoalsSlice["workspaceHydrating"] => state.workspaceHydrating);
@@ -220,11 +222,11 @@ export function useGoalsHierarchy(
   const [today, setToday] = useState<string>(new Date().toISOString().slice(0, 10));
   const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth() + 1);
   const [currentWeekNumber, setCurrentWeekNumber] = useState<number | null>(null);
-  const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(opts?.weekNumber ?? null);
+  const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(requestedWeekNumber ?? null);
   const [selectedWeekStart, setSelectedWeekStart] = useState<string | null>(null);
   const [selectedWeekEnd, setSelectedWeekEnd] = useState<string | null>(null);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     if (Number.isNaN(year)) {
       setReady(true);
       return;
@@ -238,7 +240,7 @@ export function useGoalsHierarchy(
     setLoading(true);
     setError(null);
     try {
-      const { hierarchy } = await fetchGoalsHierarchy(sessionId, year, opts?.weekNumber);
+      const { hierarchy } = await fetchGoalsHierarchy(sessionId, year, requestedWeekNumber);
       setLastSyncedAt(hierarchy.last_synced_at);
       setToday(hierarchy.today);
       setCurrentMonth(hierarchy.current_month);
@@ -252,7 +254,7 @@ export function useGoalsHierarchy(
       setLoading(false);
       setReady(true);
     }
-  }
+  }, [backendReady, requestedWeekNumber, sessionId, workspaceHydrating, year]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,7 +268,7 @@ export function useGoalsHierarchy(
     return () => {
       cancelled = true;
     };
-  }, [sessionId, backendReady, workspaceHydrating, year, opts?.weekNumber]);
+  }, [refresh]);
 
   const currentWeekFallback = useMemo(() => {
     const now = new Date();
@@ -277,7 +279,7 @@ export function useGoalsHierarchy(
   }, []);
 
   const effectiveCurrentWeek = currentWeekNumber ?? currentWeekFallback;
-  const effectiveSelectedWeek = selectedWeekNumber ?? opts?.weekNumber ?? null;
+  const effectiveSelectedWeek = selectedWeekNumber ?? requestedWeekNumber ?? null;
 
   return {
     ready,
@@ -295,6 +297,7 @@ export function useGoalsHierarchy(
     yearlyGoals: storeYearlyGoals.filter((goal) => goal.year === year),
     monthlyGoals: storeMonthlyGoals.filter((goal) => goal.year === year),
     weeklyGoals: storeWeeklyGoals.filter((goal) => goal.year === year),
+    yearDailyPriorities: storeDailyPriorities.filter((priority) => priority.date.startsWith(`${year}-`)),
     selectedWeekDailyPriorities:
       selectedWeekStart && selectedWeekEnd
         ? storeDailyPriorities.filter(

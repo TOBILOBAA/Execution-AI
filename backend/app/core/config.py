@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     google_ai_api_key: str = ""
 
     # Gemini model id for generateContent. Prefer a Flash model for lower latency.
-    gemini_model: str = Field(default="gemini-2.0-flash")
+    gemini_model: str = Field(default="gemini-2.5-flash")
     # Hard cap on HTTP wait (milliseconds). Prevents hanging forever if the API stalls.
     gemini_request_timeout_ms: int = Field(
         default=120_000,

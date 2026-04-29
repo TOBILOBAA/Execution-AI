@@ -16,10 +16,12 @@ import {
   DEFAULT_CATEGORIES,
   CURRENT_YEAR,
   EMPTY_DASHBOARD_METRICS,
+  TODAY,
 } from "./mockData";
 import { isUuid } from "./uuid";
 import type { DashboardMetrics, YearReport } from "./types";
 import {
+  ApiError,
   categoriesApi,
   yearlyGoalsApi,
   monthlyPlanApi,
@@ -118,7 +120,11 @@ interface AppState {
   workspaceOwnerId: string | null;
   /** Last server save / sync failure (not persisted). */
   syncError: string | null;
+  /** Explicit server write state so UI copy does not infer from local state. */
+  syncStatus: "idle" | "saving" | "saved" | "failed";
   clearSyncError: () => void;
+  activeDashboardDate: string;
+  setActiveDashboardDate: (date: string) => void;
 
   // ── Onboarding ──────────────────────────────────────────────────────────────
   onboardingStep: number;
@@ -140,7 +146,7 @@ interface AppState {
   reports: YearReport[];
 
   // ── Backend sync ─────────────────────────────────────────────────────────────
-  loadDashboard: () => Promise<void>;
+  loadDashboard: (planDate?: string) => Promise<void>;
   syncReports: () => Promise<void>;
 
   // ── CRUD operations ─────────────────────────────────────────────────────────
@@ -151,7 +157,7 @@ interface AppState {
   updateYearlyGoal: (id: string, updates: Partial<YearlyGoal>) => void;
   removeYearlyGoal: (id: string) => void;
   /** Persist yearly goals that only exist locally (e.g. mock ids) before leaving step 1. */
-  syncYearlyGoalsToServer: () => Promise<void>;
+  syncYearlyGoalsToServer: () => Promise<boolean>;
   /** Persist monthly goals with local-only ids before weekly AI / leaving step 2. */
   syncMonthlyGoalsToServer: (year: number, month: number) => Promise<boolean>;
   /** Persist weekly goals with local-only ids before daily AI / leaving step 3. */
@@ -183,7 +189,13 @@ interface AppState {
   removeHabit: (id: string) => void;
 
   // ── AI Plan generation ───────────────────────────────────────────────────────
-  generateMonthlyPlan: (year: number, month: number) => Promise<{ draft: unknown } | null>;
+  generateMonthlyPlan: (
+    year: number,
+    month: number,
+  ) => Promise<
+    | { ok: true; draft: unknown }
+    | { ok: false; code: "no_session" | "yearly_sync_failed" | "no_yearly_on_server" | "api_error" }
+  >;
   approveMonthlyPlan: (year: number, month: number, goals?: unknown[]) => Promise<boolean>;
   generateWeeklyPlan: (year: number, weekNumber: number) => Promise<{ draft: unknown } | null>;
   approveWeeklyPlan: (year: number, weekNumber: number, goals?: unknown[]) => Promise<boolean>;
@@ -795,6 +807,7 @@ export const useAppStore = create<AppState>()(
           currentUser: null,
           sessionId: null,
           sessionWeekStartsOn: "monday",
+          activeDashboardDate: TODAY,
           backendReady: false,
           workspaceHydrating: false,
           syncError: null,
@@ -816,6 +829,7 @@ export const useAppStore = create<AppState>()(
             currentUser: null,
             sessionId: null,
             sessionWeekStartsOn: "monday",
+            activeDashboardDate: TODAY,
             backendReady: false,
             workspaceHydrating: false,
             syncError: null,
@@ -865,7 +879,9 @@ export const useAppStore = create<AppState>()(
       backendReady: false,
       workspaceHydrating: false,
       workspaceOwnerId: null,
+      activeDashboardDate: TODAY,
       setSessionId: (id) => set({ sessionId: id }),
+      setActiveDashboardDate: (date) => set({ activeDashboardDate: date }),
       setWeekStartsOn: async (value) => {
         const { sessionId, backendReady, sessionWeekStartsOn } = get();
         if (value === sessionWeekStartsOn) return;
@@ -885,6 +901,7 @@ export const useAppStore = create<AppState>()(
         }
       },
       syncError: null,
+      syncStatus: "idle",
       clearSyncError: () => set({ syncError: null }),
 
       // ── Onboarding ──────────────────────────────────────────────────────────
@@ -934,12 +951,13 @@ export const useAppStore = create<AppState>()(
       reports: [],
 
       // ── Backend sync ─────────────────────────────────────────────────────────
-      loadDashboard: async () => {
-        const { sessionId } = get();
+      loadDashboard: async (planDate) => {
+        const { sessionId, activeDashboardDate } = get();
         if (!sessionId) return;
+        const requestedDate = planDate ?? activeDashboardDate;
         try {
           const [data, categories] = await Promise.all([
-            dashboardApi.get(sessionId),
+            dashboardApi.get(sessionId, requestedDate),
             categoriesApi.list(sessionId).catch(() => null),
           ]);
           set((s) => ({
@@ -956,6 +974,7 @@ export const useAppStore = create<AppState>()(
               monthlyGoals: s.monthlyGoals,
               weeklyGoals: s.weeklyGoals,
             }),
+            activeDashboardDate: data.today,
             syncError: null,
           }));
         } catch (e) {
@@ -1050,7 +1069,14 @@ export const useAppStore = create<AppState>()(
       },
       syncYearlyGoalsToServer: async () => {
         const { sessionId, yearlyGoals } = get();
-        if (!sessionId) return;
+        if (!sessionId) {
+          if (requiresServerPersistence()) {
+            set({ syncError: "Sync yearly goals: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          return true;
+        }
+        set({ syncStatus: "saving" });
         const localIds = yearlyGoals
           .filter((g) => g.year === CURRENT_YEAR && !isUuid(g.id))
           .map((g) => g.id);
@@ -1066,23 +1092,50 @@ export const useAppStore = create<AppState>()(
               target_date: g.targetDate,
             });
             set((s) => ({
-              yearlyGoals: s.yearlyGoals.map((yg) => (yg.id === g.id ? { ...yg, id: created.id, categoryId: created.category_id ?? yg.categoryId } : yg)),
+              yearlyGoals: s.yearlyGoals.map((yg) =>
+                yg.id === g.id ? { ...yg, id: created.id, categoryId: created.category_id ?? yg.categoryId } : yg,
+              ),
             }));
-          } catch {
-            /* leave local row; user can retry */
+          } catch (e) {
+            set({ syncError: formatApiError(`Sync yearly goal "${g.title}"`, e), syncStatus: "failed" });
+            return false;
           }
         }
+        const stillLocal = get().yearlyGoals.filter((g) => g.year === CURRENT_YEAR && !isUuid(g.id));
+        if (stillLocal.length > 0) {
+          set({
+            syncError: `${stillLocal.length} yearly goal(s) could not be synced (still local-only). Check your connection and try again.`,
+            syncStatus: "failed",
+          });
+          return false;
+        }
+        try {
+          const serverGoals = await yearlyGoalsApi.list(sessionId, CURRENT_YEAR);
+          set((s) => ({
+            yearlyGoals: [
+              ...s.yearlyGoals.filter((goal) => goal.year !== CURRENT_YEAR),
+              ...serverGoals.map(mapApiYearlyGoalToStore),
+            ],
+            syncError: null,
+            syncStatus: "saved",
+          }));
+        } catch (e) {
+          set({ syncError: formatApiError("Verify yearly goals on server", e), syncStatus: "failed" });
+          return false;
+        }
+        return true;
       },
 
       syncMonthlyGoalsToServer: async (year, month) => {
         const { sessionId, monthlyGoals } = get();
         if (!sessionId) {
           if (requiresServerPersistence()) {
-            set({ syncError: "Sync monthly goals: Backend session is not ready." });
+            set({ syncError: "Sync monthly goals: Backend session is not ready.", syncStatus: "failed" });
             return false;
           }
           return true;
         }
+        set({ syncStatus: "saving" });
         const localIds = monthlyGoals
           .filter((g) => g.year === year && g.month === month && !isUuid(g.id))
           .map((g) => g.id);
@@ -1097,6 +1150,7 @@ export const useAppStore = create<AppState>()(
               is_main: g.isMain,
               priority: g.priority,
               ...(isUuid(g.yearlyGoalId) ? { yearly_goal_id: g.yearlyGoalId } : {}),
+              ...(isUuid(g.categoryId) ? { category_id: g.categoryId } : {}),
               target_date: g.targetDate,
               workload: g.workload,
             });
@@ -1105,14 +1159,15 @@ export const useAppStore = create<AppState>()(
                 mg.id === g.id ? { ...mg, id: created.id, yearlyGoalId: created.yearly_goal_id ?? mg.yearlyGoalId } : mg
               ),
               syncError: null,
+              syncStatus: "saved",
             }));
           } catch (e) {
-            set({ syncError: formatApiError(`Sync monthly goal "${g.title}"`, e) });
+            set({ syncError: formatApiError(`Sync monthly goal "${g.title}"`, e), syncStatus: "failed" });
             success = false;
             break;
           }
         }
-        if (success) set({ syncError: null });
+        if (success) set({ syncError: null, syncStatus: "saved" });
         return success;
       },
 
@@ -1120,11 +1175,12 @@ export const useAppStore = create<AppState>()(
         const { sessionId, weeklyGoals } = get();
         if (!sessionId) {
           if (requiresServerPersistence()) {
-            set({ syncError: "Sync weekly goals: Backend session is not ready." });
+            set({ syncError: "Sync weekly goals: Backend session is not ready.", syncStatus: "failed" });
             return false;
           }
           return true;
         }
+        set({ syncStatus: "saving" });
         const localIds = weeklyGoals
           .filter((g) => g.year === year && g.weekNumber === weekNumber && !isUuid(g.id))
           .map((g) => g.id);
@@ -1140,20 +1196,22 @@ export const useAppStore = create<AppState>()(
               ...(isUuid(g.monthlyGoalId) ? { monthly_goal_id: g.monthlyGoalId } : {}),
               target_day: g.targetDay,
               goal_type: g.goalType,
+              workload: g.workload,
             });
             set((s) => ({
               weeklyGoals: s.weeklyGoals.map((wg) =>
                 wg.id === g.id ? { ...wg, id: created.id, monthlyGoalId: created.monthly_goal_id ?? wg.monthlyGoalId } : wg
               ),
               syncError: null,
+              syncStatus: "saved",
             }));
           } catch (e) {
-            set({ syncError: formatApiError(`Sync weekly goal "${g.title}"`, e) });
+            set({ syncError: formatApiError(`Sync weekly goal "${g.title}"`, e), syncStatus: "failed" });
             success = false;
             break;
           }
         }
-        if (success) set({ syncError: null });
+        if (success) set({ syncError: null, syncStatus: "saved" });
         return success;
       },
       removeYearlyGoal: (id) => {
@@ -1234,6 +1292,9 @@ export const useAppStore = create<AppState>()(
         if (updates.categoryId !== undefined && isUuid(updates.categoryId)) {
           patch.category_id = updates.categoryId;
         }
+        if (updates.yearlyGoalId !== undefined) {
+          patch.yearly_goal_id = isUuid(updates.yearlyGoalId) ? updates.yearlyGoalId : undefined;
+        }
         if (Object.keys(patch).length) {
           monthlyPlanApi
             .updateGoal(sessionId, id, patch)
@@ -1241,8 +1302,16 @@ export const useAppStore = create<AppState>()(
             .catch((e) => set({ syncError: formatApiError("Update monthly goal", e) }));
         }
       },
-      removeMonthlyGoal: (id) =>
-        set((s) => ({ monthlyGoals: s.monthlyGoals.filter((g) => g.id !== id) })),
+      removeMonthlyGoal: (id) => {
+        set((s) => ({ monthlyGoals: s.monthlyGoals.filter((g) => g.id !== id) }));
+        const { sessionId } = get();
+        if (sessionId && isUuid(id)) {
+          monthlyPlanApi
+            .deleteGoal(sessionId, id)
+            .then(() => set({ syncError: null }))
+            .catch((e) => set({ syncError: formatApiError("Delete monthly goal", e) }));
+        }
+      },
 
       // ── Weekly goals ─────────────────────────────────────────────────────────
       addWeeklyGoal: (goal) => {
@@ -1316,8 +1385,16 @@ export const useAppStore = create<AppState>()(
             .catch((e) => set({ syncError: formatApiError("Update weekly goal", e) }));
         }
       },
-      removeWeeklyGoal: (id) =>
-        set((s) => ({ weeklyGoals: s.weeklyGoals.filter((g) => g.id !== id) })),
+      removeWeeklyGoal: (id) => {
+        set((s) => ({ weeklyGoals: s.weeklyGoals.filter((g) => g.id !== id) }));
+        const { sessionId } = get();
+        if (sessionId && isUuid(id)) {
+          weeklyPlanApi
+            .deleteGoal(sessionId, id)
+            .then(() => set({ syncError: null }))
+            .catch((e) => set({ syncError: formatApiError("Delete weekly goal", e) }));
+        }
+      },
 
       // ── Daily priorities ──────────────────────────────────────────────────────
       addDailyPriority: (priority) => {
@@ -1368,6 +1445,9 @@ export const useAppStore = create<AppState>()(
         if (updates.estimatedMinutes !== undefined) patch.estimated_minutes = updates.estimatedMinutes;
         if (updates.priority !== undefined) patch.priority = updates.priority;
         if (updates.tag !== undefined) patch.tag = updates.tag ?? "";
+        if (updates.weeklyGoalId !== undefined) {
+          patch.weekly_goal_id = isUuid(updates.weeklyGoalId) ? updates.weeklyGoalId : null;
+        }
         if (Object.keys(patch).length) {
           tasksApi
             .update(sessionId, id, patch)
@@ -1409,10 +1489,13 @@ export const useAppStore = create<AppState>()(
               is_main: false,
               estimated_minutes: task.estimatedMinutes,
               tag: task.tag,
+              ...(isUuid(task.weeklyGoalId) ? { weekly_goal_id: task.weeklyGoalId } : {}),
             })
             .then((created) => {
               set((s) => ({
-                secondaryTasks: s.secondaryTasks.map((t) => (t.id === localId ? { ...t, id: created.id } : t)),
+                secondaryTasks: s.secondaryTasks.map((t) =>
+                  t.id === localId ? { ...t, id: created.id, weeklyGoalId: created.weekly_goal_id ?? t.weeklyGoalId } : t
+                ),
                 syncError: null,
               }));
             })
@@ -1441,6 +1524,9 @@ export const useAppStore = create<AppState>()(
         if (updates.estimatedMinutes !== undefined) patch.estimated_minutes = updates.estimatedMinutes;
         if (updates.priority !== undefined) patch.priority = updates.priority;
         if (updates.tag !== undefined) patch.tag = updates.tag ?? "";
+        if (updates.weeklyGoalId !== undefined) {
+          patch.weekly_goal_id = isUuid(updates.weeklyGoalId) ? updates.weeklyGoalId : null;
+        }
         if (Object.keys(patch).length) {
           tasksApi
             .update(sessionId, id, patch)
@@ -1471,6 +1557,7 @@ export const useAppStore = create<AppState>()(
       toggleHabit: (id) => {
         const habit = get().habits.find((h) => h.id === id);
         const newCompleted = !habit?.completedToday;
+        const { activeDashboardDate } = get();
         set((s) => ({
           habits: s.habits.map((h) =>
             h.id === id ? { ...h, completedToday: !h.completedToday } : h
@@ -1479,7 +1566,7 @@ export const useAppStore = create<AppState>()(
         const { sessionId } = get();
         if (sessionId && isUuid(id)) {
           habitsApi
-            .toggle(sessionId, id, newCompleted!)
+            .toggle(sessionId, id, newCompleted!, activeDashboardDate)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Update habit completion", e) }));
         }
@@ -1599,10 +1686,11 @@ export const useAppStore = create<AppState>()(
               is_main: false,
               estimated_minutes: t.estimatedMinutes,
               tag: t.tag,
+              ...(isUuid(t.weeklyGoalId) ? { weekly_goal_id: t.weeklyGoalId } : {}),
             });
             set((s) => ({
               secondaryTasks: s.secondaryTasks.map((item) =>
-                item.id === t.id ? { ...item, id: created.id } : item
+                item.id === t.id ? { ...item, id: created.id, weeklyGoalId: created.weekly_goal_id ?? item.weeklyGoalId } : item
               ),
             }));
           } catch (e) {
@@ -1637,14 +1725,39 @@ export const useAppStore = create<AppState>()(
       // ── AI Plan generation ────────────────────────────────────────────────────
       generateMonthlyPlan: async (year, month) => {
         const { sessionId } = get();
-        if (!sessionId) return null;
+        if (!sessionId) {
+          return { ok: false as const, code: "no_session" };
+        }
         try {
+          const synced = await get().syncYearlyGoalsToServer();
+          if (!synced) {
+            return { ok: false as const, code: "yearly_sync_failed" };
+          }
+          const serverYearlyGoals = await yearlyGoalsApi.list(sessionId, year);
+          if (serverYearlyGoals.length === 0) {
+            return { ok: false as const, code: "no_yearly_on_server" };
+          }
+          set((s) => ({
+            yearlyGoals: [
+              ...s.yearlyGoals.filter((goal) => goal.year !== year),
+              ...serverYearlyGoals.map(mapApiYearlyGoalToStore),
+            ],
+            syncError: null,
+            syncStatus: "saved",
+          }));
           const result = await monthlyPlanApi.generate(sessionId, year, month);
-          set({ syncError: null });
-          return { draft: result.ai_draft };
+          set({ syncError: null, syncStatus: "saved" });
+          return { ok: true as const, draft: result.ai_draft };
         } catch (e) {
-          set({ syncError: formatApiError("Monthly plan (AI generate)", e) });
-          return null;
+          if (
+            e instanceof ApiError &&
+            e.status === 404 &&
+            (e.message.includes("Yearly goals") || e.message.includes("yearly"))
+          ) {
+            return { ok: false as const, code: "no_yearly_on_server" };
+          }
+          set({ syncError: formatApiError("Monthly plan (AI generate)", e), syncStatus: "failed" });
+          return { ok: false as const, code: "api_error" };
         }
       },
       approveMonthlyPlan: async (year, month, goals) => {
@@ -1838,6 +1951,7 @@ export const useAppStore = create<AppState>()(
         currentUser: state.currentUser,
         registeredUsers: state.registeredUsers,
         sessionId: state.sessionId,
+        activeDashboardDate: state.activeDashboardDate,
         workspaceOwnerId: state.workspaceOwnerId,
         onboardingComplete: state.onboardingComplete,
         onboardingStep: state.onboardingStep,

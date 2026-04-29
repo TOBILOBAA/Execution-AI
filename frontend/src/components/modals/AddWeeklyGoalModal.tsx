@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -12,17 +12,41 @@ interface Props {
   open: boolean;
   onClose: () => void;
   initialData?: WeeklyGoal;
+  yearOverride?: number;
+  monthOverride?: number;
+  weekOverride?: number;
+  defaultIsMain?: boolean;
 }
 
-export function AddWeeklyGoalModal({ open, onClose, initialData }: Props) {
+export function AddWeeklyGoalModal({
+  open,
+  onClose,
+  initialData,
+  yearOverride,
+  monthOverride,
+  weekOverride,
+  defaultIsMain,
+}: Props) {
   const addWeeklyGoal = useAppStore((state) => state.addWeeklyGoal);
   const updateWeeklyGoal = useAppStore((state) => state.updateWeeklyGoal);
   const isEdit = !!initialData;
 
   const [title, setTitle] = useState(initialData?.title ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
-  const [isMain, setIsMain] = useState(initialData?.isMain ?? true);
+  const [isMain, setIsMain] = useState(initialData?.isMain ?? defaultIsMain ?? true);
   const [error, setError] = useState("");
+
+  const effectiveWeek = initialData?.weekNumber ?? weekOverride ?? CURRENT_WEEK;
+  const effectiveMonth = initialData?.month ?? monthOverride ?? CURRENT_MONTH;
+  const effectiveYear = initialData?.year ?? yearOverride ?? CURRENT_YEAR;
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(initialData?.title ?? "");
+    setDescription(initialData?.description ?? "");
+    setIsMain(initialData?.isMain ?? defaultIsMain ?? true);
+    setError("");
+  }, [defaultIsMain, initialData, open]);
 
   const handleSave = () => {
     if (!title.trim()) { setError("Goal title is required"); return; }
@@ -33,9 +57,9 @@ export function AddWeeklyGoalModal({ open, onClose, initialData }: Props) {
         title: title.trim(),
         description,
         isMain,
-        weekNumber: CURRENT_WEEK,
-        month: CURRENT_MONTH,
-        year: CURRENT_YEAR,
+        weekNumber: effectiveWeek,
+        month: effectiveMonth,
+        year: effectiveYear,
         status: "active",
         progress: 0,
       });
@@ -47,7 +71,7 @@ export function AddWeeklyGoalModal({ open, onClose, initialData }: Props) {
     <Modal open={open} onClose={onClose} size="md">
       <ModalHeader
         title={isEdit ? "Edit Weekly Goal" : "Add Weekly Goal"}
-        subtitle={`Week ${CURRENT_WEEK} Sprint`}
+        subtitle={`Week ${effectiveWeek} Sprint`}
         icon="view_week"
         onClose={onClose}
       />

@@ -225,7 +225,7 @@ AI never sees raw task logs — only aggregated numbers.
 | `SUPABASE_ANON_KEY` | Public anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key (used server-side) |
 | `GOOGLE_AI_API_KEY` | Google AI Studio API key for Gemini |
-| `GEMINI_MODEL` | Gemini model id |
+| `GEMINI_MODEL` | Gemini model id (recommended: `gemini-2.5-flash`) |
 | `GEMINI_REQUEST_TIMEOUT_MS` | HTTP timeout for Gemini calls in ms |
 | `GEMINI_MAX_OUTPUT_TOKENS` | Upper bound for Gemini output tokens |
 | `CORS_ORIGINS` | Comma-separated allowed frontend origins for production |

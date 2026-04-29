@@ -78,7 +78,54 @@ async function fillAuthAndSubmit(page, email, password, fullName) {
   await page.locator("form button[type='submit']").click();
 }
 
-async function completeOnboarding(page, uniqueSuffix) {
+/** Regression guard: this exact phrase was a false-negative UX bug (blamed yearly goals for any failure). */
+const FORBIDDEN_MONTHLY_AI_MISLEADING = "Make sure you have yearly goals saved first";
+
+/**
+ * On Monthly Targets step: run AI Generate, wait for completion, assert we never show the old misleading copy.
+ * If the model returns a draft, dismiss it so the rest of the smoke flow can add a manual monthly goal.
+ */
+async function runMonthlyAiGenerateSmokeAssert(page) {
+  await page.getByText(/Bedrock/).first().waitFor({ timeout: 30000 });
+  const genBtn = page.getByRole("button", { name: "AI Generate" });
+  await genBtn.waitFor({ state: "visible", timeout: 15000 });
+  await genBtn.click();
+
+  try {
+    await page.getByRole("button", { name: "Generating…" }).waitFor({ state: "visible", timeout: 5000 });
+  } catch {
+    /* fast failure path may skip loading state */
+  }
+
+  await page.getByRole("button", { name: "AI Generate" }).waitFor({ state: "visible", timeout: 180000 });
+
+  const body = await page.locator("body").innerText();
+  if (body.includes(FORBIDDEN_MONTHLY_AI_MISLEADING)) {
+    throw new Error(
+      `Monthly AI smoke: forbidden misleading copy still present (${FORBIDDEN_MONTHLY_AI_MISLEADING}). ` +
+        "Non-yearly errors must not use this message.",
+    );
+  }
+
+  if (body.includes("AI Suggestions Ready")) {
+    const draftCard = page.locator("div.rounded-2xl").filter({ hasText: "AI Suggestions Ready" });
+    await draftCard.locator("span.material-symbols-outlined", { hasText: "close" }).click();
+    await draftCard.waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
+  }
+
+  console.log(
+    JSON.stringify({
+      monthlyAiSmoke: {
+        ok: true,
+        hadDraft: body.includes("AI Suggestions Ready"),
+        note: "Forbidden misleading yearly-goals copy was not shown after AI generate.",
+      },
+    }),
+  );
+}
+
+async function completeOnboarding(page, uniqueSuffix, options = {}) {
+  const { testMonthlyAI = false } = options;
   try {
     await waitForUrl(page, "/onboarding");
 
@@ -95,6 +142,10 @@ async function completeOnboarding(page, uniqueSuffix) {
     await page.getByRole("button", { name: "Add Goal" }).last().click();
     await page.getByText(`UI Smoke Yearly ${uniqueSuffix}`).first().waitFor({ timeout: 30000 });
     await page.getByRole("button", { name: "Next Step" }).click();
+
+    if (testMonthlyAI) {
+      await runMonthlyAiGenerateSmokeAssert(page);
+    }
 
     await page.getByRole("button", { name: /ADD GOAL/i }).first().click();
     await page.getByPlaceholder("e.g. Launch the Q1 Marketing Campaign").waitFor({ timeout: 10000 });
@@ -253,6 +304,7 @@ async function main() {
   const supabaseUrl = assertEnv("SUPABASE_URL", backendEnv.SUPABASE_URL);
   const serviceRoleKey = assertEnv("SUPABASE_SERVICE_ROLE_KEY", backendEnv.SUPABASE_SERVICE_ROLE_KEY);
   const baseUrl = process.env.UI_SMOKE_BASE_URL || "http://127.0.0.1:3000";
+  const testMonthlyAI = process.env.UI_SMOKE_TEST_MONTHLY_AI === "1";
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -267,6 +319,7 @@ async function main() {
   const checks = {
     onboardingCompletedInUi: false,
     dashboardReloadStayedOnDashboard: false,
+    monthlyAiGenerateExercised: testMonthlyAI,
     goalsHubLoaded: false,
     yearPageLoaded: false,
     quarterPageLoaded: false,
@@ -283,7 +336,7 @@ async function main() {
     const page1 = await context1.newPage();
     await page1.goto(`${baseUrl}/auth`, { waitUntil: "networkidle" });
     await fillAuthAndSubmit(page1, email, password, fullName);
-    await completeOnboarding(page1, String(stamp));
+    await completeOnboarding(page1, String(stamp), { testMonthlyAI });
     checks.onboardingCompletedInUi = true;
     await verifyDashboardPersistence(page1, String(stamp));
     checks.dashboardReloadStayedOnDashboard = true;
@@ -338,6 +391,7 @@ async function main() {
       email,
       authUserId,
       apiBaseUrl: frontendEnv.NEXT_PUBLIC_API_URL,
+      uiSmokeTestMonthlyAI: testMonthlyAI,
       serverState,
       checks,
       diagnostics,
