@@ -70,7 +70,7 @@ export function AddWeeklyGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -263,6 +263,7 @@ export function AddWeeklyGoalModal({
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}
         >
           <button
+            type="button"
             onClick={onClose}
             className="text-sm font-semibold uppercase tracking-wider transition-colors"
             style={{ color: "#8a9e97" }}

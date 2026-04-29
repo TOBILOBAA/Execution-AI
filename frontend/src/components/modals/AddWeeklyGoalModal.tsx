@@ -6,7 +6,7 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAppStore } from "@/lib/store";
 import type { WeeklyGoal } from "@/lib/types";
-import { CURRENT_WEEK, CURRENT_MONTH, CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentWeek, getCurrentMonth, getCurrentYear } from "@/lib/mockData";
 
 interface Props {
   open: boolean;
@@ -36,9 +36,9 @@ export function AddWeeklyGoalModal({
   const [isMain, setIsMain] = useState(initialData?.isMain ?? defaultIsMain ?? true);
   const [error, setError] = useState("");
 
-  const effectiveWeek = initialData?.weekNumber ?? weekOverride ?? CURRENT_WEEK;
-  const effectiveMonth = initialData?.month ?? monthOverride ?? CURRENT_MONTH;
-  const effectiveYear = initialData?.year ?? yearOverride ?? CURRENT_YEAR;
+  const effectiveWeek = initialData?.weekNumber ?? weekOverride ?? getCurrentWeek();
+  const effectiveMonth = initialData?.month ?? monthOverride ?? getCurrentMonth();
+  const effectiveYear = initialData?.year ?? yearOverride ?? getCurrentYear();
 
   useEffect(() => {
     if (!open) return;

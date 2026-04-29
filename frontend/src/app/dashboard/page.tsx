@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { TODAY } from "@/lib/mockData";
+import { getToday } from "@/lib/mockData";
 import { PriorityCard } from "@/components/dashboard/PriorityCard";
 import { SecondaryTaskRow } from "@/components/dashboard/SecondaryTaskRow";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
@@ -52,7 +52,7 @@ export default function DashboardHome() {
   const todayRows = dailyPriorities.filter((p) => p.date === activeDashboardDate);
   const todayTasks = secondaryTasks.filter((task) => task.date === activeDashboardDate);
   const remaining = todayRows.filter((p) => !p.completed).length;
-  const isPreviewingAnotherDay = activeDashboardDate !== TODAY;
+  const isPreviewingAnotherDay = activeDashboardDate !== getToday();
   const displayDateLabel = useMemo(() => formatPlanDateLabel(activeDashboardDate), [activeDashboardDate]);
 
   return (

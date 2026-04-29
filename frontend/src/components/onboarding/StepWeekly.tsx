@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { WeeklyGoal } from "@/lib/types";
-import { CURRENT_WEEK, CURRENT_MONTH, CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentWeek, getCurrentMonth, getCurrentYear } from "@/lib/mockData";
 import { AddWeeklyGoalModal } from "./AddWeeklyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
@@ -364,13 +364,13 @@ export function StepWeekly({ onNext, onBack }: Props) {
   );
 
   const currentWeekGoals = weeklyGoals.filter(
-    (g) => g.weekNumber === CURRENT_WEEK && g.year === CURRENT_YEAR
+    (g) => g.weekNumber === getCurrentWeek() && g.year === getCurrentYear()
   );
   const mainGoals = currentWeekGoals.filter((g) => g.isMain);
   const secondaryGoals = currentWeekGoals.filter((g) => !g.isMain);
 
   const currentMonthlyGoals = monthlyGoals.filter(
-    (g) => g.month === CURRENT_MONTH && g.year === CURRENT_YEAR
+    (g) => g.month === getCurrentMonth() && g.year === getCurrentYear()
   );
 
   // Modal state
@@ -425,14 +425,14 @@ export function StepWeekly({ onNext, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateWeeklyPlan(CURRENT_YEAR, CURRENT_WEEK);
+    const result = await generateWeeklyPlan(getCurrentYear(), getCurrentWeek());
     if (result?.draft) {
       const draft = result.draft as WeeklyAIDraft;
       setAiDraft(draft);
       setAiRowKeys(buildAiRowKeys(draft));
     } else {
       setAiError(
-        "AI generation failed. Add monthly goals (or use AI on the previous step and accept), click “Generate Weekly Flow” so they save, then try again."
+        "AI generation failed. Add monthly goals (or use AI on the previous step and accept), click Next so they save, then try again."
       );
     }
     setAiLoading(false);
@@ -448,7 +448,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false });
     });
     setAiAccepting(true);
-    const ok = await approveWeeklyPlan(CURRENT_YEAR, CURRENT_WEEK, goals);
+    const ok = await approveWeeklyPlan(getCurrentYear(), getCurrentWeek(), goals);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -458,7 +458,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
 
   const handleLeaveWeekly = async () => {
     setLeaveError(null);
-    const ok = await syncWeeklyGoalsToServer(CURRENT_YEAR, CURRENT_WEEK);
+    const ok = await syncWeeklyGoalsToServer(getCurrentYear(), getCurrentWeek());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Weekly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -475,10 +475,10 @@ export function StepWeekly({ onNext, onBack }: Props) {
           className="font-headline text-4xl font-extrabold tracking-tight"
           style={{ color: "#1a1f1e" }}
         >
-          Weekly Planning
+          Plan week {getCurrentWeek()}.
         </h1>
         <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#8a9e97" }}>
-          Translate your monthly targets into tactical movements for the week.
+          1 main goal, up to 3 secondary goals. Each connects to a monthly goal.
         </p>
       </div>
 
@@ -491,7 +491,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
             </div>
             <div>
               <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Generate with AI</p>
-              <p className="text-xs" style={{ color: "#6b7b74" }}>AI will suggest this week&apos;s goals based on your monthly plan</p>
+              <p className="text-xs" style={{ color: "#6b7b74" }}>
+                We&apos;ll use your monthly goals — and a summary of your year — to suggest a focused week.
+              </p>
             </div>
           </div>
           <button
@@ -506,12 +508,12 @@ export function StepWeekly({ onNext, onBack }: Props) {
                   <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/>
                   <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/>
                 </svg>
-                Generating…
+                Drafting your week…
               </>
             ) : (
               <>
                 <span className="material-symbols-outlined text-[15px]">bolt</span>
-                AI Generate
+                Generate with AI
               </>
             )}
           </button>
@@ -800,8 +802,8 @@ export function StepWeekly({ onNext, onBack }: Props) {
           onMouseEnter={(e) => (e.currentTarget.style.background = "#005f41")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "#006c4a")}
         >
-          Commit Plan
-          <span className="material-symbols-outlined text-[16px]">rocket_launch</span>
+          Next
+          <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
         </button>
       </div>
 
@@ -822,9 +824,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
               addWeeklyGoal({
                 ...data,
                 isMain: true,
-                weekNumber: CURRENT_WEEK,
-                month: CURRENT_MONTH,
-                year: CURRENT_YEAR,
+                weekNumber: getCurrentWeek(),
+                month: getCurrentMonth(),
+                year: getCurrentYear(),
                 status: "active",
                 progress: 0,
                 aiSuggested: false,
@@ -853,9 +855,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
               addWeeklyGoal({
                 ...data,
                 isMain: false,
-                weekNumber: CURRENT_WEEK,
-                month: CURRENT_MONTH,
-                year: CURRENT_YEAR,
+                weekNumber: getCurrentWeek(),
+                month: getCurrentMonth(),
+                year: getCurrentYear(),
                 status: "active",
                 progress: 0,
                 aiSuggested: false,

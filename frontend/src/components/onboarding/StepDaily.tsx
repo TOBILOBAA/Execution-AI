@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { DailyPriority, FoundationalHabit, HabitFrequency } from "@/lib/types";
-import { TODAY } from "@/lib/mockData";
+import { getToday } from "@/lib/mockData";
 import { AddDailyPriorityModal } from "./AddDailyPriorityModal";
 import { AddSecondaryTaskModal } from "./AddSecondaryTaskModal";
 import { AddHabitModal } from "./AddHabitModal";
@@ -335,8 +335,8 @@ export function StepDaily({ onFinish, onBack }: Props) {
     })),
   );
 
-  const todayPriorities = dailyPriorities.filter((p) => p.date === TODAY);
-  const todayTasks = secondaryTasks.filter((t) => t.date === TODAY);
+  const todayPriorities = dailyPriorities.filter((p) => p.date === getToday());
+  const todayTasks = secondaryTasks.filter((t) => t.date === getToday());
   const activeHabits = habits.filter((h) => h.active);
 
   // Modal state
@@ -388,7 +388,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateDailyPlan(TODAY);
+    const result = await generateDailyPlan(getToday());
     if (result?.draft) {
       const draft = result.draft as DailyAIDraft;
       setAiDraft(draft);
@@ -411,7 +411,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       if (aiRowKeys.has(`t:${i}`)) priorities.push({ ...t, is_main: false });
     });
     setAiAccepting(true);
-    const ok = await approveDailyPlan(TODAY, priorities);
+    const ok = await approveDailyPlan(getToday(), priorities);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -419,9 +419,19 @@ export function StepDaily({ onFinish, onBack }: Props) {
     setAiAccepting(false);
   };
 
+  const todayStr = getToday();
+  const headlineDate = useMemo(() => {
+    const d = new Date(`${todayStr}T12:00:00`);
+    return {
+      weekday: d.toLocaleDateString("en-US", { weekday: "long" }),
+      monthShort: d.toLocaleDateString("en-US", { month: "short" }),
+      day: d.getDate(),
+    };
+  }, [todayStr]);
+
   const handleFinish = async () => {
     setLeaveError(null);
-    const ok = await syncDailySetupToServer(TODAY);
+    const ok = await syncDailySetupToServer(getToday());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Daily tasks and habits have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -436,10 +446,10 @@ export function StepDaily({ onFinish, onBack }: Props) {
         {/* Heading */}
         <div className="text-center space-y-2">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight" style={{ color: "#1a1f1e" }}>
-            Your Daily Focus
+            Set up {headlineDate.weekday}, {headlineDate.monthShort} {headlineDate.day}.
           </h1>
           <p className="text-sm leading-relaxed max-w-md mx-auto" style={{ color: "#8a9e97" }}>
-            Fine-tune your strategy for maximum leverage today.
+            1 main priority, up to 3 secondary tasks. Each connects to a weekly goal. Your habits roll forward from Step 2.
           </p>
         </div>
 
@@ -452,7 +462,9 @@ export function StepDaily({ onFinish, onBack }: Props) {
               </div>
               <div>
                 <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Generate with AI</p>
-                <p className="text-xs" style={{ color: "#6b7b74" }}>AI will suggest today&apos;s priorities based on your weekly goals</p>
+                <p className="text-xs" style={{ color: "#6b7b74" }}>
+                  We&apos;ll use this week&apos;s goals and your habits to suggest a focused day.
+                </p>
               </div>
             </div>
             <button
@@ -467,12 +479,12 @@ export function StepDaily({ onFinish, onBack }: Props) {
                     <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/>
                     <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/>
                   </svg>
-                  Generating…
+                  Drafting your day…
                 </>
               ) : (
                 <>
                   <span className="material-symbols-outlined text-[15px]">bolt</span>
-                  AI Generate
+                  Generate with AI
                 </>
               )}
             </button>
@@ -736,8 +748,8 @@ export function StepDaily({ onFinish, onBack }: Props) {
             className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90"
             style={{ background: "#006c4a", boxShadow: "0 2px 12px rgba(0,108,74,0.22)" }}
           >
-            Start Executing
-            <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
+            Begin
+            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
           </button>
         </div>
       </div>
@@ -772,7 +784,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 tag: data.tag,
                 weeklyGoalId: data.weeklyGoalId,
                 ...(data.description ? { description: data.description } : {}),
-                date: TODAY,
+                date: getToday(),
                 status: "active",
                 completed: false,
                 priority: "high",
@@ -813,7 +825,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 tag: data.tag,
                 weeklyGoalId: data.weeklyGoalId,
                 ...(data.description ? { description: data.description } : {}),
-                date: TODAY,
+                date: getToday(),
                 status: "active",
                 completed: false,
                 priority: "medium",

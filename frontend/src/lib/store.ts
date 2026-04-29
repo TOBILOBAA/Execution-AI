@@ -14,9 +14,9 @@ import type {
 } from "./types";
 import {
   DEFAULT_CATEGORIES,
-  CURRENT_YEAR,
   EMPTY_DASHBOARD_METRICS,
-  TODAY,
+  getCurrentYear,
+  getToday,
 } from "./mockData";
 import { isUuid } from "./uuid";
 import type { DashboardMetrics, YearReport } from "./types";
@@ -296,10 +296,23 @@ function mergeSeededRegistryUsers(set: (partial: Partial<AppState>) => void, get
 }
 
 /**
- * After login: bind workspace to this user, ensure backend session, pull onboarding + dashboard.
- * If the authenticated user changed, reset workspace state then load from server.
+ * After login: bind workspace to this user, ensure backend session, then pull
+ * onboarding metadata + dashboard data in parallel.
+ *
+ * Critical-path optimisation:
+ *   The dashboard layout and onboarding shell both gate their first render on
+ *   `workspaceHydrating`. Previously this stayed true through the full chain
+ *   (session start → onboarding pull → dashboard load) which meant the user
+ *   sat behind a single global spinner for ~3× the round-trip time. We now:
+ *     1. block on session start (we need the session id),
+ *     2. fan out onboarding pull + dashboard load with Promise.allSettled,
+ *     3. release `workspaceHydrating` as soon as onboarding metadata is in
+ *        (so the router can pick /dashboard vs /onboarding) — dashboard rows
+ *        either appear with the parallel response, or fill in moments later.
+ *
  * If session start fails → backendReady false.
- * If only dashboard load fails → keep backendReady true so POST/PATCH saves can still succeed.
+ * If only dashboard load fails → keep backendReady true so POST/PATCH saves
+ * can still succeed; the failure surfaces via syncError.
  */
 async function attachBackendAfterAuth(userId: string, get: () => AppState, set: (p: Partial<AppState>) => void) {
   set({ workspaceHydrating: true });
@@ -331,41 +344,56 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
     set({ workspaceOwnerId: userId });
   }
 
+  let sid: string;
   try {
-    try {
-      const sid = await ensureBackendSession(userId);
-      set({ sessionId: sid, backendReady: true });
-    } catch (e) {
-      set({ backendReady: false, syncError: formatApiError("Start backend session", e) });
-      return;
-    }
-    const sid = get().sessionId;
-    if (!sid) return;
-    try {
-      const ob = await pullOnboardingFromServer(sid);
-      if (ob) {
-        const localDone = switchingAccount || serverPersistence ? false : preservedOnboardingDone;
-        const localStep = switchingAccount || serverPersistence ? 1 : preservedOnboardingStep;
-        const done = Boolean(ob.onboarding_done || localDone);
-        const step = done ? 4 : Math.max(ob.onboarding_step, localStep, 1);
-        set({
-          onboardingComplete: done,
-          onboardingStep: step,
-          sessionWeekStartsOn: ob.week_starts_on,
-        });
-        if (done && !ob.onboarding_done) {
-          void sessionsApi
-            .update(sid, { onboarding_done: true, onboarding_step: 4 })
-            .catch(() => {});
-        }
+    sid = await ensureBackendSession(userId);
+    set({ sessionId: sid, backendReady: true });
+  } catch (e) {
+    set({
+      backendReady: false,
+      syncError: formatApiError("Start backend session", e),
+      workspaceHydrating: false,
+    });
+    return;
+  }
+
+  // Fan out: onboarding metadata + dashboard payload land in parallel.
+  const onboardingPromise = pullOnboardingFromServer(sid);
+  const dashboardPromise = get().loadDashboard();
+
+  // Apply onboarding metadata as soon as it lands so the router can decide
+  // /dashboard vs /onboarding without waiting for the dashboard payload.
+  try {
+    const ob = await onboardingPromise;
+    if (ob) {
+      const localDone = switchingAccount || serverPersistence ? false : preservedOnboardingDone;
+      const localStep = switchingAccount || serverPersistence ? 1 : preservedOnboardingStep;
+      const done = Boolean(ob.onboarding_done || localDone);
+      const step = done ? 4 : Math.max(ob.onboarding_step, localStep, 1);
+      set({
+        onboardingComplete: done,
+        onboardingStep: step,
+        sessionWeekStartsOn: ob.week_starts_on,
+      });
+      if (done && !ob.onboarding_done) {
+        void sessionsApi
+          .update(sid, { onboarding_done: true, onboarding_step: 4 })
+          .catch(() => {});
       }
-      await get().loadDashboard();
-      set({ syncError: null });
-    } catch (e) {
-      set({ syncError: formatApiError("Load dashboard from server", e) });
     }
+  } catch (e) {
+    set({ syncError: formatApiError("Load workspace state", e) });
   } finally {
+    // Release the gate immediately — any remaining dashboard load runs in
+    // the background and updates store state when it resolves.
     set({ workspaceHydrating: false });
+  }
+
+  try {
+    await dashboardPromise;
+    if (!get().syncError) set({ syncError: null });
+  } catch (e) {
+    set({ syncError: formatApiError("Load dashboard from server", e) });
   }
 }
 
@@ -807,7 +835,7 @@ export const useAppStore = create<AppState>()(
           currentUser: null,
           sessionId: null,
           sessionWeekStartsOn: "monday",
-          activeDashboardDate: TODAY,
+          activeDashboardDate: getToday(),
           backendReady: false,
           workspaceHydrating: false,
           syncError: null,
@@ -829,7 +857,7 @@ export const useAppStore = create<AppState>()(
             currentUser: null,
             sessionId: null,
             sessionWeekStartsOn: "monday",
-            activeDashboardDate: TODAY,
+            activeDashboardDate: getToday(),
             backendReady: false,
             workspaceHydrating: false,
             syncError: null,
@@ -879,7 +907,7 @@ export const useAppStore = create<AppState>()(
       backendReady: false,
       workspaceHydrating: false,
       workspaceOwnerId: null,
-      activeDashboardDate: TODAY,
+      activeDashboardDate: getToday(),
       setSessionId: (id) => set({ sessionId: id }),
       setActiveDashboardDate: (date) => set({ activeDashboardDate: date }),
       setWeekStartsOn: async (value) => {
@@ -1078,10 +1106,10 @@ export const useAppStore = create<AppState>()(
         }
         set({ syncStatus: "saving" });
         const localIds = yearlyGoals
-          .filter((g) => g.year === CURRENT_YEAR && !isUuid(g.id))
+          .filter((g) => g.year === getCurrentYear() && !isUuid(g.id))
           .map((g) => g.id);
         await waitForPendingCreates(pendingYearlyGoalCreates, localIds);
-        const pending = get().yearlyGoals.filter((g) => g.year === CURRENT_YEAR && !isUuid(g.id));
+        const pending = get().yearlyGoals.filter((g) => g.year === getCurrentYear() && !isUuid(g.id));
         for (const g of pending) {
           try {
             const created = await yearlyGoalsApi.create(sessionId, {
@@ -1101,7 +1129,7 @@ export const useAppStore = create<AppState>()(
             return false;
           }
         }
-        const stillLocal = get().yearlyGoals.filter((g) => g.year === CURRENT_YEAR && !isUuid(g.id));
+        const stillLocal = get().yearlyGoals.filter((g) => g.year === getCurrentYear() && !isUuid(g.id));
         if (stillLocal.length > 0) {
           set({
             syncError: `${stillLocal.length} yearly goal(s) could not be synced (still local-only). Check your connection and try again.`,
@@ -1110,10 +1138,10 @@ export const useAppStore = create<AppState>()(
           return false;
         }
         try {
-          const serverGoals = await yearlyGoalsApi.list(sessionId, CURRENT_YEAR);
+          const serverGoals = await yearlyGoalsApi.list(sessionId, getCurrentYear());
           set((s) => ({
             yearlyGoals: [
-              ...s.yearlyGoals.filter((goal) => goal.year !== CURRENT_YEAR),
+              ...s.yearlyGoals.filter((goal) => goal.year !== getCurrentYear()),
               ...serverGoals.map(mapApiYearlyGoalToStore),
             ],
             syncError: null,

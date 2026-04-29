@@ -4,7 +4,7 @@ import { cn, formatMonthYear } from "@/lib/utils";
 import type { MonthlyGoal } from "@/lib/types";
 import { ProgressBar } from "@/components/ui/Progress";
 import { Badge } from "@/components/ui/Badge";
-import { CURRENT_MONTH, CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentYear } from "@/lib/mockData";
 
 interface MonthlySectionProps {
   goals: MonthlyGoal[];
@@ -14,7 +14,7 @@ interface MonthlySectionProps {
 
 export function MonthlySection({ goals, onAdd, onEdit }: MonthlySectionProps) {
   const currentGoals = goals.filter(
-    (g) => g.month === CURRENT_MONTH && g.year === CURRENT_YEAR
+    (g) => g.month === getCurrentMonth() && g.year === getCurrentYear()
   );
   const mainGoals = currentGoals.filter((g) => g.isMain);
   const secondaryGoals = currentGoals.filter((g) => !g.isMain);
@@ -27,7 +27,7 @@ export function MonthlySection({ goals, onAdd, onEdit }: MonthlySectionProps) {
             Current Month
           </span>
           <h2 className="font-headline font-bold text-xl text-[--color-on-surface]">
-            {formatMonthYear(CURRENT_MONTH, CURRENT_YEAR)} Bedrock
+            {formatMonthYear(getCurrentMonth(), getCurrentYear())} Bedrock
           </h2>
         </div>
         <button

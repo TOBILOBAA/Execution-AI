@@ -11,20 +11,48 @@ import type {
   WeekReport,
 } from "./types";
 
-// ─── Current context (always live — never hardcoded) ──────────────────────────
-const _now = new Date();
-export const TODAY = _now.toISOString().slice(0, 10); // YYYY-MM-DD
-export const CURRENT_YEAR = _now.getFullYear();
-export const CURRENT_MONTH = _now.getMonth() + 1; // 1-12
+// ─── Current context — lazy getters (never captured at import time) ─────────
+//
+// Long-running tabs (especially across midnight or week boundaries) need to
+// read "today/now" on every render. Exported constants captured once at
+// module-import froze stale labels and goal-list filters until a hard refresh.
+// Always call the getter — never alias the result to a const at module scope.
 
-// ISO week number
 function _isoWeek(d: Date): number {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
   return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
-export const CURRENT_WEEK = _isoWeek(_now);
+
+/** Today as YYYY-MM-DD in the user's local timezone. */
+export function getToday(): string {
+  const d = new Date();
+  // Use local components — toISOString() is UTC and shifts ±1 day at boundaries.
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Current calendar year. */
+export function getCurrentYear(): number {
+  return new Date().getFullYear();
+}
+
+/** Current month (1-12). */
+export function getCurrentMonth(): number {
+  return new Date().getMonth() + 1;
+}
+
+/** Current ISO week number. */
+export function getCurrentWeek(): number {
+  return _isoWeek(new Date());
+}
+
+// Seed-only snapshots for the static MOCK_* arrays below (intentionally frozen
+// at import time — they only feed demo data, never live filters).
+const _SEED_TODAY = getToday();
 
 // ─── Categories ───────────────────────────────────────────────────────────────
 export const DEFAULT_CATEGORIES: Category[] = [
@@ -213,7 +241,7 @@ export const MOCK_DAILY_PRIORITIES: DailyPriority[] = [
     title: "Finalize Architectural Framework Review",
     description: "Complete the full structural review and prepare for sign-off.",
     weeklyGoalId: "wg-1",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "high",
@@ -227,7 +255,7 @@ export const MOCK_DAILY_PRIORITIES: DailyPriority[] = [
     title: "Client Strategy Alignment Meeting",
     description: "Sync with client on Q4 strategic direction and next steps.",
     weeklyGoalId: "wg-1",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "high",
@@ -241,7 +269,7 @@ export const MOCK_DAILY_PRIORITIES: DailyPriority[] = [
     title: "Deep Work Session: Module 4 Prototyping",
     description: "Focused build session for the core module prototype.",
     weeklyGoalId: "wg-1",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "high",
@@ -256,7 +284,7 @@ export const MOCK_SECONDARY_TASKS: DailyPriority[] = [
   {
     id: "st-1",
     title: "Clear email inbox to zero",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "medium",
@@ -267,7 +295,7 @@ export const MOCK_SECONDARY_TASKS: DailyPriority[] = [
   {
     id: "st-2",
     title: "Update weekly expense tracker",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "low",
@@ -278,7 +306,7 @@ export const MOCK_SECONDARY_TASKS: DailyPriority[] = [
   {
     id: "st-3",
     title: "Order new office supplies",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "medium",
@@ -289,7 +317,7 @@ export const MOCK_SECONDARY_TASKS: DailyPriority[] = [
   {
     id: "st-4",
     title: "Read 20 pages of current book",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "low",

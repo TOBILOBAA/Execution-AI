@@ -34,12 +34,12 @@ export default function UpdatePasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (password.length < 8) {
+      setError("Use 8 characters or more.");
       return;
     }
     if (password !== password2) {
-      setError("Passwords do not match.");
+      setError("The two passwords don't match.");
       return;
     }
     const sb = getSupabaseBrowser();
@@ -67,9 +67,9 @@ export default function UpdatePasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-5 py-12" style={{ background: "#f4f6f4" }}>
       <div className="bg-white rounded-3xl w-full p-8 shadow-sm" style={{ maxWidth: 420, border: "1.5px solid rgba(0,0,0,0.07)" }}>
-        <h1 className="font-headline font-extrabold text-xl mb-1" style={{ color: "#1a1f1e" }}>Set a new password</h1>
+        <h1 className="font-headline font-extrabold text-xl mb-1" style={{ color: "#1a1f1e" }}>Set a new password.</h1>
         <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
-          {ready ? "Choose a new password for your account." : "Verifying reset link…"}
+          {ready ? "Use 8 characters or more." : "Verifying reset link…"}
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -84,7 +84,7 @@ export default function UpdatePasswordPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{ color: "#6b7c75" }}>Confirm</label>
+            <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{ color: "#6b7c75" }}>Confirm new password</label>
             <input
               type="password"
               value={password2}
@@ -101,7 +101,7 @@ export default function UpdatePasswordPage() {
             className="w-full py-3.5 rounded-2xl text-sm font-bold text-white"
             style={{ background: ready && !loading ? "#006c4a" : "#8ab5a0" }}
           >
-            {loading ? "Saving…" : "Update password"}
+            {loading ? "Updating…" : "Update password"}
           </button>
         </form>
       </div>

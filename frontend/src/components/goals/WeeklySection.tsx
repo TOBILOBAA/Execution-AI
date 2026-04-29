@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { WeeklyGoal } from "@/lib/types";
 import { ProgressBar } from "@/components/ui/Progress";
 import { Badge } from "@/components/ui/Badge";
-import { CURRENT_WEEK, CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentWeek, getCurrentYear } from "@/lib/mockData";
 
 interface WeeklySectionProps {
   goals: WeeklyGoal[];
@@ -14,7 +14,7 @@ interface WeeklySectionProps {
 
 export function WeeklySection({ goals, onAdd, onEdit }: WeeklySectionProps) {
   const currentGoals = goals.filter(
-    (g) => g.weekNumber === CURRENT_WEEK && g.year === CURRENT_YEAR
+    (g) => g.weekNumber === getCurrentWeek() && g.year === getCurrentYear()
   );
   const mainGoals = currentGoals.filter((g) => g.isMain);
   const secondaryGoals = currentGoals.filter((g) => !g.isMain);
@@ -27,7 +27,7 @@ export function WeeklySection({ goals, onAdd, onEdit }: WeeklySectionProps) {
             Current Week
           </span>
           <h2 className="font-headline font-bold text-xl text-[--color-on-surface]">
-            Week {CURRENT_WEEK} Sprint
+            Week {getCurrentWeek()} Sprint
           </h2>
         </div>
         <button

@@ -6,7 +6,7 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAppStore } from "@/lib/store";
 import type { MonthlyGoal } from "@/lib/types";
-import { CURRENT_MONTH, CURRENT_YEAR, MONTH_NAMES } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentYear, MONTH_NAMES } from "@/lib/mockData";
 
 interface Props {
   open: boolean;
@@ -34,8 +34,8 @@ export function AddMonthlyGoalModal({
   const [isMain, setIsMain] = useState(initialData?.isMain ?? defaultIsMain ?? true);
   const [error, setError] = useState("");
 
-  const effectiveMonth = initialData?.month ?? monthOverride ?? CURRENT_MONTH;
-  const effectiveYear = initialData?.year ?? yearOverride ?? CURRENT_YEAR;
+  const effectiveMonth = initialData?.month ?? monthOverride ?? getCurrentMonth();
+  const effectiveYear = initialData?.year ?? yearOverride ?? getCurrentYear();
 
   useEffect(() => {
     if (!open) return;

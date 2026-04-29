@@ -11,13 +11,20 @@ import { useAppStore } from "@/lib/store";
  */
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const [message, setMessage] = useState("Confirming your session…");
+  const [message, setMessage] = useState("Setting things up…");
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setMessage((m) => (m === "Setting things up…" ? "Still working. One moment." : m));
+    }, 6000);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const run = async () => {
       const sb = getSupabaseBrowser();
       if (!sb) {
-        setMessage("Supabase is not configured.");
+        setMessage("Could not sign you in. Head back to sign in and try again.");
         return;
       }
       const url = new URL(window.location.href);
@@ -28,7 +35,9 @@ export default function AuthCallbackPage() {
           setMessage(error.message);
           return;
         }
-        router.replace("/dashboard");
+        await useAppStore.getState().hydrateAuthFromSupabase();
+        const done = useAppStore.getState().onboardingComplete;
+        router.replace(done ? "/dashboard" : "/onboarding");
         return;
       }
       const hash = window.location.hash.replace(/^#/, "");
@@ -48,7 +57,7 @@ export default function AuthCallbackPage() {
           return;
         }
       }
-      setMessage("This link is invalid or has expired. Request a new one from the sign-in page.");
+      setMessage("Could not sign you in. Head back to sign in and try again.");
     };
     void run();
   }, [router]);

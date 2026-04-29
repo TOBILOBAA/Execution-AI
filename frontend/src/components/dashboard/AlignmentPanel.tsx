@@ -3,7 +3,7 @@
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import type { DashboardMetrics } from "@/lib/types";
-import { CURRENT_MONTH, CURRENT_WEEK, CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentWeek, getCurrentYear } from "@/lib/mockData";
 
 interface AlignmentPanelProps {
   metrics: DashboardMetrics;
@@ -18,11 +18,11 @@ export function AlignmentPanel({ metrics }: AlignmentPanelProps) {
     })),
   );
   const currentMonthlyGoal =
-    monthlyGoals.find((g) => g.year === CURRENT_YEAR && g.month === CURRENT_MONTH && g.isMain) ??
-    monthlyGoals.find((g) => g.year === CURRENT_YEAR && g.month === CURRENT_MONTH);
+    monthlyGoals.find((g) => g.year === getCurrentYear() && g.month === getCurrentMonth() && g.isMain) ??
+    monthlyGoals.find((g) => g.year === getCurrentYear() && g.month === getCurrentMonth());
   const currentWeeklyGoal =
-    weeklyGoals.find((g) => g.year === CURRENT_YEAR && g.weekNumber === CURRENT_WEEK && g.isMain) ??
-    weeklyGoals.find((g) => g.year === CURRENT_YEAR && g.weekNumber === CURRENT_WEEK);
+    weeklyGoals.find((g) => g.year === getCurrentYear() && g.weekNumber === getCurrentWeek() && g.isMain) ??
+    weeklyGoals.find((g) => g.year === getCurrentYear() && g.weekNumber === getCurrentWeek());
 
   return (
     <div className="space-y-3">
