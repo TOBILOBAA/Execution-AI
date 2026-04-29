@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from supabase import Client
 
 from app.api.deps import get_db
+from app.core.exceptions import AIGenerationError
 from app.schemas.reports import (
     DailyReportRequest,
     WeeklyReportRequest,
@@ -33,7 +34,10 @@ def generate_daily_report(
     Only available after REPORT_CUTOFF_HOUR UTC for today's report.
     Past dates can be generated at any time.
     """
-    return report_service.generate_daily_report(db, body.session_id, body.date)
+    try:
+        return report_service.generate_daily_report(db, body.session_id, body.date)
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc
 
 
 @router.post("/weekly/generate")
@@ -42,7 +46,10 @@ def generate_weekly_report(
     db: Client = Depends(get_db),
 ):
     """Generate or regenerate a weekly execution report."""
-    return report_service.generate_weekly_report(db, body.session_id, body.year, body.week_number)
+    try:
+        return report_service.generate_weekly_report(db, body.session_id, body.year, body.week_number)
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc
 
 
 @router.post("/monthly/generate")
@@ -51,7 +58,10 @@ def generate_monthly_report(
     db: Client = Depends(get_db),
 ):
     """Generate or regenerate a monthly execution report."""
-    return report_service.generate_monthly_report(db, body.session_id, body.year, body.month)
+    try:
+        return report_service.generate_monthly_report(db, body.session_id, body.year, body.month)
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc
 
 
 @router.post("/yearly/generate")
@@ -60,4 +70,7 @@ def generate_yearly_report(
     db: Client = Depends(get_db),
 ):
     """Generate or regenerate a yearly execution report."""
-    return report_service.generate_yearly_report(db, body.session_id, body.year)
+    try:
+        return report_service.generate_yearly_report(db, body.session_id, body.year)
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc

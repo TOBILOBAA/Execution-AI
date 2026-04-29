@@ -10,21 +10,34 @@ interface Props {
   data: unknown;
 }
 
+interface QuarterReportModalData {
+  year: number;
+  quarter: 1 | 2 | 3 | 4;
+  coveredMonths: string[];
+  avgCompletion: number | null;
+  topPillar: string | null;
+  summary: string;
+  reflection: string;
+  nextFocus: string | null;
+}
+
 // ── Backdrop + modal shell ─────────────────────────────────────────────────────
 function ModalShell({
   onClose,
   children,
   wide = false,
+  extraWide = false,
   labelledBy,
 }: {
   onClose: () => void;
   children: React.ReactNode;
   wide?: boolean;
+  extraWide?: boolean;
   labelledBy?: string;
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center p-2 sm:items-center sm:p-6"
       style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
       onClick={onClose}
       role="dialog"
@@ -32,8 +45,8 @@ function ModalShell({
       aria-labelledby={labelledBy}
     >
       <div
-        className="bg-white rounded-3xl shadow-2xl w-full overflow-y-auto max-h-[90vh]"
-        style={{ maxWidth: wide ? 720 : 520 }}
+        className="flex w-full max-h-[calc(100dvh-1rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl overscroll-contain sm:max-h-[calc(100dvh-3rem)]"
+        style={{ maxWidth: extraWide ? 880 : wide ? 720 : 560 }}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -77,10 +90,10 @@ const DAY_DATA = {
 
 function DayRecapModal({ onClose }: { onClose: () => void }) {
   return (
-    <ModalShell onClose={onClose} labelledBy="day-recap-title">
-      <div className="p-6">
+    <ModalShell onClose={onClose} wide labelledBy="day-recap-title">
+      <div className="flex min-h-0 flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between mb-5">
+        <div className="flex items-start justify-between px-4 pb-5 pt-5 sm:px-6 sm:pt-6">
           <div>
             <h2 id="day-recap-title" className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>Day Recap</h2>
             <p className="text-sm mt-0.5" style={{ color: "#8a9e97" }}>Excellent progress today. Take a moment to reflect.</p>
@@ -90,8 +103,10 @@ function DayRecapModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
+
         {/* Efficiency + Focus Time */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
           <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Efficiency</p>
             <div className="flex items-baseline gap-1 mb-2">
@@ -144,13 +159,15 @@ function DayRecapModal({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         </div>
+        </div>
 
-        {/* CTA */}
-        <button onClick={onClose} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-sm font-bold text-white transition-opacity hover:opacity-80" style={{ background: "#006c4a" }}>
-          Finish Day &amp; Plan Tomorrow
-          <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-        </button>
-        <p className="text-center text-[10px] font-bold uppercase tracking-widest mt-2" style={{ color: "#c4d0cb" }}>Shift + Enter to Confirm</p>
+        <div className="shrink-0 border-t px-4 py-4 sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+          <button onClick={onClose} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-sm font-bold text-white transition-opacity hover:opacity-80" style={{ background: "#006c4a" }}>
+            Finish Day &amp; Plan Tomorrow
+            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+          </button>
+          <p className="text-center text-[10px] font-bold uppercase tracking-widest mt-2" style={{ color: "#c4d0cb" }}>Shift + Enter to Confirm</p>
+        </div>
       </div>
     </ModalShell>
   );
@@ -178,20 +195,24 @@ const WEEK_DATA = {
 function WeeklyReportModal({ onClose }: { onClose: () => void }) {
   const focusPct = Math.round((WEEK_DATA.focusHours / WEEK_DATA.focusTarget) * 100);
   return (
-    <ModalShell onClose={onClose} labelledBy="weekly-report-title">
-      <div className="p-6">
+    <ModalShell onClose={onClose} wide labelledBy="weekly-report-title">
+      <div className="flex min-h-0 flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between mb-1">
+        <div className="flex items-start justify-between px-4 pb-1 pt-5 sm:px-6 sm:pt-6">
           <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>Execution Summary</p>
           <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-xl transition-opacity hover:opacity-60" style={{ color: "#a8b5af" }}>
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
-        <h2 id="weekly-report-title" className="font-headline font-bold text-2xl mb-1" style={{ color: "#1a1f1e" }}>Week {WEEK_DATA.weekNum}: {WEEK_DATA.weekTitle}</h2>
-        <p className="text-sm mb-5" style={{ color: "#8a9e97" }}>{WEEK_DATA.dateRange}</p>
+        <div className="px-4 sm:px-6">
+          <h2 id="weekly-report-title" className="font-headline font-bold text-2xl mb-1" style={{ color: "#1a1f1e" }}>Week {WEEK_DATA.weekNum}: {WEEK_DATA.weekTitle}</h2>
+          <p className="text-sm mb-5" style={{ color: "#8a9e97" }}>{WEEK_DATA.dateRange}</p>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
           <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
             <div className="flex items-center gap-1.5 mb-2">
               <span className="material-symbols-outlined text-[14px]" style={{ color: "#006c4a" }}>bolt</span>
@@ -249,9 +270,10 @@ function WeeklyReportModal({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         </div>
+        </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
           <button onClick={onClose} className="flex-1 py-3 rounded-2xl text-sm font-bold transition-opacity hover:opacity-70" style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#6b7c75" }}>
             Reflect &amp; Close
           </button>
@@ -273,10 +295,10 @@ function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unk
   const nextMonth = d?.month ? (MONTH_NAMES[d.month] ?? "Next Month") : "July";
 
   return (
-    <ModalShell onClose={onClose} wide labelledBy="monthly-insight-title">
-      <div className="p-6">
+    <ModalShell onClose={onClose} extraWide labelledBy="monthly-insight-title">
+      <div className="flex min-h-0 flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between mb-5">
+        <div className="flex items-start justify-between px-4 pb-5 pt-5 sm:px-6 sm:pt-6">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>Monthly Insight</p>
             <h2 id="monthly-insight-title" className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>{monthName} {year}</h2>
@@ -285,6 +307,8 @@ function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unk
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
 
         {/* Executive Summary */}
         <div className="rounded-2xl p-5 mb-5 flex gap-3" style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.15)" }}>
@@ -370,9 +394,10 @@ function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unk
             ))}
           </div>
         </div>
+        </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between flex-wrap gap-3 pt-4" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+        <div className="flex shrink-0 flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
           <div className="flex items-center gap-3">
             <button className="flex items-center gap-1 text-xs font-bold transition-opacity hover:opacity-60" style={{ color: "#6b7c75" }}>
               <span className="material-symbols-outlined text-[14px]">download</span>Export PDF
@@ -388,13 +413,92 @@ function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unk
   );
 }
 
+function QuarterlyReportModal({ onClose, data }: { onClose: () => void; data: unknown }) {
+  const d = (data ?? {}) as QuarterReportModalData;
+  const coveredMonths = d.coveredMonths?.length ? d.coveredMonths.join(", ") : "No monthly reports saved yet";
+
+  return (
+    <ModalShell onClose={onClose} wide labelledBy="quarterly-report-title">
+      <div className="flex min-h-0 flex-col">
+        <div className="flex items-start justify-between px-4 pb-5 pt-5 sm:px-6 sm:pt-6">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+              Quarterly review
+            </p>
+            <h2 id="quarterly-report-title" className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>
+              Q{d.quarter ?? 1} {d.year ?? 2026}
+            </h2>
+            <p className="mt-1 text-sm" style={{ color: "#8a9e97" }}>
+              Built from saved monthly reports across {coveredMonths}.
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl transition-opacity hover:opacity-60" style={{ color: "#a8b5af" }}>
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
+          <div className="rounded-2xl p-5 mb-5 flex gap-3" style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.15)" }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#006c4a" }}>
+              <span className="material-symbols-outlined text-[18px] text-white">auto_awesome</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold mb-2" style={{ color: "#1a1f1e" }}>AI Quarterly Summary</p>
+              <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+                {d.summary || "Monthly reports exist in this quarter, but the summary could not be formed yet."}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+            <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Average completion</p>
+              <p className="font-headline font-extrabold text-3xl" style={{ color: "#1a1f1e" }}>
+                {d.avgCompletion === null ? "—" : `${d.avgCompletion}%`}
+              </p>
+            </div>
+            <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Top pillar</p>
+              <p className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>
+                {d.topPillar || "Not identified yet"}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-4 mb-5" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Reflection</p>
+            <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+              {d.reflection || "The quarter summary is waiting on more monthly reporting depth."}
+            </p>
+          </div>
+
+          {d.nextFocus && (
+            <div className="rounded-2xl p-4" style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.12)" }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#006c4a" }}>Next focus</p>
+              <p className="text-sm font-semibold leading-relaxed" style={{ color: "#1a1f1e" }}>
+                {d.nextFocus}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="shrink-0 border-t px-4 py-4 sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+          <button onClick={onClose} className="w-full py-3 rounded-2xl text-sm font-bold text-white transition-opacity hover:opacity-80" style={{ background: "#006c4a" }}>
+            Close quarterly review
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 // ── Yearly Report Modal (opens from the old "View Report" button) ─────────────
 function YearlyReportModal({ onClose, data }: { onClose: () => void; data: unknown }) {
   const d = data as { year?: number; completionRate?: number; topPillar?: string; streak?: number } | undefined;
   return (
-    <ModalShell onClose={onClose} labelledBy="yearly-report-title">
-      <div className="p-6">
-        <div className="flex items-start justify-between mb-5">
+    <ModalShell onClose={onClose} wide labelledBy="yearly-report-title">
+      <div className="flex min-h-0 flex-col">
+        <div className="flex items-start justify-between px-4 pb-5 pt-5 sm:px-6 sm:pt-6">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>Annual Report</p>
             <h2 id="yearly-report-title" className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>{d?.year ?? 2026} Summary</h2>
@@ -403,7 +507,9 @@ function YearlyReportModal({ onClose, data }: { onClose: () => void; data: unkno
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-5">
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
           {[{ label: "Completion Rate", value: `${d?.completionRate ?? 94}%` }, { label: "Best Streak", value: `${d?.streak ?? 42}d` }].map((s) => (
             <div key={s.label} className="rounded-2xl p-4 text-center" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>{s.label}</p>
@@ -417,7 +523,8 @@ function YearlyReportModal({ onClose, data }: { onClose: () => void; data: unkno
             Top pillar: <strong>{d?.topPillar ?? "Career"}</strong>. Your execution velocity peaked in Q3. View the full report for AI master review and Hall of Fame highlights.
           </p>
         </div>
-        <div className="flex gap-3">
+        </div>
+        <div className="flex shrink-0 flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
           <button onClick={onClose} className="flex-1 py-3 rounded-2xl text-sm font-bold transition-opacity hover:opacity-70" style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#6b7c75" }}>Close</button>
           <a href={`/dashboard/reports/${d?.year ?? 2026}`} className="flex-1 py-3 rounded-2xl text-sm font-bold text-white text-center transition-opacity hover:opacity-80" style={{ background: "#006c4a" }}>
             Full Report
@@ -449,6 +556,8 @@ export function ReportModal({ open, onClose, type, data }: Props) {
   switch (type) {
     case "daily-report":
       return <DayRecapModal onClose={onClose} />;
+    case "quarterly-report":
+      return <QuarterlyReportModal onClose={onClose} data={data} />;
     case "weekly-report":
       return <WeeklyReportModal onClose={onClose} />;
     case "monthly-report":

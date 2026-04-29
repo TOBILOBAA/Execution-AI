@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { getToday } from "@/lib/mockData";
 import type { DailyPriority } from "@/lib/types";
 
 const TIME_PILLS = [
@@ -19,11 +18,12 @@ interface Props {
 }
 
 export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
-  const { addSecondaryTask, updateSecondaryTask, categories } = useAppStore(
+  const { addSecondaryTask, updateSecondaryTask, categories, activeDashboardDate } = useAppStore(
     useShallow((state) => ({
       addSecondaryTask: state.addSecondaryTask,
       updateSecondaryTask: state.updateSecondaryTask,
       categories: state.categories,
+      activeDashboardDate: state.activeDashboardDate,
     })),
   );
   const isEdit = !!initialData;
@@ -68,7 +68,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
         tag: alignment,
         estimatedMinutes: minutes,
         isMain: false,
-        date: getToday(),
+        date: activeDashboardDate,
         status: "active",
         completed: false,
         priority: "medium",

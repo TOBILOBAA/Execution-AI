@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import type { DailyPriority } from "@/lib/types";
-import { getToday } from "@/lib/mockData";
 
 const ORDINALS = ["ONE", "TWO", "THREE"];
 
@@ -16,12 +15,13 @@ interface Props {
 }
 
 export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData }: Props) {
-  const { dailyPriorities, categories, addDailyPriority, updateDailyPriority } = useAppStore(
+  const { dailyPriorities, categories, addDailyPriority, updateDailyPriority, activeDashboardDate } = useAppStore(
     useShallow((state) => ({
       dailyPriorities: state.dailyPriorities,
       categories: state.categories,
       addDailyPriority: state.addDailyPriority,
       updateDailyPriority: state.updateDailyPriority,
+      activeDashboardDate: state.activeDashboardDate,
     })),
   );
   const isEditMode = mode === "edit";
@@ -92,7 +92,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
         title: singleTitle.trim(),
         tag: singleTag,
         isMain: true,
-        date: getToday(),
+        date: activeDashboardDate,
         status: "active",
         completed: false,
         priority: "high",

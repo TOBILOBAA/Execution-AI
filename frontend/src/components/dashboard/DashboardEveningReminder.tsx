@@ -16,7 +16,7 @@ function pad2(n: number) {
 
 function DashboardEveningReminderInner() {
   const searchParams = useSearchParams();
-  const testEvening = searchParams.get("evening_test") === "1";
+  const testEvening = searchParams?.get("evening_test") === "1";
 
   useEffect(() => {
     if (!testEvening || typeof window === "undefined") return;
