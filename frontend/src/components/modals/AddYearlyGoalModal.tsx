@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import type { YearlyGoal } from "@/lib/types";
-import { CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentYear } from "@/lib/mockData";
 
 // Per-category icon + color to match the design
 const CAT_ICON_COLORS: Record<string, { icon: string; color: string; bg: string }> = {
@@ -71,7 +71,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
         title: title.trim(),
         categoryId,
         ...(description.trim() ? { description: description.trim() } : {}),
-        year: CURRENT_YEAR,
+        year: getCurrentYear(),
         status: "active",
         progress: 0,
         targetDate: targetDate || undefined,

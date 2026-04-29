@@ -14,9 +14,9 @@ import type {
 } from "./types";
 import {
   DEFAULT_CATEGORIES,
-  CURRENT_YEAR,
   EMPTY_DASHBOARD_METRICS,
-  TODAY,
+  getCurrentYear,
+  getToday,
 } from "./mockData";
 import { isUuid } from "./uuid";
 import type { DashboardMetrics, YearReport } from "./types";
@@ -807,7 +807,7 @@ export const useAppStore = create<AppState>()(
           currentUser: null,
           sessionId: null,
           sessionWeekStartsOn: "monday",
-          activeDashboardDate: TODAY,
+          activeDashboardDate: getToday(),
           backendReady: false,
           workspaceHydrating: false,
           syncError: null,
@@ -829,7 +829,7 @@ export const useAppStore = create<AppState>()(
             currentUser: null,
             sessionId: null,
             sessionWeekStartsOn: "monday",
-            activeDashboardDate: TODAY,
+            activeDashboardDate: getToday(),
             backendReady: false,
             workspaceHydrating: false,
             syncError: null,
@@ -879,7 +879,7 @@ export const useAppStore = create<AppState>()(
       backendReady: false,
       workspaceHydrating: false,
       workspaceOwnerId: null,
-      activeDashboardDate: TODAY,
+      activeDashboardDate: getToday(),
       setSessionId: (id) => set({ sessionId: id }),
       setActiveDashboardDate: (date) => set({ activeDashboardDate: date }),
       setWeekStartsOn: async (value) => {
@@ -1078,10 +1078,10 @@ export const useAppStore = create<AppState>()(
         }
         set({ syncStatus: "saving" });
         const localIds = yearlyGoals
-          .filter((g) => g.year === CURRENT_YEAR && !isUuid(g.id))
+          .filter((g) => g.year === getCurrentYear() && !isUuid(g.id))
           .map((g) => g.id);
         await waitForPendingCreates(pendingYearlyGoalCreates, localIds);
-        const pending = get().yearlyGoals.filter((g) => g.year === CURRENT_YEAR && !isUuid(g.id));
+        const pending = get().yearlyGoals.filter((g) => g.year === getCurrentYear() && !isUuid(g.id));
         for (const g of pending) {
           try {
             const created = await yearlyGoalsApi.create(sessionId, {
@@ -1101,7 +1101,7 @@ export const useAppStore = create<AppState>()(
             return false;
           }
         }
-        const stillLocal = get().yearlyGoals.filter((g) => g.year === CURRENT_YEAR && !isUuid(g.id));
+        const stillLocal = get().yearlyGoals.filter((g) => g.year === getCurrentYear() && !isUuid(g.id));
         if (stillLocal.length > 0) {
           set({
             syncError: `${stillLocal.length} yearly goal(s) could not be synced (still local-only). Check your connection and try again.`,
@@ -1110,10 +1110,10 @@ export const useAppStore = create<AppState>()(
           return false;
         }
         try {
-          const serverGoals = await yearlyGoalsApi.list(sessionId, CURRENT_YEAR);
+          const serverGoals = await yearlyGoalsApi.list(sessionId, getCurrentYear());
           set((s) => ({
             yearlyGoals: [
-              ...s.yearlyGoals.filter((goal) => goal.year !== CURRENT_YEAR),
+              ...s.yearlyGoals.filter((goal) => goal.year !== getCurrentYear()),
               ...serverGoals.map(mapApiYearlyGoalToStore),
             ],
             syncError: null,

@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { WeeklyGoal } from "@/lib/types";
-import { CURRENT_WEEK, CURRENT_MONTH, CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentWeek, getCurrentMonth, getCurrentYear } from "@/lib/mockData";
 import { AddWeeklyGoalModal } from "./AddWeeklyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
@@ -364,13 +364,13 @@ export function StepWeekly({ onNext, onBack }: Props) {
   );
 
   const currentWeekGoals = weeklyGoals.filter(
-    (g) => g.weekNumber === CURRENT_WEEK && g.year === CURRENT_YEAR
+    (g) => g.weekNumber === getCurrentWeek() && g.year === getCurrentYear()
   );
   const mainGoals = currentWeekGoals.filter((g) => g.isMain);
   const secondaryGoals = currentWeekGoals.filter((g) => !g.isMain);
 
   const currentMonthlyGoals = monthlyGoals.filter(
-    (g) => g.month === CURRENT_MONTH && g.year === CURRENT_YEAR
+    (g) => g.month === getCurrentMonth() && g.year === getCurrentYear()
   );
 
   // Modal state
@@ -425,7 +425,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateWeeklyPlan(CURRENT_YEAR, CURRENT_WEEK);
+    const result = await generateWeeklyPlan(getCurrentYear(), getCurrentWeek());
     if (result?.draft) {
       const draft = result.draft as WeeklyAIDraft;
       setAiDraft(draft);
@@ -448,7 +448,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false });
     });
     setAiAccepting(true);
-    const ok = await approveWeeklyPlan(CURRENT_YEAR, CURRENT_WEEK, goals);
+    const ok = await approveWeeklyPlan(getCurrentYear(), getCurrentWeek(), goals);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -458,7 +458,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
 
   const handleLeaveWeekly = async () => {
     setLeaveError(null);
-    const ok = await syncWeeklyGoalsToServer(CURRENT_YEAR, CURRENT_WEEK);
+    const ok = await syncWeeklyGoalsToServer(getCurrentYear(), getCurrentWeek());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Weekly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -822,9 +822,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
               addWeeklyGoal({
                 ...data,
                 isMain: true,
-                weekNumber: CURRENT_WEEK,
-                month: CURRENT_MONTH,
-                year: CURRENT_YEAR,
+                weekNumber: getCurrentWeek(),
+                month: getCurrentMonth(),
+                year: getCurrentYear(),
                 status: "active",
                 progress: 0,
                 aiSuggested: false,
@@ -853,9 +853,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
               addWeeklyGoal({
                 ...data,
                 isMain: false,
-                weekNumber: CURRENT_WEEK,
-                month: CURRENT_MONTH,
-                year: CURRENT_YEAR,
+                weekNumber: getCurrentWeek(),
+                month: getCurrentMonth(),
+                year: getCurrentYear(),
                 status: "active",
                 progress: 0,
                 aiSuggested: false,

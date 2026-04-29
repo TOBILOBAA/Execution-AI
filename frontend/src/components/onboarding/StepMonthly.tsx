@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { CURRENT_MONTH, CURRENT_YEAR, MONTH_NAMES } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentYear, MONTH_NAMES } from "@/lib/mockData";
 import { AddMonthlyGoalModal } from "./AddMonthlyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import type { MonthlyGoal, FoundationalHabit, HabitFrequency } from "@/lib/types";
@@ -183,7 +183,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateMonthlyPlan(CURRENT_YEAR, CURRENT_MONTH);
+    const result = await generateMonthlyPlan(getCurrentYear(), getCurrentMonth());
     if (result.ok && result.draft) {
       const draft = result.draft as AIDraft;
       setAiDraft(draft);
@@ -220,7 +220,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false, priority: "medium" });
     });
     setAiAccepting(true);
-    const ok = await approveMonthlyPlan(CURRENT_YEAR, CURRENT_MONTH, goals);
+    const ok = await approveMonthlyPlan(getCurrentYear(), getCurrentMonth(), goals);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -228,7 +228,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiAccepting(false);
   };
 
-  const currentGoals = monthlyGoals.filter((g) => g.month === CURRENT_MONTH && g.year === CURRENT_YEAR);
+  const currentGoals = monthlyGoals.filter((g) => g.month === getCurrentMonth() && g.year === getCurrentYear());
   const mainGoals = currentGoals.filter((g) => g.isMain);
   const secondaryGoals = currentGoals.filter((g) => !g.isMain);
   const activeHabits = habits.filter((h) => h.active);
@@ -265,8 +265,8 @@ export function StepMonthly({ onNext, onBack }: Props) {
         ...(desc ? { description: desc } : {}),
         ...(wl ? { workload: wl } : {}),
         isMain: addMode === "main",
-        month: CURRENT_MONTH,
-        year: CURRENT_YEAR,
+        month: getCurrentMonth(),
+        year: getCurrentYear(),
         status: "active",
         progress: 0,
         priority: addMode === "main" ? "high" : "medium",
@@ -293,7 +293,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
   const handleLeaveMonthly = async () => {
     setLeaveError(null);
-    const ok = await syncMonthlyGoalsToServer(CURRENT_YEAR, CURRENT_MONTH);
+    const ok = await syncMonthlyGoalsToServer(getCurrentYear(), getCurrentMonth());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Monthly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -308,7 +308,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
         {/* Heading */}
         <div className="text-center">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight mb-2.5" style={{ color: "#1a1f1e" }}>
-            {MONTH_NAMES[CURRENT_MONTH - 1]} {CURRENT_YEAR} Bedrock
+            {MONTH_NAMES[getCurrentMonth() - 1]} {getCurrentYear()} Bedrock
           </h1>
           <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#6b7b74" }}>
             Establish your foundation. We&apos;ve structured your month around primary objectives, secondary supports, and the habits that sustain them.
@@ -584,7 +584,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
         <AddMonthlyGoalModal
           mode={isEditMode ? ((goalModal as MonthlyGoal).isMain ? "main" : "secondary") : (addMode as "main" | "secondary")}
           categories={categories}
-          yearlyGoals={yearlyGoals.filter((g) => g.year === CURRENT_YEAR)}
+          yearlyGoals={yearlyGoals.filter((g) => g.year === getCurrentYear())}
           initialTitle={isEditMode ? (goalModal as MonthlyGoal).title : ""}
           initialCategoryId={isEditMode ? (goalModal as MonthlyGoal).categoryId : undefined}
           initialYearlyGoalId={isEditMode ? (goalModal as MonthlyGoal).yearlyGoalId : undefined}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { TODAY } from "@/lib/mockData";
+import { getToday } from "@/lib/mockData";
 import type { DailyPriority } from "@/lib/types";
 
 const TIME_PILLS = [
@@ -68,7 +68,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
         tag: alignment,
         estimatedMinutes: minutes,
         isMain: false,
-        date: TODAY,
+        date: getToday(),
         status: "active",
         completed: false,
         priority: "medium",

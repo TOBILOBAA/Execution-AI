@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentYear } from "@/lib/mockData";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
 import { AddGoalModal } from "./AddGoalModal";
 import { AddCategoryModal } from "./AddCategoryModal";
@@ -86,7 +86,7 @@ export function StepYearly({ onNext }: Props) {
   const getGoalsForCat = (catId: string) =>
     yearlyGoals.filter(
       (g) =>
-        g.year === CURRENT_YEAR &&
+        g.year === getCurrentYear() &&
         (g.categoryId === catId || (!g.categoryId && catId === fallbackCategoryId)),
     );
 
@@ -107,7 +107,7 @@ export function StepYearly({ onNext }: Props) {
         title,
         categoryId: modalCatId,
         ...(description ? { description } : {}),
-        year: CURRENT_YEAR,
+        year: getCurrentYear(),
         status: "active",
         progress: 0,
         targetDate,

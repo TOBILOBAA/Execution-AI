@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { TODAY } from "@/lib/mockData";
+import { getToday } from "@/lib/mockData";
 import { PriorityCard } from "@/components/dashboard/PriorityCard";
 import { SecondaryTaskRow } from "@/components/dashboard/SecondaryTaskRow";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
@@ -32,7 +32,7 @@ export default function DashboardHome() {
     })),
   );
 
-  const todayRows = dailyPriorities.filter((p) => p.date === TODAY);
+  const todayRows = dailyPriorities.filter((p) => p.date === getToday());
   const remaining = todayRows.filter((p) => !p.completed).length;
 
   return (
@@ -93,7 +93,7 @@ export default function DashboardHome() {
                     No priorities for today yet
                   </p>
                   <p className="text-sm mb-5 max-w-md mx-auto" style={{ color: "#8a9e97" }}>
-                    The home screen only shows tasks dated {TODAY}. Add them during onboarding (final step) or tap Edit to
+                    The home screen only shows tasks dated {getToday()}. Add them during onboarding (final step) or tap Edit to
                     define what you are executing today.
                   </p>
                   <div className="flex flex-wrap items-center justify-center gap-3">

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import type { DailyPriority } from "@/lib/types";
-import { TODAY } from "@/lib/mockData";
+import { getToday } from "@/lib/mockData";
 
 const ORDINALS = ["ONE", "TWO", "THREE"];
 
@@ -92,7 +92,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
         title: singleTitle.trim(),
         tag: singleTag,
         isMain: true,
-        date: TODAY,
+        date: getToday(),
         status: "active",
         completed: false,
         priority: "high",

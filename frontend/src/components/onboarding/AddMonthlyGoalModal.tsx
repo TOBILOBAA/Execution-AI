@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { CURRENT_MONTH, CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentYear } from "@/lib/mockData";
 import type { Category, YearlyGoal } from "@/lib/types";
 
 interface Props {
@@ -64,8 +64,8 @@ export function AddMonthlyGoalModal({
 }: Props) {
   const isMain = mode === "main";
   const isEdit = !!initialTitle;
-  const effectiveMonth = monthOverride ?? CURRENT_MONTH;
-  const effectiveYear = yearOverride ?? CURRENT_YEAR;
+  const effectiveMonth = monthOverride ?? getCurrentMonth();
+  const effectiveYear = yearOverride ?? getCurrentYear();
   const defaultDate = initialDate ?? endOfMonth(effectiveYear, effectiveMonth);
 
   const [title, setTitle] = useState(initialTitle);

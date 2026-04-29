@@ -6,7 +6,7 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAppStore } from "@/lib/store";
 import type { MonthlyGoal } from "@/lib/types";
-import { CURRENT_MONTH, CURRENT_YEAR, MONTH_NAMES } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentYear, MONTH_NAMES } from "@/lib/mockData";
 
 interface Props {
   open: boolean;
@@ -33,8 +33,8 @@ export function AddMonthlyGoalModal({ open, onClose, initialData }: Props) {
         title: title.trim(),
         description,
         isMain,
-        month: CURRENT_MONTH,
-        year: CURRENT_YEAR,
+        month: getCurrentMonth(),
+        year: getCurrentYear(),
         status: "active",
         progress: 0,
         priority: isMain ? "high" : "medium",
@@ -47,7 +47,7 @@ export function AddMonthlyGoalModal({ open, onClose, initialData }: Props) {
     <Modal open={open} onClose={onClose} size="md">
       <ModalHeader
         title={isEdit ? "Edit Monthly Goal" : "Add Monthly Goal"}
-        subtitle={`${MONTH_NAMES[CURRENT_MONTH - 1]} ${CURRENT_YEAR}`}
+        subtitle={`${MONTH_NAMES[getCurrentMonth() - 1]} ${getCurrentYear()}`}
         icon="calendar_month"
         onClose={onClose}
       />

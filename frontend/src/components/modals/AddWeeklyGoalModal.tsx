@@ -6,7 +6,7 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAppStore } from "@/lib/store";
 import type { WeeklyGoal } from "@/lib/types";
-import { CURRENT_WEEK, CURRENT_MONTH, CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentWeek, getCurrentMonth, getCurrentYear } from "@/lib/mockData";
 
 interface Props {
   open: boolean;
@@ -33,9 +33,9 @@ export function AddWeeklyGoalModal({ open, onClose, initialData }: Props) {
         title: title.trim(),
         description,
         isMain,
-        weekNumber: CURRENT_WEEK,
-        month: CURRENT_MONTH,
-        year: CURRENT_YEAR,
+        weekNumber: getCurrentWeek(),
+        month: getCurrentMonth(),
+        year: getCurrentYear(),
         status: "active",
         progress: 0,
       });
@@ -47,7 +47,7 @@ export function AddWeeklyGoalModal({ open, onClose, initialData }: Props) {
     <Modal open={open} onClose={onClose} size="md">
       <ModalHeader
         title={isEdit ? "Edit Weekly Goal" : "Add Weekly Goal"}
-        subtitle={`Week ${CURRENT_WEEK} Sprint`}
+        subtitle={`Week ${getCurrentWeek()} Sprint`}
         icon="view_week"
         onClose={onClose}
       />

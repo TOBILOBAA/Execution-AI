@@ -1,7 +1,7 @@
 "use client";
 
 import { useAppStore } from "@/lib/store";
-import { TODAY } from "@/lib/mockData";
+import { getToday } from "@/lib/mockData";
 import { DailyKickoffModal } from "./DailyKickoffModal";
 
 /** Renders post-onboarding kickoff on every dashboard route so `kickoffPending` can always be cleared. */
@@ -14,8 +14,8 @@ export function DashboardKickoffModal() {
 
   if (!kickoffPending) return null;
 
-  const todayPriorities = dailyPriorities.filter((p) => p.date === TODAY);
-  const todayTasks = secondaryTasks.filter((t) => t.date === TODAY);
+  const todayPriorities = dailyPriorities.filter((p) => p.date === getToday());
+  const todayTasks = secondaryTasks.filter((t) => t.date === getToday());
 
   return (
     <DailyKickoffModal

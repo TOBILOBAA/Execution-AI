@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { reportsApi, type ApiReport } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentYear } from "@/lib/mockData";
 import {
   listYearSnapshots,
   monthName,
@@ -74,7 +74,7 @@ export default function ReportsPage() {
     };
   }, [sessionId]);
 
-  const currentYearGoals = yearlyGoals.filter((goal) => goal.year === CURRENT_YEAR);
+  const currentYearGoals = yearlyGoals.filter((goal) => goal.year === getCurrentYear());
   const completionRate = currentYearGoals.length
     ? Math.round(currentYearGoals.reduce((sum, goal) => sum + (goal.progress ?? 0), 0) / currentYearGoals.length)
     : Math.min(100, metrics.monthlyCompletionRate ?? 0);
@@ -125,7 +125,7 @@ export default function ReportsPage() {
         >
           <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
             <p className="font-headline font-extrabold" style={{ fontSize: "52px", color: "#1a1f1e", lineHeight: 1 }}>
-              {CURRENT_YEAR}
+              {getCurrentYear()}
             </p>
             <span
               className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mt-2"
@@ -175,7 +175,7 @@ export default function ReportsPage() {
                 Monthly Goal Layers
               </p>
               <p className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>
-                {monthlyGoals.filter((goal) => goal.year === CURRENT_YEAR).length || "—"}
+                {monthlyGoals.filter((goal) => goal.year === getCurrentYear()).length || "—"}
               </p>
               <p className="text-xs mt-1" style={{ color: "#a8b5af" }}>
                 Saved monthly objectives in the current year
@@ -184,11 +184,11 @@ export default function ReportsPage() {
           </div>
 
           <button
-            onClick={() => router.push(`/dashboard/reports/${CURRENT_YEAR}`)}
+            onClick={() => router.push(`/dashboard/reports/${getCurrentYear()}`)}
             className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-widest transition-opacity hover:opacity-60"
             style={{ color: "#006c4a" }}
           >
-            Open {CURRENT_YEAR} archive
+            Open {getCurrentYear()} archive
             <span className="material-symbols-outlined text-[17px]">arrow_forward</span>
           </button>
         </div>

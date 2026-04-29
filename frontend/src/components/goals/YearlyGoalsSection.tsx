@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { YearlyGoal, Category } from "@/lib/types";
 import { ProgressBar } from "@/components/ui/Progress";
 import { Badge } from "@/components/ui/Badge";
-import { CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentYear } from "@/lib/mockData";
 
 interface YearlyGoalsSectionProps {
   goals: YearlyGoal[];
@@ -35,7 +35,7 @@ export function YearlyGoalsSection({
               Annual Directive
             </span>
             <h2 className="font-headline font-bold text-2xl text-[--color-on-surface]">
-              Yearly Goals {CURRENT_YEAR}
+              Yearly Goals {getCurrentYear()}
             </h2>
           </div>
           <button
