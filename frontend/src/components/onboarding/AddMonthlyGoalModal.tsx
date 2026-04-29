@@ -9,6 +9,8 @@ interface Props {
   mode: "main" | "secondary";
   categories: Category[];
   yearlyGoals: YearlyGoal[];
+  monthOverride?: number;
+  yearOverride?: number;
   /** Pre-fill for edit */
   initialTitle?: string;
   initialCategoryId?: string;
@@ -49,6 +51,8 @@ export function AddMonthlyGoalModal({
   mode,
   categories,
   yearlyGoals,
+  monthOverride,
+  yearOverride,
   initialTitle = "",
   initialCategoryId,
   initialYearlyGoalId,
@@ -60,7 +64,9 @@ export function AddMonthlyGoalModal({
 }: Props) {
   const isMain = mode === "main";
   const isEdit = !!initialTitle;
-  const defaultDate = initialDate ?? endOfMonth(CURRENT_YEAR, CURRENT_MONTH);
+  const effectiveMonth = monthOverride ?? CURRENT_MONTH;
+  const effectiveYear = yearOverride ?? CURRENT_YEAR;
+  const defaultDate = initialDate ?? endOfMonth(effectiveYear, effectiveMonth);
 
   const [title, setTitle] = useState(initialTitle);
   const [categoryId, setCategoryId] = useState(initialCategoryId ?? categories[0]?.id ?? "");
@@ -70,8 +76,8 @@ export function AddMonthlyGoalModal({
   const [workload, setWorkload] = useState(initialWorkload);
   const [error, setError] = useState("");
 
-  const daysLeft = daysRemainingInMonth(CURRENT_YEAR, CURRENT_MONTH);
-  const monthName = MONTH_NAMES_FULL[CURRENT_MONTH - 1];
+  const daysLeft = daysRemainingInMonth(effectiveYear, effectiveMonth);
+  const monthName = MONTH_NAMES_FULL[effectiveMonth - 1];
 
   const handleSubmit = () => {
     if (!title.trim()) { setError("Goal name is required."); return; }
@@ -80,7 +86,7 @@ export function AddMonthlyGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.35)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
