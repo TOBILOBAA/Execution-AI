@@ -175,6 +175,7 @@ def build_monthly_planning_payload(
             ),
             "progress_pct": g.get("progress", 0),
             "description": g.get("description", ""),
+            "target_date": g.get("target_date", ""),
         }
         for g in yearly_goals
     ]
@@ -204,6 +205,7 @@ def build_monthly_planning_payload(
 def build_weekly_planning_payload(
     ctx: TemporalContext,
     monthly_goals: list[dict],
+    yearly_goals: list[dict] | None = None,
     existing_weekly_goals: list[dict] | None = None,
 ) -> dict:
     """
@@ -219,8 +221,18 @@ def build_weekly_planning_payload(
             "priority": g.get("priority", "medium"),
             "progress_pct": g.get("progress", 0),
             "description": g.get("description", ""),
+            "workload": g.get("workload", ""),
         }
         for g in monthly_goals
+    ]
+
+    yearly_summary = [
+        {
+            "title": g["title"],
+            "progress_pct": g.get("progress", 0),
+            "description": g.get("description", ""),
+        }
+        for g in (yearly_goals or [])
     ]
 
     return {
@@ -242,6 +254,7 @@ def build_weekly_planning_payload(
             "rationale": budget.rationale,
         },
         "monthly_goals": monthly_summary,
+        "yearly_goals": yearly_summary,
         "existing_weekly_goals": existing_weekly_goals or [],
     }
 
@@ -252,6 +265,9 @@ def build_daily_planning_payload(
     weekly_remaining_tasks: int,
     existing_daily: list[dict] | None = None,
     habits: list[dict] | None = None,
+    monthly_goals: list[dict] | None = None,
+    yearly_goals: list[dict] | None = None,
+    yesterday_completion: dict | None = None,
 ) -> dict:
     """
     Structured payload for daily plan generation.
@@ -267,6 +283,26 @@ def build_daily_planning_payload(
             "description": g.get("description", ""),
         }
         for g in weekly_goals
+    ]
+
+    monthly_summary = [
+        {
+            "title": g["title"],
+            "is_main": g.get("is_main", False),
+            "progress_pct": g.get("progress", 0),
+            "description": g.get("description", ""),
+            "workload": g.get("workload", ""),
+        }
+        for g in (monthly_goals or [])
+    ]
+
+    yearly_summary = [
+        {
+            "title": g["title"],
+            "progress_pct": g.get("progress", 0),
+            "description": g.get("description", ""),
+        }
+        for g in (yearly_goals or [])
     ]
 
     habit_names = [h["name"] for h in (habits or []) if h.get("active")]
@@ -287,7 +323,10 @@ def build_daily_planning_payload(
             "rationale": budget.rationale,
         },
         "weekly_goals": weekly_summary,
+        "monthly_goals": monthly_summary,
+        "yearly_goals": yearly_summary,
         "weekly_tasks_remaining": weekly_remaining_tasks,
         "active_habits": habit_names,
         "existing_daily_items": existing_daily or [],
+        "yesterday_completion": yesterday_completion or {},
     }

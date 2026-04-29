@@ -103,6 +103,8 @@ class WeeklyNarrative(BaseModel):
     key_pattern: str | None = None
     reflection: str
     next_week_priority: str
+    tailored_pattern: str | None = None
+    tailored_action: str | None = None
 
 
 class MonthlyNarrative(BaseModel):
@@ -112,6 +114,8 @@ class MonthlyNarrative(BaseModel):
     key_lesson: str | None = None
     reflection: str
     next_month_focus: str
+    tailored_pattern: str | None = None
+    tailored_action: str | None = None
 
 
 class YearlyNarrative(BaseModel):
@@ -121,6 +125,8 @@ class YearlyNarrative(BaseModel):
     key_pattern: str | None = None
     reflection: str
     next_year_focus: str
+    tailored_pattern: str | None = None
+    tailored_action: str | None = None
 
 
 # ─── Full report snapshot response ────────────────────────────────────────────
@@ -178,4 +184,3 @@ class AIDailyPlanOutput(BaseModel):
     reasoning: str
     top_priorities: list[AIGoalItem]
     secondary_tasks: list[AIGoalItem]
-    foundational_habits: list[str]

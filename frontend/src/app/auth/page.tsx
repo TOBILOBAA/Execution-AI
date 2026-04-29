@@ -9,7 +9,9 @@ import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudPasswordAuthEnabled, isC
 
 type Mode = "signin" | "signup" | "forgot";
 
-const cloudOtpEnabled = isCloudOtpAuthEnabled();
+// OTP path is intentionally disabled for MVP. The code is preserved for post-MVP.
+// To re-enable: replace `false` with `isCloudOtpAuthEnabled()`.
+const cloudOtpEnabled = false;
 const cloudPassword = isCloudPasswordAuthEnabled();
 const authLocalOnly = isAuthLocalOnly();
 const showLocalSeedPanel = isAuthLocalOnly() || !isCloudSupabaseConfigured();
@@ -199,7 +201,9 @@ export default function AuthPage() {
         return;
       }
       if (result.needsEmailConfirmation) {
-        setInfo("We sent a confirmation link to your inbox. Open it to verify your email, then sign in here.");
+        // Email confirmation is disabled for MVP — project-level Supabase setting controls this.
+        // If the user lands here it means they need to confirm; show a message rather than silently failing.
+        setInfo("Check your inbox for a confirmation link, then sign in here.");
         setLoading(false);
         return;
       }
