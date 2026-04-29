@@ -308,10 +308,11 @@ export function StepMonthly({ onNext, onBack }: Props) {
         {/* Heading */}
         <div className="text-center">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight mb-2.5" style={{ color: "#1a1f1e" }}>
-            {MONTH_NAMES[getCurrentMonth() - 1]} {getCurrentYear()} Bedrock
+            Plan {MONTH_NAMES[getCurrentMonth() - 1]}.
           </h1>
           <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#6b7b74" }}>
-            Establish your foundation. We&apos;ve structured your month around primary objectives, secondary supports, and the habits that sustain them.
+            Pick 1 main goal, up to 2 secondary goals, and the foundational habits you&apos;ll hold this month. Each goal
+            connects to a yearly goal.
           </p>
         </div>
 
@@ -324,7 +325,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
               </div>
               <div>
                 <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Generate with AI</p>
-                <p className="text-xs" style={{ color: "#6b7b74" }}>Let AI suggest main and secondary monthly goals from your yearly objectives (often a few seconds).</p>
+                <p className="text-xs" style={{ color: "#6b7b74" }}>
+                  We&apos;ll use your yearly goals to suggest a focused month. You can edit anything.
+                </p>
               </div>
             </div>
             <button
@@ -339,12 +342,12 @@ export function StepMonthly({ onNext, onBack }: Props) {
                     <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/>
                     <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/>
                   </svg>
-                  Generating…
+                  Drafting your month…
                 </>
               ) : (
                 <>
                   <span className="material-symbols-outlined text-[15px]">bolt</span>
-                  AI Generate
+                  Generate with AI
                 </>
               )}
             </button>
@@ -573,8 +576,8 @@ export function StepMonthly({ onNext, onBack }: Props) {
             className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90"
             style={{ background: "#006c4a", boxShadow: "0 2px 12px rgba(0,108,74,0.22)" }}
           >
-            Generate Weekly Flow
-            <span className="material-symbols-outlined text-[18px]">stacked_bar_chart</span>
+            Next
+            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
           </button>
         </div>
       </div>

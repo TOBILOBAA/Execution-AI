@@ -11,13 +11,20 @@ import { useAppStore } from "@/lib/store";
  */
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const [message, setMessage] = useState("Confirming your session…");
+  const [message, setMessage] = useState("Setting things up…");
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setMessage((m) => (m === "Setting things up…" ? "Still working. One moment." : m));
+    }, 6000);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const run = async () => {
       const sb = getSupabaseBrowser();
       if (!sb) {
-        setMessage("Supabase is not configured.");
+        setMessage("Could not sign you in. Head back to sign in and try again.");
         return;
       }
       const url = new URL(window.location.href);
@@ -28,11 +35,6 @@ export default function AuthCallbackPage() {
           setMessage(error.message);
           return;
         }
-        // Hydrate first so we know whether the user has completed onboarding.
-        // Routing PKCE callbacks unconditionally to /dashboard caused
-        // /dashboard ↔ /onboarding ping-pong (the dashboard layout bounces
-        // back when onboardingComplete is false), re-running hydration each
-        // time and feeling like a stall.
         await useAppStore.getState().hydrateAuthFromSupabase();
         const done = useAppStore.getState().onboardingComplete;
         router.replace(done ? "/dashboard" : "/onboarding");
@@ -55,7 +57,7 @@ export default function AuthCallbackPage() {
           return;
         }
       }
-      setMessage("This link is invalid or has expired. Request a new one from the sign-in page.");
+      setMessage("Could not sign you in. Head back to sign in and try again.");
     };
     void run();
   }, [router]);

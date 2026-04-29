@@ -432,7 +432,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       setAiRowKeys(buildAiRowKeys(draft));
     } else {
       setAiError(
-        "AI generation failed. Add monthly goals (or use AI on the previous step and accept), click “Generate Weekly Flow” so they save, then try again."
+        "AI generation failed. Add monthly goals (or use AI on the previous step and accept), click Next so they save, then try again."
       );
     }
     setAiLoading(false);
@@ -475,10 +475,10 @@ export function StepWeekly({ onNext, onBack }: Props) {
           className="font-headline text-4xl font-extrabold tracking-tight"
           style={{ color: "#1a1f1e" }}
         >
-          Weekly Planning
+          Plan week {getCurrentWeek()}.
         </h1>
         <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#8a9e97" }}>
-          Translate your monthly targets into tactical movements for the week.
+          1 main goal, up to 3 secondary goals. Each connects to a monthly goal.
         </p>
       </div>
 
@@ -491,7 +491,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
             </div>
             <div>
               <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Generate with AI</p>
-              <p className="text-xs" style={{ color: "#6b7b74" }}>AI will suggest this week&apos;s goals based on your monthly plan</p>
+              <p className="text-xs" style={{ color: "#6b7b74" }}>
+                We&apos;ll use your monthly goals — and a summary of your year — to suggest a focused week.
+              </p>
             </div>
           </div>
           <button
@@ -506,12 +508,12 @@ export function StepWeekly({ onNext, onBack }: Props) {
                   <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/>
                   <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/>
                 </svg>
-                Generating…
+                Drafting your week…
               </>
             ) : (
               <>
                 <span className="material-symbols-outlined text-[15px]">bolt</span>
-                AI Generate
+                Generate with AI
               </>
             )}
           </button>
@@ -800,8 +802,8 @@ export function StepWeekly({ onNext, onBack }: Props) {
           onMouseEnter={(e) => (e.currentTarget.style.background = "#005f41")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "#006c4a")}
         >
-          Commit Plan
-          <span className="material-symbols-outlined text-[16px]">rocket_launch</span>
+          Next
+          <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
         </button>
       </div>
 
