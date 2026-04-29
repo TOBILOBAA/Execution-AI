@@ -28,7 +28,14 @@ export default function AuthCallbackPage() {
           setMessage(error.message);
           return;
         }
-        router.replace("/dashboard");
+        // Hydrate first so we know whether the user has completed onboarding.
+        // Routing PKCE callbacks unconditionally to /dashboard caused
+        // /dashboard ↔ /onboarding ping-pong (the dashboard layout bounces
+        // back when onboardingComplete is false), re-running hydration each
+        // time and feeling like a stall.
+        await useAppStore.getState().hydrateAuthFromSupabase();
+        const done = useAppStore.getState().onboardingComplete;
+        router.replace(done ? "/dashboard" : "/onboarding");
         return;
       }
       const hash = window.location.hash.replace(/^#/, "");
