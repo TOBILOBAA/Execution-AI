@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -12,17 +12,38 @@ interface Props {
   open: boolean;
   onClose: () => void;
   initialData?: MonthlyGoal;
+  yearOverride?: number;
+  monthOverride?: number;
+  defaultIsMain?: boolean;
 }
 
-export function AddMonthlyGoalModal({ open, onClose, initialData }: Props) {
+export function AddMonthlyGoalModal({
+  open,
+  onClose,
+  initialData,
+  yearOverride,
+  monthOverride,
+  defaultIsMain,
+}: Props) {
   const addMonthlyGoal = useAppStore((state) => state.addMonthlyGoal);
   const updateMonthlyGoal = useAppStore((state) => state.updateMonthlyGoal);
   const isEdit = !!initialData;
 
   const [title, setTitle] = useState(initialData?.title ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
-  const [isMain, setIsMain] = useState(initialData?.isMain ?? true);
+  const [isMain, setIsMain] = useState(initialData?.isMain ?? defaultIsMain ?? true);
   const [error, setError] = useState("");
+
+  const effectiveMonth = initialData?.month ?? monthOverride ?? CURRENT_MONTH;
+  const effectiveYear = initialData?.year ?? yearOverride ?? CURRENT_YEAR;
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(initialData?.title ?? "");
+    setDescription(initialData?.description ?? "");
+    setIsMain(initialData?.isMain ?? defaultIsMain ?? true);
+    setError("");
+  }, [defaultIsMain, initialData, open]);
 
   const handleSave = () => {
     if (!title.trim()) { setError("Goal title is required"); return; }
@@ -33,8 +54,8 @@ export function AddMonthlyGoalModal({ open, onClose, initialData }: Props) {
         title: title.trim(),
         description,
         isMain,
-        month: CURRENT_MONTH,
-        year: CURRENT_YEAR,
+        month: effectiveMonth,
+        year: effectiveYear,
         status: "active",
         progress: 0,
         priority: isMain ? "high" : "medium",
@@ -47,7 +68,7 @@ export function AddMonthlyGoalModal({ open, onClose, initialData }: Props) {
     <Modal open={open} onClose={onClose} size="md">
       <ModalHeader
         title={isEdit ? "Edit Monthly Goal" : "Add Monthly Goal"}
-        subtitle={`${MONTH_NAMES[CURRENT_MONTH - 1]} ${CURRENT_YEAR}`}
+        subtitle={`${MONTH_NAMES[effectiveMonth - 1]} ${effectiveYear}`}
         icon="calendar_month"
         onClose={onClose}
       />

@@ -52,7 +52,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
     monthlyGoals,
   } = useGoalsHierarchy(year);
 
-  const monthQuery = searchParams.get("month");
+  const monthQuery = searchParams?.get("month");
   const selectedMonth =
     monthQuery === "all" || !monthQuery
       ? "all"

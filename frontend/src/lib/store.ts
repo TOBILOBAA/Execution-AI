@@ -16,6 +16,7 @@ import {
   DEFAULT_CATEGORIES,
   CURRENT_YEAR,
   EMPTY_DASHBOARD_METRICS,
+  TODAY,
 } from "./mockData";
 import { isUuid } from "./uuid";
 import type { DashboardMetrics, YearReport } from "./types";
@@ -122,6 +123,8 @@ interface AppState {
   /** Explicit server write state so UI copy does not infer from local state. */
   syncStatus: "idle" | "saving" | "saved" | "failed";
   clearSyncError: () => void;
+  activeDashboardDate: string;
+  setActiveDashboardDate: (date: string) => void;
 
   // ── Onboarding ──────────────────────────────────────────────────────────────
   onboardingStep: number;
@@ -143,7 +146,7 @@ interface AppState {
   reports: YearReport[];
 
   // ── Backend sync ─────────────────────────────────────────────────────────────
-  loadDashboard: () => Promise<void>;
+  loadDashboard: (planDate?: string) => Promise<void>;
   syncReports: () => Promise<void>;
 
   // ── CRUD operations ─────────────────────────────────────────────────────────
@@ -804,6 +807,7 @@ export const useAppStore = create<AppState>()(
           currentUser: null,
           sessionId: null,
           sessionWeekStartsOn: "monday",
+          activeDashboardDate: TODAY,
           backendReady: false,
           workspaceHydrating: false,
           syncError: null,
@@ -825,6 +829,7 @@ export const useAppStore = create<AppState>()(
             currentUser: null,
             sessionId: null,
             sessionWeekStartsOn: "monday",
+            activeDashboardDate: TODAY,
             backendReady: false,
             workspaceHydrating: false,
             syncError: null,
@@ -874,7 +879,9 @@ export const useAppStore = create<AppState>()(
       backendReady: false,
       workspaceHydrating: false,
       workspaceOwnerId: null,
+      activeDashboardDate: TODAY,
       setSessionId: (id) => set({ sessionId: id }),
+      setActiveDashboardDate: (date) => set({ activeDashboardDate: date }),
       setWeekStartsOn: async (value) => {
         const { sessionId, backendReady, sessionWeekStartsOn } = get();
         if (value === sessionWeekStartsOn) return;
@@ -944,12 +951,13 @@ export const useAppStore = create<AppState>()(
       reports: [],
 
       // ── Backend sync ─────────────────────────────────────────────────────────
-      loadDashboard: async () => {
-        const { sessionId } = get();
+      loadDashboard: async (planDate) => {
+        const { sessionId, activeDashboardDate } = get();
         if (!sessionId) return;
+        const requestedDate = planDate ?? activeDashboardDate;
         try {
           const [data, categories] = await Promise.all([
-            dashboardApi.get(sessionId),
+            dashboardApi.get(sessionId, requestedDate),
             categoriesApi.list(sessionId).catch(() => null),
           ]);
           set((s) => ({
@@ -966,6 +974,7 @@ export const useAppStore = create<AppState>()(
               monthlyGoals: s.monthlyGoals,
               weeklyGoals: s.weeklyGoals,
             }),
+            activeDashboardDate: data.today,
             syncError: null,
           }));
         } catch (e) {
@@ -1293,8 +1302,16 @@ export const useAppStore = create<AppState>()(
             .catch((e) => set({ syncError: formatApiError("Update monthly goal", e) }));
         }
       },
-      removeMonthlyGoal: (id) =>
-        set((s) => ({ monthlyGoals: s.monthlyGoals.filter((g) => g.id !== id) })),
+      removeMonthlyGoal: (id) => {
+        set((s) => ({ monthlyGoals: s.monthlyGoals.filter((g) => g.id !== id) }));
+        const { sessionId } = get();
+        if (sessionId && isUuid(id)) {
+          monthlyPlanApi
+            .deleteGoal(sessionId, id)
+            .then(() => set({ syncError: null }))
+            .catch((e) => set({ syncError: formatApiError("Delete monthly goal", e) }));
+        }
+      },
 
       // ── Weekly goals ─────────────────────────────────────────────────────────
       addWeeklyGoal: (goal) => {
@@ -1368,8 +1385,16 @@ export const useAppStore = create<AppState>()(
             .catch((e) => set({ syncError: formatApiError("Update weekly goal", e) }));
         }
       },
-      removeWeeklyGoal: (id) =>
-        set((s) => ({ weeklyGoals: s.weeklyGoals.filter((g) => g.id !== id) })),
+      removeWeeklyGoal: (id) => {
+        set((s) => ({ weeklyGoals: s.weeklyGoals.filter((g) => g.id !== id) }));
+        const { sessionId } = get();
+        if (sessionId && isUuid(id)) {
+          weeklyPlanApi
+            .deleteGoal(sessionId, id)
+            .then(() => set({ syncError: null }))
+            .catch((e) => set({ syncError: formatApiError("Delete weekly goal", e) }));
+        }
+      },
 
       // ── Daily priorities ──────────────────────────────────────────────────────
       addDailyPriority: (priority) => {
@@ -1532,6 +1557,7 @@ export const useAppStore = create<AppState>()(
       toggleHabit: (id) => {
         const habit = get().habits.find((h) => h.id === id);
         const newCompleted = !habit?.completedToday;
+        const { activeDashboardDate } = get();
         set((s) => ({
           habits: s.habits.map((h) =>
             h.id === id ? { ...h, completedToday: !h.completedToday } : h
@@ -1540,7 +1566,7 @@ export const useAppStore = create<AppState>()(
         const { sessionId } = get();
         if (sessionId && isUuid(id)) {
           habitsApi
-            .toggle(sessionId, id, newCompleted!)
+            .toggle(sessionId, id, newCompleted!, activeDashboardDate)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Update habit completion", e) }));
         }
@@ -1925,6 +1951,7 @@ export const useAppStore = create<AppState>()(
         currentUser: state.currentUser,
         registeredUsers: state.registeredUsers,
         sessionId: state.sessionId,
+        activeDashboardDate: state.activeDashboardDate,
         workspaceOwnerId: state.workspaceOwnerId,
         onboardingComplete: state.onboardingComplete,
         onboardingStep: state.onboardingStep,

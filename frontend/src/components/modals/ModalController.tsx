@@ -50,6 +50,7 @@ export function ModalController() {
     case "manage-habits":
       return <ManageHabitsModal {...props} />;
     case "daily-report":
+    case "quarterly-report":
     case "weekly-report":
     case "monthly-report":
     case "yearly-report":

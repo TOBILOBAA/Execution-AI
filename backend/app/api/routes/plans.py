@@ -171,6 +171,19 @@ def update_monthly_goal(
     )
 
 
+@router.delete("/monthly-goals/{goal_id}", status_code=204)
+def delete_monthly_goal(
+    goal_id: UUID,
+    session_id: UUID,
+    db: Client = Depends(get_db),
+):
+    goal = plans_db.get_monthly_goal(db, goal_id, session_id)
+    if not goal:
+        raise NotFoundError("Monthly goal", str(goal_id))
+    plans_db.delete_monthly_goal(db, goal_id, session_id)
+    return None
+
+
 # ─── Weekly Plans ─────────────────────────────────────────────────────────────
 
 @router.post("/weekly-plan/generate")
@@ -264,6 +277,19 @@ def update_weekly_goal(
     return plans_db.update_weekly_goal(
         db, goal_id, session_id, body.model_dump(exclude_unset=True)
     )
+
+
+@router.delete("/weekly-goals/{goal_id}", status_code=204)
+def delete_weekly_goal(
+    goal_id: UUID,
+    session_id: UUID,
+    db: Client = Depends(get_db),
+):
+    goal = plans_db.get_weekly_goal(db, goal_id, session_id)
+    if not goal:
+        raise NotFoundError("Weekly goal", str(goal_id))
+    plans_db.delete_weekly_goal(db, goal_id, session_id)
+    return None
 
 
 # ─── Daily Plans ──────────────────────────────────────────────────────────────
