@@ -874,7 +874,16 @@ export function DashboardPeriodReviewPrompts() {
         if (epoch !== modalAiEpochRef.current) return;
         setReport(generated);
         if (!generated) {
-          setError("We couldn’t generate this report yet. You can try again once more data is available.");
+          const banner = useAppStore.getState().syncError;
+          const detail =
+            banner &&
+            (banner.includes("Weekly report") ||
+              banner.includes("Monthly report") ||
+              banner.includes("Quarterly report") ||
+              banner.includes("Yearly report"))
+              ? banner
+              : "We couldn’t generate this report yet. You can try again once more data is available.";
+          setError(detail);
         }
       })
       .finally(() => {
@@ -1195,7 +1204,26 @@ export function DashboardPeriodReviewPrompts() {
         if (!activeWeekContext) throw new Error("Missing next-week context.");
         const generated = await generateWeeklyPlan(activeWeekContext.nextYear, activeWeekContext.nextWeek);
         if (epoch !== modalAiEpochRef.current) return;
-        if (!generated?.draft) throw new Error("We couldn’t generate the next week yet.");
+        if (!generated.ok) {
+          const banner = useAppStore.getState().syncError;
+          const apiDetail =
+            generated.code === "api_error" &&
+            banner &&
+            banner.includes("Weekly plan (AI generate)")
+              ? banner
+              : null;
+          const msg =
+            generated.code === "no_session"
+              ? "Sign in or refresh so your session is active, then try again."
+              : generated.code === "invalid_week"
+                ? "That week isn’t valid for planning."
+                : generated.code === "monthly_sync_failed"
+                  ? "Monthly goals have not finished syncing yet, so the weekly AI draft cannot be generated cleanly."
+                  : generated.code === "no_monthly_on_server"
+                    ? "Save monthly goals for this week’s month on the board first, then try AI again."
+                    : apiDetail ?? "We couldn’t generate the next week yet.";
+          throw new Error(msg);
+        }
         const draft = generated.draft as PeriodPlanDraft;
         setPlanDraft(draft);
         setDraftKeys(buildDraftRowKeys(draft));
@@ -1211,6 +1239,14 @@ export function DashboardPeriodReviewPrompts() {
       }
       if (!generated.ok && generated.code === "yearly_sync_failed") {
         throw new Error("Yearly goals have not finished syncing yet, so the monthly AI draft cannot be generated cleanly.");
+      }
+      if (!generated.ok && generated.code === "api_error") {
+        const banner = useAppStore.getState().syncError;
+        throw new Error(
+          banner && banner.includes("Monthly plan (AI generate)")
+            ? banner
+            : "We couldn’t generate the next month yet.",
+        );
       }
       if (!generated.ok) {
         throw new Error("We couldn’t generate the next month yet.");
