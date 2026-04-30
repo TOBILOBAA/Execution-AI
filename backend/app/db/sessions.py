@@ -26,6 +26,8 @@ def _hydrate_session_defaults(session: dict | None) -> dict | None:
             session.get("week_starts_on"),
             session.get("timezone"),
         ),
+        "pending_recaps": session.get("pending_recaps") or [],
+        "handled_recaps": session.get("handled_recaps") or [],
     }
 
 

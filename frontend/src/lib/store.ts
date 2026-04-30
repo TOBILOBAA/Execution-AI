@@ -11,6 +11,7 @@ import type {
   FoundationalHabit,
   ModalType,
   WeekStartsOn,
+  DashboardRecapEntry,
 } from "./types";
 import {
   DEFAULT_CATEGORIES,
@@ -144,6 +145,7 @@ interface AppState {
   habits: FoundationalHabit[];
   metrics: DashboardMetrics;
   reports: ApiReport[];
+  pendingRecaps: DashboardRecapEntry[];
 
   // ── Backend sync ─────────────────────────────────────────────────────────────
   loadDashboard: (planDate?: string) => Promise<void>;
@@ -446,6 +448,17 @@ function padWeeklyConsistency(raw: number[] | undefined): number[] {
   return a.slice(0, 7);
 }
 
+function mapApiRecapEntry(entry: NonNullable<ApiDashboard["pending_recaps"]>[number]): DashboardRecapEntry {
+  return {
+    type: entry.type,
+    periodYear: entry.period_year,
+    periodWeek: entry.period_week,
+    periodMonth: entry.period_month,
+    periodQuarter: entry.period_quarter,
+    firedAt: entry.fired_at,
+  };
+}
+
 function mapApiYearlyGoalToStore(g: ApiYearlyGoal): YearlyGoal {
   return {
     id: g.id,
@@ -561,12 +574,12 @@ function mapDashboardToStore(
     monthlyContext:
       (data.monthly_context_text && data.monthly_context_text.trim()) ||
       fallbackMonthlyContextText(data.monthly_context),
+    weeklyCompletionRate: data.metrics.weekly_completion_rate,
+    monthlyCompletionRate: data.metrics.monthly_completion_rate,
     tasksCompletedToday: data.metrics.tasks_completed_today,
     tasksTotalToday: data.metrics.tasks_total_today,
     habitsCompletedToday: data.metrics.habits_completed_today,
     habitsTotalToday: data.metrics.habits_total_today,
-    weeklyCompletionRate: data.metrics.weekly_completion_rate,
-    monthlyCompletionRate: data.metrics.monthly_completion_rate,
   };
 
   return {
@@ -577,6 +590,7 @@ function mapDashboardToStore(
     yearlyGoals,
     monthlyGoals,
     weeklyGoals,
+    pendingRecaps: (data.pending_recaps ?? []).map(mapApiRecapEntry),
   };
 }
 
@@ -660,6 +674,7 @@ export const useAppStore = create<AppState>()(
             habits: [],
             metrics: EMPTY_DASHBOARD_METRICS,
             reports: [],
+            pendingRecaps: [],
             syncError: null,
             authReady: true,
             workspaceHydrating: true,
@@ -725,6 +740,7 @@ export const useAppStore = create<AppState>()(
           habits: [],
           metrics: EMPTY_DASHBOARD_METRICS,
           reports: [],
+          pendingRecaps: [],
           syncError: null,
           authReady: true,
           workspaceHydrating: true,
@@ -818,6 +834,7 @@ export const useAppStore = create<AppState>()(
             habits: [],
             metrics: EMPTY_DASHBOARD_METRICS,
             reports: [],
+            pendingRecaps: [],
             syncError: null,
             authReady: true,
             workspaceHydrating: true,
@@ -844,6 +861,7 @@ export const useAppStore = create<AppState>()(
           backendReady: false,
           workspaceHydrating: false,
           syncError: null,
+          pendingRecaps: [],
           authReady: true,
         });
       },
@@ -982,6 +1000,7 @@ export const useAppStore = create<AppState>()(
       habits: [],
       metrics: EMPTY_DASHBOARD_METRICS,
       reports: [],
+      pendingRecaps: [],
 
       // ── Backend sync ─────────────────────────────────────────────────────────
       loadDashboard: async (planDate) => {
@@ -1490,10 +1509,13 @@ export const useAppStore = create<AppState>()(
       },
       toggleDailyPriority: (id) => {
         const priority = get().dailyPriorities.find((p) => p.id === id);
+        if (!priority) return;
         const newCompleted = !priority?.completed;
         set((s) => ({
           dailyPriorities: s.dailyPriorities.map((p) =>
-            p.id === id ? { ...p, completed: !p.completed } : p
+            p.id === id
+              ? { ...p, completed: newCompleted, status: newCompleted ? "completed" : "active" }
+              : p
           ),
         }));
         // Sync to backend
@@ -1502,7 +1524,14 @@ export const useAppStore = create<AppState>()(
           tasksApi
             .toggleStatus(sessionId, id, newCompleted!)
             .then(() => set({ syncError: null }))
-            .catch((e) => set({ syncError: formatApiError("Update task completion", e) }));
+            .catch((e) =>
+              set((s) => ({
+                dailyPriorities: s.dailyPriorities.map((p) =>
+                  p.id === id ? { ...p, completed: priority.completed, status: priority.status } : p
+                ),
+                syncError: formatApiError("Update task completion", e),
+              }))
+            );
         }
       },
       removeDailyPriority: (id) =>
@@ -1569,10 +1598,13 @@ export const useAppStore = create<AppState>()(
       },
       toggleSecondaryTask: (id) => {
         const task = get().secondaryTasks.find((t) => t.id === id);
+        if (!task) return;
         const newCompleted = !task?.completed;
         set((s) => ({
           secondaryTasks: s.secondaryTasks.map((t) =>
-            t.id === id ? { ...t, completed: !t.completed } : t
+            t.id === id
+              ? { ...t, completed: newCompleted, status: newCompleted ? "completed" : "active" }
+              : t
           ),
         }));
         const { sessionId } = get();
@@ -1580,7 +1612,14 @@ export const useAppStore = create<AppState>()(
           tasksApi
             .toggleStatus(sessionId, id, newCompleted!)
             .then(() => set({ syncError: null }))
-            .catch((e) => set({ syncError: formatApiError("Update secondary task", e) }));
+            .catch((e) =>
+              set((s) => ({
+                secondaryTasks: s.secondaryTasks.map((t) =>
+                  t.id === id ? { ...t, completed: task.completed, status: task.status } : t
+                ),
+                syncError: formatApiError("Update secondary task", e),
+              }))
+            );
         }
       },
       removeSecondaryTask: (id) =>
@@ -1589,11 +1628,12 @@ export const useAppStore = create<AppState>()(
       // ── Habits ───────────────────────────────────────────────────────────────
       toggleHabit: (id) => {
         const habit = get().habits.find((h) => h.id === id);
+        if (!habit) return;
         const newCompleted = !habit?.completedToday;
         const { activeDashboardDate } = get();
         set((s) => ({
           habits: s.habits.map((h) =>
-            h.id === id ? { ...h, completedToday: !h.completedToday } : h
+            h.id === id ? { ...h, completedToday: newCompleted } : h
           ),
         }));
         const { sessionId } = get();
@@ -1601,7 +1641,14 @@ export const useAppStore = create<AppState>()(
           habitsApi
             .toggle(sessionId, id, newCompleted!, activeDashboardDate)
             .then(() => set({ syncError: null }))
-            .catch((e) => set({ syncError: formatApiError("Update habit completion", e) }));
+            .catch((e) =>
+              set((s) => ({
+                habits: s.habits.map((h) =>
+                  h.id === id ? { ...h, completedToday: habit.completedToday } : h
+                ),
+                syncError: formatApiError("Update habit completion", e),
+              }))
+            );
         }
       },
       updateHabit: (id, updates) => {

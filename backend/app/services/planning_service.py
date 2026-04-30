@@ -33,6 +33,8 @@ import app.db.habits as habits_db
 import app.db.reports as reports_db
 import app.db.sessions as sessions_db
 
+MAIN_GOAL_CAP = 3
+
 
 def _month_last_date(year: int, month: int) -> date:
     last_day = calendar.monthrange(year, month)[1]
@@ -127,6 +129,17 @@ def _linked_id_from_item(item: dict, key: str, allowed_rows: list[dict]) -> str 
     except (TypeError, ValueError):
         return None
     return value if any(str(row.get("id")) == value for row in allowed_rows) else None
+
+
+def _count_main_rows(rows: list[dict]) -> int:
+    return sum(1 for row in rows if row.get("is_main"))
+
+
+def _assert_main_goal_cap(total_main: int, period_label: str, item_label: str) -> None:
+    if total_main > MAIN_GOAL_CAP:
+        raise ConflictError(
+            f"You can only save up to {MAIN_GOAL_CAP} main {item_label} for this {period_label}."
+        )
 
 
 # ─── Monthly Plan ─────────────────────────────────────────────────────────────
@@ -233,6 +246,8 @@ def approve_monthly_plan(
             {**g, "is_main": False, "priority": g.get("priority", "medium")}
             for g in secondary_goals
         ]
+
+    _assert_main_goal_cap(_count_main_rows(goals_to_create), "month", "goals")
 
     yearly_list = yg_db.list_yearly_goals(db, session_id, year)
 
@@ -385,6 +400,8 @@ def approve_weekly_plan(
         ] + [
             {**g, "is_main": False} for g in draft.get("secondary_goals", [])
         ]
+
+    _assert_main_goal_cap(_count_main_rows(goals_to_create), "week", "goals")
 
     monthly_list = plans_db.list_monthly_goals(db, session_id, year, month)
 
@@ -542,6 +559,8 @@ def approve_daily_plan(
             {**p, "is_main": False}
             for p in draft.get("secondary_tasks", [])
         ]
+
+    _assert_main_goal_cap(_count_main_rows(items_to_create), "day", "priorities")
 
     week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
     week_number = week_number_for(plan_date, week_starts_on)

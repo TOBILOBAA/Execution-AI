@@ -9,7 +9,6 @@ import { PriorityCard } from "@/components/dashboard/PriorityCard";
 import { SecondaryTaskRow } from "@/components/dashboard/SecondaryTaskRow";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
 import { HabitsSection } from "@/components/dashboard/HabitsSection";
-import { DashboardCompletionPrompt } from "@/components/dashboard/DashboardCompletionPrompt";
 
 function formatPlanDateLabel(isoDate: string) {
   try {
@@ -52,6 +51,7 @@ export default function DashboardHome() {
   const todayRows = dailyPriorities.filter((p) => p.date === activeDashboardDate);
   const todayTasks = secondaryTasks.filter((task) => task.date === activeDashboardDate);
   const remaining = todayRows.filter((p) => !p.completed).length;
+  const mainPriorityCapReached = todayRows.length >= 3;
   const isPreviewingAnotherDay = activeDashboardDate !== getToday();
   const displayDateLabel = useMemo(() => formatPlanDateLabel(activeDashboardDate), [activeDashboardDate]);
 
@@ -113,11 +113,15 @@ export default function DashboardHome() {
                   </div>
                   <button
                     onClick={() => openModal("add-daily-priority")}
+                    disabled={mainPriorityCapReached}
                     className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
-                    style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                    style={{
+                      background: mainPriorityCapReached ? "rgba(0,0,0,0.06)" : "rgba(0,108,74,0.08)",
+                      color: mainPriorityCapReached ? "#8a9e97" : "#006c4a",
+                    }}
                   >
                     <span className="material-symbols-outlined text-[15px]">add</span>
-                    Add main priority
+                    {mainPriorityCapReached ? "Main priority cap reached" : "Add main priority"}
                   </button>
                 </div>
 
@@ -230,7 +234,6 @@ export default function DashboardHome() {
           </section>
         </div>
       </div>
-      <DashboardCompletionPrompt />
     </>
   );
 }

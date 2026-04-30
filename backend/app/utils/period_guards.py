@@ -29,6 +29,10 @@ def get_session_today(db: Client, session_id: UUID) -> date:
     return datetime.now(_session_zone(db, session_id)).date()
 
 
+def get_session_now(db: Client, session_id: UUID) -> datetime:
+    return datetime.now(_session_zone(db, session_id))
+
+
 def get_session_temporal_context(
     db: Client,
     session_id: UUID,
@@ -58,6 +62,11 @@ def is_current_daily_period(db: Client, session_id: UUID, target_date: date) -> 
     return target_date == get_session_today(db, session_id)
 
 
+def is_plannable_daily_period(db: Client, session_id: UUID, target_date: date) -> bool:
+    today = get_session_today(db, session_id)
+    return target_date == today or target_date == today.fromordinal(today.toordinal() + 1)
+
+
 def assert_period_current_yearly(session_id: UUID, year: int, db: Client) -> None:
     if not is_current_yearly_period(db, session_id, year):
         raise PeriodLockedError()
@@ -75,4 +84,9 @@ def assert_period_current_weekly(session_id: UUID, year: int, week_number: int, 
 
 def assert_period_current_daily(session_id: UUID, target_date: date, db: Client) -> None:
     if not is_current_daily_period(db, session_id, target_date):
+        raise PeriodLockedError()
+
+
+def assert_period_plannable_daily(session_id: UUID, target_date: date, db: Client) -> None:
+    if not is_plannable_daily_period(db, session_id, target_date):
         raise PeriodLockedError()

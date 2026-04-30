@@ -91,6 +91,17 @@ export interface Session {
   week_starts_on: "sunday" | "monday";
   created_at: string;
   auth_user_id?: string;
+  pending_recaps?: ApiRecapQueueEntry[];
+  handled_recaps?: string[];
+}
+
+export interface ApiRecapQueueEntry {
+  type: "weekly" | "monthly" | "quarterly" | "yearly";
+  period_year: number;
+  period_week?: number;
+  period_month?: number;
+  period_quarter?: number;
+  fired_at: string;
 }
 
 export interface ApiCategory {
@@ -217,6 +228,7 @@ export interface ApiDashboard {
   /** Present on current API; omitted on older backends. */
   yearly_goals?: ApiYearlyGoal[];
   habits: ApiHabit[];
+  pending_recaps?: ApiRecapQueueEntry[];
   metrics: {
     execution_streak: number;
     yesterday_completion: number;
@@ -336,6 +348,8 @@ export const sessionsApi = {
       auth_user_id?: string;
       timezone?: string;
       week_starts_on?: "sunday" | "monday";
+      pending_recaps?: ApiRecapQueueEntry[];
+      handled_recaps?: string[];
     },
   ) =>
     patch<Session>(`/session/${sessionId}`, updates),
