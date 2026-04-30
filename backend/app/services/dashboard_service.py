@@ -33,9 +33,9 @@ from app.utils.period_guards import (
     get_session_temporal_context,
     get_session_today,
     is_current_daily_period,
-    is_current_monthly_period,
-    is_current_weekly_period,
-    is_current_yearly_period,
+    is_plannable_monthly_period,
+    is_plannable_weekly_period,
+    is_plannable_yearly_period,
 )
 
 RECAP_GRANULARITY_ORDER = {
@@ -379,11 +379,11 @@ def get_dashboard(db: Client, session_id: UUID, plan_date: date | None = None) -
     for item in all_priorities:
         item["editable"] = is_current_daily_period(db, session_id, date.fromisoformat(item["date"]))
     for goal in weekly_goals:
-        goal["editable"] = is_current_weekly_period(db, session_id, int(goal["year"]), int(goal["week_number"]))
+        goal["editable"] = is_plannable_weekly_period(db, session_id, int(goal["year"]), int(goal["week_number"]))
     for goal in monthly_goals:
-        goal["editable"] = is_current_monthly_period(db, session_id, int(goal["year"]), int(goal["month"]))
+        goal["editable"] = is_plannable_monthly_period(db, session_id, int(goal["year"]), int(goal["month"]))
     for goal in yearly_goals:
-        goal["editable"] = is_current_yearly_period(db, session_id, int(goal["year"]))
+        goal["editable"] = is_plannable_yearly_period(db, session_id, int(goal["year"]))
 
     # ── Assemble response ─────────────────────────────────────────────────────
     return {

@@ -9,9 +9,9 @@ from app.utils.date_utils import get_week_boundaries
 from app.utils.period_guards import (
     get_session_temporal_context,
     is_current_daily_period,
-    is_current_monthly_period,
-    is_current_weekly_period,
-    is_current_yearly_period,
+    is_plannable_monthly_period,
+    is_plannable_weekly_period,
+    is_plannable_yearly_period,
 )
 import app.db.yearly_goals as yg_db
 import app.db.categories as cat_db
@@ -108,11 +108,11 @@ def get_goals_hierarchy(
         )
 
     for goal in yearly_goals:
-        goal["editable"] = is_current_yearly_period(db, session_id, int(goal["year"]))
+        goal["editable"] = is_plannable_yearly_period(db, session_id, int(goal["year"]))
     for goal in monthly_goals:
-        goal["editable"] = is_current_monthly_period(db, session_id, int(goal["year"]), int(goal["month"]))
+        goal["editable"] = is_plannable_monthly_period(db, session_id, int(goal["year"]), int(goal["month"]))
     for goal in weekly_goals:
-        goal["editable"] = is_current_weekly_period(db, session_id, int(goal["year"]), int(goal["week_number"]))
+        goal["editable"] = is_plannable_weekly_period(db, session_id, int(goal["year"]), int(goal["week_number"]))
     for priority in selected_week_daily_priorities:
         priority["editable"] = is_current_daily_period(db, session_id, date.fromisoformat(priority["date"]))
     for priority in year_daily_priorities:
