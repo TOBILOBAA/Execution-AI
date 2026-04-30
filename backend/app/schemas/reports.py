@@ -24,6 +24,12 @@ class MonthlyReportRequest(BaseModel):
     month: int = Field(..., ge=1, le=12)
 
 
+class QuarterlyReportRequest(BaseModel):
+    session_id: UUID
+    year: int
+    quarter: int = Field(..., ge=1, le=4)
+
+
 class YearlyReportRequest(BaseModel):
     session_id: UUID
     year: int
@@ -73,6 +79,22 @@ class MonthlyMetrics(BaseModel):
     avg_weekly_completion: int
     best_week: int | None       # week_number
     best_pillar: str | None
+
+
+class QuarterlyMetrics(BaseModel):
+    year: int
+    quarter: int                # 1..4
+    months_count: int
+    tasks_total: int
+    tasks_completed: int
+    avg_monthly_completion: int
+    # §9c canonical keys are also persisted on metrics JSONB.
+    completion: int
+    consistency: int
+    alignment: int
+    realism: int
+    momentum: int
+    execution_score: int
 
 
 class YearlyMetrics(BaseModel):
