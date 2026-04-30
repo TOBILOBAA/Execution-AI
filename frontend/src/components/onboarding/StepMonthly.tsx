@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { CURRENT_MONTH, CURRENT_YEAR, MONTH_NAMES } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentYear, MONTH_NAMES } from "@/lib/mockData";
 import { AddMonthlyGoalModal } from "./AddMonthlyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import type { MonthlyGoal, FoundationalHabit, HabitFrequency } from "@/lib/types";
@@ -183,7 +183,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateMonthlyPlan(CURRENT_YEAR, CURRENT_MONTH);
+    const result = await generateMonthlyPlan(getCurrentYear(), getCurrentMonth());
     if (result.ok && result.draft) {
       const draft = result.draft as AIDraft;
       setAiDraft(draft);
@@ -220,7 +220,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false, priority: "medium" });
     });
     setAiAccepting(true);
-    const ok = await approveMonthlyPlan(CURRENT_YEAR, CURRENT_MONTH, goals);
+    const ok = await approveMonthlyPlan(getCurrentYear(), getCurrentMonth(), goals);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -228,7 +228,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiAccepting(false);
   };
 
-  const currentGoals = monthlyGoals.filter((g) => g.month === CURRENT_MONTH && g.year === CURRENT_YEAR);
+  const currentGoals = monthlyGoals.filter((g) => g.month === getCurrentMonth() && g.year === getCurrentYear());
   const mainGoals = currentGoals.filter((g) => g.isMain);
   const secondaryGoals = currentGoals.filter((g) => !g.isMain);
   const activeHabits = habits.filter((h) => h.active);
@@ -265,8 +265,8 @@ export function StepMonthly({ onNext, onBack }: Props) {
         ...(desc ? { description: desc } : {}),
         ...(wl ? { workload: wl } : {}),
         isMain: addMode === "main",
-        month: CURRENT_MONTH,
-        year: CURRENT_YEAR,
+        month: getCurrentMonth(),
+        year: getCurrentYear(),
         status: "active",
         progress: 0,
         priority: addMode === "main" ? "high" : "medium",
@@ -293,7 +293,17 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
   const handleLeaveMonthly = async () => {
     setLeaveError(null);
-    const ok = await syncMonthlyGoalsToServer(CURRENT_YEAR, CURRENT_MONTH);
+    const mainGoalsCount = monthlyGoals.filter(g => g.month === getCurrentMonth() && g.year === getCurrentYear() && g.isMain).length;
+    const secondaryGoalsCount = monthlyGoals.filter(g => g.month === getCurrentMonth() && g.year === getCurrentYear() && !g.isMain).length;
+    if (mainGoalsCount !== 1) {
+      setLeaveError("You need exactly one main goal for the month before continuing.");
+      return;
+    }
+    if (secondaryGoalsCount > 2) {
+      setLeaveError("You can have at most two secondary goals for the month.");
+      return;
+    }
+    const ok = await syncMonthlyGoalsToServer(getCurrentYear(), getCurrentMonth());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Monthly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -308,10 +318,11 @@ export function StepMonthly({ onNext, onBack }: Props) {
         {/* Heading */}
         <div className="text-center">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight mb-2.5" style={{ color: "#1a1f1e" }}>
-            {MONTH_NAMES[CURRENT_MONTH - 1]} {CURRENT_YEAR} Bedrock
+            Plan {MONTH_NAMES[getCurrentMonth() - 1]}.
           </h1>
           <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#6b7b74" }}>
-            Establish your foundation. We&apos;ve structured your month around primary objectives, secondary supports, and the habits that sustain them.
+            Pick 1 main goal, up to 2 secondary goals, and the foundational habits you&apos;ll hold this month. Each goal
+            connects to a yearly goal.
           </p>
         </div>
 
@@ -324,7 +335,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
               </div>
               <div>
                 <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Generate with AI</p>
-                <p className="text-xs" style={{ color: "#6b7b74" }}>Let AI suggest main and secondary monthly goals from your yearly objectives (often a few seconds).</p>
+                <p className="text-xs" style={{ color: "#6b7b74" }}>
+                  We&apos;ll use your yearly goals to suggest a focused month. You can edit anything.
+                </p>
               </div>
             </div>
             <button
@@ -339,12 +352,12 @@ export function StepMonthly({ onNext, onBack }: Props) {
                     <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/>
                     <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/>
                   </svg>
-                  Generating…
+                  Drafting your month…
                 </>
               ) : (
                 <>
                   <span className="material-symbols-outlined text-[15px]">bolt</span>
-                  AI Generate
+                  Generate with AI
                 </>
               )}
             </button>
@@ -573,8 +586,8 @@ export function StepMonthly({ onNext, onBack }: Props) {
             className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90"
             style={{ background: "#006c4a", boxShadow: "0 2px 12px rgba(0,108,74,0.22)" }}
           >
-            Generate Weekly Flow
-            <span className="material-symbols-outlined text-[18px]">stacked_bar_chart</span>
+            Next
+            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
           </button>
         </div>
       </div>
@@ -584,7 +597,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
         <AddMonthlyGoalModal
           mode={isEditMode ? ((goalModal as MonthlyGoal).isMain ? "main" : "secondary") : (addMode as "main" | "secondary")}
           categories={categories}
-          yearlyGoals={yearlyGoals.filter((g) => g.year === CURRENT_YEAR)}
+          yearlyGoals={yearlyGoals.filter((g) => g.year === getCurrentYear())}
           initialTitle={isEditMode ? (goalModal as MonthlyGoal).title : ""}
           initialCategoryId={isEditMode ? (goalModal as MonthlyGoal).categoryId : undefined}
           initialYearlyGoalId={isEditMode ? (goalModal as MonthlyGoal).yearlyGoalId : undefined}

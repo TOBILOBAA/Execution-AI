@@ -1,40 +1,72 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAppStore } from "@/lib/store";
 import type { MonthlyGoal } from "@/lib/types";
-import { CURRENT_MONTH, CURRENT_YEAR, MONTH_NAMES } from "@/lib/mockData";
+import { MONTH_NAMES } from "@/lib/mockData";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   initialData?: MonthlyGoal;
+  yearOverride?: number;
+  monthOverride?: number;
+  defaultIsMain?: boolean;
 }
 
-export function AddMonthlyGoalModal({ open, onClose, initialData }: Props) {
+export function AddMonthlyGoalModal({
+  open,
+  onClose,
+  initialData,
+  yearOverride,
+  monthOverride,
+  defaultIsMain,
+}: Props) {
   const addMonthlyGoal = useAppStore((state) => state.addMonthlyGoal);
   const updateMonthlyGoal = useAppStore((state) => state.updateMonthlyGoal);
+  const yearlyGoals = useAppStore((state) => state.yearlyGoals);
+  const activeDashboardDate = useAppStore((state) => state.activeDashboardDate);
   const isEdit = !!initialData;
 
   const [title, setTitle] = useState(initialData?.title ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
-  const [isMain, setIsMain] = useState(initialData?.isMain ?? true);
+  const [yearlyGoalId, setYearlyGoalId] = useState(initialData?.yearlyGoalId ?? "");
+  const [isMain, setIsMain] = useState(initialData?.isMain ?? defaultIsMain ?? true);
   const [error, setError] = useState("");
+
+  const activeDashboardYear = Number(activeDashboardDate.slice(0, 4)) || new Date().getFullYear();
+  const activeDashboardMonth = Number(activeDashboardDate.slice(5, 7)) || new Date().getMonth() + 1;
+  const effectiveMonth = initialData?.month ?? monthOverride ?? activeDashboardMonth;
+  const effectiveYear = initialData?.year ?? yearOverride ?? activeDashboardYear;
+  const availableYearlyGoals = yearlyGoals.filter((goal) => goal.year === effectiveYear);
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(initialData?.title ?? "");
+    setDescription(initialData?.description ?? "");
+    setYearlyGoalId(initialData?.yearlyGoalId ?? availableYearlyGoals[0]?.id ?? "");
+    setIsMain(initialData?.isMain ?? defaultIsMain ?? true);
+    setError("");
+  }, [availableYearlyGoals, defaultIsMain, initialData, open]);
 
   const handleSave = () => {
     if (!title.trim()) { setError("Goal title is required"); return; }
+    if (!yearlyGoalId) { setError("Pick a yearly goal first"); return; }
     if (isEdit && initialData) {
-      updateMonthlyGoal(initialData.id, { title: title.trim(), description, isMain });
+      updateMonthlyGoal(initialData.id, { title: title.trim(), description, isMain, yearlyGoalId });
     } else {
+      const parentGoal = availableYearlyGoals.find((goal) => goal.id === yearlyGoalId);
       addMonthlyGoal({
         title: title.trim(),
         description,
+        yearlyGoalId,
+        categoryId: parentGoal?.categoryId,
         isMain,
-        month: CURRENT_MONTH,
-        year: CURRENT_YEAR,
+        month: effectiveMonth,
+        year: effectiveYear,
         status: "active",
         progress: 0,
         priority: isMain ? "high" : "medium",
@@ -47,11 +79,34 @@ export function AddMonthlyGoalModal({ open, onClose, initialData }: Props) {
     <Modal open={open} onClose={onClose} size="md">
       <ModalHeader
         title={isEdit ? "Edit Monthly Goal" : "Add Monthly Goal"}
-        subtitle={`${MONTH_NAMES[CURRENT_MONTH - 1]} ${CURRENT_YEAR}`}
+        subtitle={`${MONTH_NAMES[effectiveMonth - 1]} ${effectiveYear}`}
         icon="calendar_month"
         onClose={onClose}
       />
       <ModalBody className="space-y-5">
+        <div className="space-y-1.5">
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-[--color-on-surface-variant]">
+            Yearly Goal
+          </label>
+          <div className="relative">
+            <select
+              value={yearlyGoalId}
+              onChange={(e) => { setYearlyGoalId(e.target.value); setError(""); }}
+              className="w-full bg-[--color-surface-container-low] rounded-lg px-4 py-3 text-sm text-[--color-on-surface] border border-transparent focus:outline-none focus:ring-2 focus:ring-[--color-primary]/20 focus:bg-white transition-all duration-150"
+            >
+              {availableYearlyGoals.length === 0 ? (
+                <option value="">Add a yearly goal first</option>
+              ) : (
+                <>
+                  <option value="">Select a yearly goal</option>
+                  {availableYearlyGoals.map((goal) => (
+                    <option key={goal.id} value={goal.id}>{goal.title}</option>
+                  ))}
+                </>
+              )}
+            </select>
+          </div>
+        </div>
         <div className="space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-widest text-[--color-on-surface-variant]">
             Priority Level
@@ -92,7 +147,7 @@ export function AddMonthlyGoalModal({ open, onClose, initialData }: Props) {
       </ModalBody>
       <ModalFooter>
         <Button variant="ghost" size="md" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" size="md" onClick={handleSave}>
+        <Button variant="primary" size="md" onClick={handleSave} disabled={!yearlyGoalId}>
           {isEdit ? "Save Changes" : "Add Goal"}
         </Button>
       </ModalFooter>

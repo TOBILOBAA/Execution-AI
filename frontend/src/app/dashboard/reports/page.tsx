@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { reportsApi, type ApiReport } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentYear } from "@/lib/mockData";
 import { MetricInfoTooltip } from "@/components/reports/MetricInfoTooltip";
 import {
   listYearSnapshots,
@@ -58,14 +58,16 @@ export default function ReportsPage() {
     };
   }, [sessionId]);
 
-  const currentYearGoals = yearlyGoals.filter((goal) => goal.year === CURRENT_YEAR);
-  const currentYearMonthlyGoals = monthlyGoals.filter((goal) => goal.year === CURRENT_YEAR);
+  const currentYear = getCurrentYear();
+  const currentYearGoals = yearlyGoals.filter((goal) => goal.year === currentYear);
+  const currentYearMonthlyGoals = monthlyGoals.filter((goal) => goal.year === currentYear);
+
   const yearSnapshots = useMemo(() => listYearSnapshots(reports ?? []), [reports]);
   const generatedYears = yearSnapshots
     .filter((item) => item.yearly || item.monthly.length)
     .sort((a, b) => b.year - a.year);
-  const pastYears = generatedYears.filter((item) => item.year !== CURRENT_YEAR);
-  const activeYearSnapshot = generatedYears.find((item) => item.year === CURRENT_YEAR);
+  const pastYears = generatedYears.filter((item) => item.year !== currentYear);
+  const activeYearSnapshot = generatedYears.find((item) => item.year === currentYear);
   const completionFromReports = yearlyCompletionRate(activeYearSnapshot?.yearly ?? null);
   const completionRate =
     completionFromReports ??
@@ -128,7 +130,7 @@ export default function ReportsPage() {
               Active year
             </p>
             <h2 className="font-headline font-extrabold mt-2" style={{ fontSize: "56px", lineHeight: 1, color: "#006c4a" }}>
-              {CURRENT_YEAR}
+              {currentYear}
             </h2>
             <p className="text-sm mt-3 leading-relaxed max-w-xl" style={{ color: "#5d6d67" }}>
               {executionGrade.message}
@@ -136,7 +138,7 @@ export default function ReportsPage() {
           </div>
           <button
             type="button"
-            onClick={() => router.push(`/dashboard/reports/${CURRENT_YEAR}`)}
+            onClick={() => router.push(`/dashboard/reports/${currentYear}`)}
             className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold"
             style={{ background: "#006c4a", color: "#fff" }}
           >

@@ -39,6 +39,18 @@ def _month_last_date(year: int, month: int) -> date:
     return date(year, month, last_day)
 
 
+def _row_matches_draft(title: str, draft_items: list[dict]) -> bool:
+    """Return True if the submitted title closely matches any item in the AI draft."""
+    if not title or not draft_items:
+        return False
+    title_l = title.strip().lower()
+    for item in draft_items:
+        draft_title = (item.get("title") or "").strip().lower()
+        if draft_title and (draft_title == title_l or draft_title in title_l or title_l in draft_title):
+            return True
+    return False
+
+
 def _normalize_monthly_target_date(raw: object | None, year: int, month: int) -> str:
     """Return YYYY-MM-DD inside the given month; default last day of month."""
     fallback = _month_last_date(year, month).isoformat()
@@ -224,6 +236,10 @@ def approve_monthly_plan(
 
     yearly_list = yg_db.list_yearly_goals(db, session_id, year)
 
+    # Determine which draft items exist for per-row ai_suggested flagging
+    plan_draft = plan.get("ai_draft") or {}
+    all_draft_items = plan_draft.get("main_goals", []) + plan_draft.get("secondary_goals", [])
+
     # Map and insert goals
     goal_records = []
     for g in goals_to_create:
@@ -234,6 +250,7 @@ def approve_monthly_plan(
         yid = yg.get("id") if yg else yid
         cid = g.get("category_id") or (yg.get("category_id") if yg else None)
         target_date = _normalize_monthly_target_date(g.get("target_date"), year, month)
+        is_ai_suggested = _row_matches_draft(g.get("title", ""), all_draft_items)
         goal_records.append({
             "session_id": str(session_id),
             "monthly_plan_id": plan_id,
@@ -245,7 +262,7 @@ def approve_monthly_plan(
             "progress": 0,
             "priority": g.get("priority", "medium"),
             "is_main": g.get("is_main", False),
-            "ai_suggested": not bool(custom_goals),
+            "ai_suggested": is_ai_suggested,
             "yearly_goal_id": str(yid) if yid else None,
             "category_id": str(cid) if cid else None,
             "target_date": target_date,
@@ -286,6 +303,7 @@ def generate_weekly_plan(
     if not monthly_goals:
         raise NotFoundError("Monthly goals", f"approve a monthly plan for {year}-{month:02d} first")
 
+    yearly_goals = yg_db.list_yearly_goals(db, session_id, year)
     existing = plans_db.list_weekly_goals(db, session_id, year, week_number)
 
     # Override temporal context for the specific week
@@ -312,6 +330,7 @@ def generate_weekly_plan(
     payload = build_weekly_planning_payload(
         ctx=week_ctx,
         monthly_goals=monthly_goals,
+        yearly_goals=yearly_goals,
         existing_weekly_goals=existing,
     )
 
@@ -369,6 +388,10 @@ def approve_weekly_plan(
 
     monthly_list = plans_db.list_monthly_goals(db, session_id, year, month)
 
+    # Per-row ai_suggested: compare against draft
+    plan_draft = plan.get("ai_draft") or {}
+    all_draft_items = plan_draft.get("main_goals", []) + plan_draft.get("secondary_goals", [])
+
     goal_records = []
     for g in goals_to_create:
         mid = _linked_id_from_item(g, "monthly_goal_id", monthly_list)
@@ -380,6 +403,7 @@ def approve_weekly_plan(
             )
         mid = mg.get("id") if mg else mid
         workload = g.get("estimated_effort") or g.get("workload")
+        is_ai_suggested = _row_matches_draft(g.get("title", ""), all_draft_items)
         goal_records.append({
             "session_id": str(session_id),
             "weekly_plan_id": plan_id,
@@ -392,7 +416,7 @@ def approve_weekly_plan(
             "status": "active",
             "progress": 0,
             "is_main": g.get("is_main", False),
-            "ai_suggested": not bool(custom_goals),
+            "ai_suggested": is_ai_suggested,
             "workload": workload,
         })
 
@@ -435,6 +459,30 @@ def generate_daily_plan(
         1 for g in weekly_goals if g.get("status") not in ("completed", "missed")
     )
 
+    month = plan_date.month
+    monthly_goals = plans_db.list_monthly_goals(db, session_id, plan_date.year, month)
+    yearly_goals = yg_db.list_yearly_goals(db, session_id, plan_date.year)
+
+    # Build yesterday_completion from the prior day's report metrics if available
+    from datetime import timedelta
+    yesterday_date = plan_date - timedelta(days=1)
+    yesterday_completion = {}
+    try:
+        yesterday_report = reports_db.get_report(
+            db, session_id, "daily",
+            period_year=yesterday_date.year,
+            period_date=yesterday_date,
+        )
+        if yesterday_report and yesterday_report.get("metrics"):
+            m = yesterday_report["metrics"]
+            yesterday_completion = {
+                "completion_rate": m.get("completion_rate", 0),
+                "priorities_completed": m.get("priorities_completed", 0),
+                "priorities_total": m.get("priorities_total", 0),
+            }
+    except Exception:
+        pass
+
     existing = plans_db.list_daily_priorities(db, session_id, plan_date)
     payload = build_daily_planning_payload(
         ctx=ctx,
@@ -442,6 +490,9 @@ def generate_daily_plan(
         weekly_remaining_tasks=weekly_remaining,
         existing_daily=existing,
         habits=habits,
+        monthly_goals=monthly_goals,
+        yearly_goals=yearly_goals,
+        yesterday_completion=yesterday_completion,
     )
 
     start = datetime.now(timezone.utc)
@@ -496,6 +547,10 @@ def approve_daily_plan(
     week_number = week_number_for(plan_date, week_starts_on)
     weekly_goals = plans_db.list_weekly_goals(db, session_id, plan_date.year, week_number)
 
+    # Per-row ai_suggested: compare against draft
+    plan_draft = plan.get("ai_draft") or {}
+    all_draft_items = plan_draft.get("top_priorities", []) + plan_draft.get("secondary_tasks", [])
+
     priority_records = []
     for item in items_to_create:
         effort_str = item.get("estimated_effort", "") or ""
@@ -507,6 +562,7 @@ def approve_daily_plan(
                 weekly_goals,
             )
             wid = wg.get("id") if wg else None
+        is_ai_suggested = _row_matches_draft(item.get("title", ""), all_draft_items)
         priority_records.append({
             "session_id": str(session_id),
             "daily_plan_id": plan_id,
@@ -520,7 +576,7 @@ def approve_daily_plan(
             "estimated_minutes": estimated_minutes,
             "is_main": item.get("is_main", True),
             "tag": item.get("tag"),
-            "ai_suggested": not bool(custom_priorities),
+            "ai_suggested": is_ai_suggested,
         })
 
     if priority_records:

@@ -1,125 +1,132 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
+import { goalsApi } from "@/lib/api";
+import { averageProgress, countGoalStates, getQuarterFromMonth } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
 
-const MONTH_LONG = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-function currentQuarter(month: number) {
-  return Math.ceil(month / 3);
+function weeksRemainingInQuarter(todayIso: string, month: number) {
+  const [year, , day] = todayIso.split("-").map(Number);
+  const quarter = getQuarterFromMonth(month);
+  const quarterEndMonth = quarter * 3;
+  const quarterEnd = new Date(Date.UTC(year, quarterEndMonth, 0));
+  const now = new Date(Date.UTC(year, month - 1, day));
+  const diff = quarterEnd.getTime() - now.getTime();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24 * 7)));
 }
 
-export default function GoalsPage() {
+function formatHeaderDate(todayIso: string) {
+  const date = new Date(`${todayIso}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return todayIso;
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export default function GoalsOverviewPage() {
   const router = useRouter();
-  const currentYear = new Date().getFullYear();
   const metrics = useAppStore((state) => state.metrics);
-  const openModal = useAppStore((state) => state.openModal);
+  const allKnownYearlyGoals = useAppStore((state) => state.yearlyGoals);
+  const sessionId = useAppStore((state) => state.sessionId);
+  const backendReady = useAppStore((state) => state.backendReady);
+  const activeDashboardDate = useAppStore((state) => state.activeDashboardDate);
+  const [currentYear, setCurrentYear] = useState<number>(() => Number(activeDashboardDate.slice(0, 4)) || new Date().getFullYear());
+  const [knownYears, setKnownYears] = useState<number[]>([currentYear]);
   const {
     ready,
     loading,
     error,
     currentMonth,
-    currentWeekNumber,
+    today,
     yearlyGoals,
-    monthlyGoals,
-    weeklyGoals,
-    selectedWeekDailyPriorities,
   } = useGoalsHierarchy(currentYear);
 
-  const quarter = currentQuarter(currentMonth);
-  const completionSignal =
-    yearlyGoals.length === 0
-      ? null
-      : Math.round(yearlyGoals.reduce((sum, goal) => sum + goal.progress, 0) / yearlyGoals.length);
+  useEffect(() => {
+    const sessionYear = Number(today.slice(0, 4));
+    if (sessionYear && sessionYear !== currentYear) {
+      setCurrentYear(sessionYear);
+    }
+  }, [currentYear, today]);
+
+  useEffect(() => {
+    if (!sessionId || !backendReady) {
+      setKnownYears([currentYear]);
+      return;
+    }
+    let cancelled = false;
+    void goalsApi.years(sessionId)
+      .then((years) => {
+        if (!cancelled && years.length > 0) setKnownYears(years);
+      })
+      .catch(() => {
+        if (!cancelled) setKnownYears([currentYear]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [backendReady, currentYear, sessionId]);
 
   if (!ready || loading) {
     return (
       <GoalsLoadingShell
-        eyebrow="Goals hub"
-        title="Loading your execution stack"
-        detail="We are checking how the active year, quarter, week, and daily execution layers connect before showing the hub."
+        eyebrow="Goals overview"
+        title="Loading the active year"
+        detail="We are checking the current year, its progress, and the saved yearly goals before showing the overview."
       />
     );
   }
 
-  const currentYearlyGoals = yearlyGoals;
-  const currentMonthGoals = monthlyGoals.filter((goal) => goal.month === currentMonth);
-  const currentWeekGoals = weeklyGoals.filter((goal) => goal.weekNumber === currentWeekNumber);
-  const todayPriorities = selectedWeekDailyPriorities.filter((priority) => {
-    const today = new Date().toISOString().slice(0, 10);
-    return priority.date === today;
+  const stateCounts = countGoalStates(yearlyGoals, today);
+  const averageYearProgress = averageProgress(yearlyGoals);
+  const consistency = metrics.weeklyConsistency.length
+    ? Math.round(metrics.weeklyConsistency.reduce((sum, value) => sum + value, 0) / metrics.weeklyConsistency.length)
+    : 0;
+  const streak = metrics.executionStreak;
+  const currentQuarter = getQuarterFromMonth(currentMonth);
+  const remainingWeeks = weeksRemainingInQuarter(today, currentMonth);
+  const progressRing = `conic-gradient(#0b7a53 ${averageYearProgress * 3.6}deg, #edf3ef 0deg)`;
+
+  const fallbackYears = [...new Set([...allKnownYearlyGoals.map((goal) => goal.year), currentYear])].sort((a, b) => b - a);
+  const effectiveYears = knownYears.length > 0 ? knownYears : fallbackYears;
+  const pastYears = effectiveYears.filter((year) => year !== currentYear);
+
+  const yearRows = pastYears.map((year) => {
+    const goals = allKnownYearlyGoals.filter((goal) => goal.year === year);
+    return {
+      year,
+      count: goals.length,
+      progress: averageProgress(goals),
+      completed: goals.filter((goal) => goal.status === "completed" || goal.progress >= 100).length,
+    };
   });
 
-  const yearlyMain = currentYearlyGoals.slice(0, 3);
-  const currentMonthMain = currentMonthGoals.find((goal) => goal.isMain) ?? currentMonthGoals[0] ?? null;
-  const currentWeekMain = currentWeekGoals.find((goal) => goal.isMain) ?? currentWeekGoals[0] ?? null;
-
-  const missingMonthly = currentYearlyGoals.filter(
-    (yearlyGoal) => !monthlyGoals.some((monthlyGoal) => monthlyGoal.yearlyGoalId === yearlyGoal.id),
-  ).length;
-  const missingWeekly = currentMonthGoals.filter(
-    (monthlyGoal) => !weeklyGoals.some((weeklyGoal) => weeklyGoal.monthlyGoalId === monthlyGoal.id),
-  ).length;
-  const unlinkedToday = todayPriorities.filter((priority) => !priority.weeklyGoalId).length;
-
-  const nextAction =
-    currentYearlyGoals.length === 0
-      ? {
-          title: "Define the active year",
-          body: "Add the outcomes that actually matter for this year so the rest of the product has something real to support.",
-          action: () => openModal("add-yearly-goal"),
-          label: "Add yearly goal",
-        }
-      : missingMonthly > 0
-        ? {
-            title: "Add monthly planning depth",
-            body: `${missingMonthly} yearly goal${missingMonthly === 1 ? "" : "s"} still have no monthly follow-through.`,
-            action: () => router.push(`/dashboard/goals/${currentYear}/q/q${quarter}`),
-            label: `Open Q${quarter}`,
-          }
-        : currentWeekGoals.length === 0
-          ? {
-              title: "Define this week's commitment",
-              body: `ISO week ${currentWeekNumber} has no saved sprint yet.`,
-              action: () => openModal("add-weekly-goal"),
-              label: "Add weekly goal",
-            }
-          : todayPriorities.length === 0
-            ? {
-                title: "Translate the sprint into today",
-                body: "The weekly plan exists, but today has no saved execution list yet.",
-                action: () => router.push("/dashboard"),
-                label: "Open dashboard",
-              }
-            : {
-                title: "Keep execution aligned",
-                body: "Use the dashboard to make sure today stays linked to the active weekly sprint.",
-                action: () => router.push("/dashboard"),
-                label: "Review today",
-              };
-
-  const priorYears = [...new Set(yearlyGoals.map((goal) => goal.year).filter((year) => year < currentYear))].sort(
-    (a, b) => b - a,
-  );
-
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-8">
+    <div className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.24em]" style={{ color: "#8a9e97" }}>
-            Goals hub
-          </p>
-          <h1 className="font-headline font-extrabold tracking-tight mt-2" style={{ fontSize: "32px", color: "#1a1f1e" }}>
-            Where am I in the execution stack?
+          <div className="flex items-center gap-2 text-sm" style={{ color: "#6b7c75" }}>
+            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+            <span>Goals</span>
+            <span>/</span>
+            <span>Year Overview</span>
+          </div>
+          <h1 className="font-headline font-extrabold tracking-tight mt-6" style={{ fontSize: "32px", color: "#1a1f1e" }}>
+            {currentYear} Goals Overview
           </h1>
-          <p className="text-sm mt-2 max-w-3xl leading-relaxed" style={{ color: "#6b7c75" }}>
-            This hub is meant to orient you fast: what the active year is, what quarter matters now, what this week is asking for, and whether today is actually linked to it.
+          <p className="text-sm mt-2" style={{ color: "#6b7c75" }}>
+            Your execution at a glance. Focus on what matters most.
           </p>
+        </div>
+
+        <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "#1a1f1e" }}>
+          <span className="material-symbols-outlined text-[18px]">calendar_month</span>
+          <span>{formatHeaderDate(today)}</span>
         </div>
       </div>
 
@@ -132,217 +139,149 @@ export default function GoalsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <div className="xl:col-span-8 space-y-6">
-          <div
-            className="rounded-[28px] p-6"
-            style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
+      <div
+        className="rounded-[28px] p-6"
+        style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
+      >
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
+              Year progress
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push(`/dashboard/goals/${currentYear}`)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+            style={{ background: "#006c4a", color: "#fff" }}
           >
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
-                  Active year
-                </p>
-                <h2 className="font-headline font-extrabold mt-2" style={{ fontSize: "56px", lineHeight: 1, color: "#1a1f1e" }}>
-                  {currentYear}
-                </h2>
-                <p className="text-sm mt-3 max-w-xl leading-relaxed" style={{ color: "#6b7c75" }}>
-                  The active year card should tell you whether the top of your execution stack is clear or still missing planning depth.
-                </p>
+            <span className="material-symbols-outlined text-[16px]">calendar_month</span>
+            Plan This Year
+          </button>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-8 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-6 items-center min-w-0">
+            <div className="w-36 h-36 rounded-full flex items-center justify-center shrink-0 mx-auto md:mx-0" style={{ background: progressRing }}>
+              <div className="w-[102px] h-[102px] rounded-full bg-white flex flex-col items-center justify-center shadow-[inset_0_1px_0_rgba(0,0,0,0.03)]">
+                <span className="font-headline font-extrabold text-3xl" style={{ color: "#1a1f1e" }}>
+                  {averageYearProgress}%
+                </span>
+                <span className="text-xs text-center" style={{ color: "#6b7c75" }}>
+                  of the year completed
+                </span>
               </div>
-              <button
-                type="button"
-                onClick={() => router.push(`/dashboard/goals/${currentYear}`)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
-                style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+            </div>
+
+            <div className="min-w-0 max-w-[440px]">
+              <h2 className="font-headline font-bold text-[34px] leading-[1.05] tracking-tight" style={{ color: "#1a1f1e" }}>
+                You&apos;re making steady progress.
+              </h2>
+              <p className="text-sm mt-3 leading-relaxed max-w-[340px]" style={{ color: "#6b7c75" }}>
+                Stay consistent with your weekly plans to hit your yearly targets.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 gap-x-4 gap-y-5 xl:gap-y-0">
+            {[
+              { label: "Yearly Goals", value: yearlyGoals.length, color: "#1a1f1e" },
+              { label: "On Track", value: stateCounts["on-track"], color: "#0b7a53" },
+              { label: "At Risk", value: stateCounts["at-risk"], color: "#d97706" },
+              { label: "Not Started", value: stateCounts["not-started"], color: "#64748b" },
+            ].map((stat, index) => (
+              <div
+                key={stat.label}
+                className="min-w-0 xl:pl-5"
+                style={{
+                  borderLeft: index === 0 ? "none" : "1px solid rgba(0,0,0,0.06)",
+                  paddingLeft: index === 0 ? 0 : undefined,
+                }}
               >
-                Open strategy view
-                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-              {[
-                {
-                  label: "Yearly goals",
-                  value: String(currentYearlyGoals.length),
-                  helper: completionSignal === null ? "No outcomes yet" : `${completionSignal}% average progress`,
-                },
-                {
-                  label: "Quarter status",
-                  value: `Q${quarter}`,
-                  helper: currentMonthMain ? currentMonthMain.title : `No main monthly goal in ${MONTH_LONG[currentMonth - 1]}`,
-                },
-                {
-                  label: "Week status",
-                  value: `W${currentWeekNumber}`,
-                  helper: currentWeekMain ? currentWeekMain.title : "No saved weekly sprint",
-                },
-                {
-                  label: "Today",
-                  value: todayPriorities.length > 0 ? String(todayPriorities.length) : "0",
-                  helper: todayPriorities.length > 0 ? "Saved priorities" : "Nothing saved yet",
-                },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-2xl p-4"
-                  style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.05)" }}
-                >
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                    {stat.label}
-                  </p>
-                  <p className="mt-2 font-headline font-extrabold leading-tight" style={{ fontSize: "28px", color: "#1a1f1e" }}>
-                    {stat.value}
-                  </p>
-                  <p className="mt-2 text-xs leading-relaxed" style={{ color: "#6b7c75" }}>
-                    {stat.helper}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="rounded-2xl p-4" style={{ background: "rgba(0,108,74,0.04)", border: "1px solid rgba(0,108,74,0.08)" }}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#006c4a" }}>
-                  Top yearly goals
+                <p className="text-[34px] font-headline font-extrabold leading-none" style={{ color: stat.color }}>
+                  {stat.value}
                 </p>
-                {yearlyMain.length === 0 ? (
-                  <p className="text-sm mt-3 leading-relaxed" style={{ color: "#6b7c75" }}>
-                    No yearly goals saved yet.
-                  </p>
-                ) : (
-                  <div className="mt-3 space-y-2">
-                    {yearlyMain.map((goal) => (
-                      <div key={goal.id} className="rounded-xl px-3 py-2.5" style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)" }}>
-                        <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>{goal.title}</p>
-                        <p className="text-xs mt-1" style={{ color: "#6b7c75" }}>{goal.progress}% complete</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-2xl p-4" style={{ background: "rgba(0,108,74,0.04)", border: "1px solid rgba(0,108,74,0.08)" }}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#006c4a" }}>
-                  Current quarter
-                </p>
-                <p className="text-sm font-semibold mt-3" style={{ color: "#1a1f1e" }}>
-                  {currentMonthMain?.title ?? "No main monthly goal yet"}
-                </p>
-                <p className="text-xs mt-2 leading-relaxed" style={{ color: "#6b7c75" }}>
-                  {currentMonthGoals.length > 0
-                    ? `${currentMonthGoals.length} monthly goal${currentMonthGoals.length === 1 ? "" : "s"} saved for ${MONTH_LONG[currentMonth - 1]}.`
-                    : `Nothing saved for ${MONTH_LONG[currentMonth - 1]} yet.`}
+                <p className="text-sm mt-2 leading-relaxed max-w-[110px]" style={{ color: "#6b7c75" }}>
+                  {stat.label}
                 </p>
               </div>
-
-              <div className="rounded-2xl p-4" style={{ background: "rgba(0,108,74,0.04)", border: "1px solid rgba(0,108,74,0.08)" }}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#006c4a" }}>
-                  Current week
-                </p>
-                <p className="text-sm font-semibold mt-3" style={{ color: "#1a1f1e" }}>
-                  {currentWeekMain?.title ?? "No weekly sprint saved yet"}
-                </p>
-                <p className="text-xs mt-2 leading-relaxed" style={{ color: "#6b7c75" }}>
-                  {currentWeekGoals.length > 0
-                    ? `${currentWeekGoals.length} weekly goal${currentWeekGoals.length === 1 ? "" : "s"} saved for ISO week ${currentWeekNumber}.`
-                    : `Nothing saved for ISO week ${currentWeekNumber} yet.`}
-                </p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        <div className="xl:col-span-4 space-y-6">
-          <div
-            className="rounded-[28px] p-6"
-            style={{
-              background: "linear-gradient(180deg, rgba(17,24,22,1), rgba(12,36,28,1))",
-              color: "#fff",
-              boxShadow: "0 12px 32px rgba(10,24,18,0.28)",
-            }}
-          >
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em]" style={{ color: "rgba(255,255,255,0.42)" }}>
-              Next best action
-            </p>
-            <h2 className="font-headline font-bold text-xl mt-3" style={{ color: "#fff" }}>
-              {nextAction.title}
-            </h2>
-            <p className="text-sm mt-3 leading-relaxed" style={{ color: "rgba(255,255,255,0.76)" }}>
-              {nextAction.body}
-            </p>
-            <button
-              type="button"
-              onClick={nextAction.action}
-              className="mt-5 w-full rounded-xl py-3 text-sm font-bold"
-              style={{ background: "#006c4a", color: "#fff" }}
-            >
-              {nextAction.label}
-            </button>
-          </div>
-
-          <div
-            className="rounded-[28px] p-6"
-            style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
-          >
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
-              Execution gaps
-            </p>
-            <div className="mt-4 space-y-3">
-              {[
-                `${missingMonthly} yearly goal${missingMonthly === 1 ? "" : "s"} without monthly depth`,
-                `${missingWeekly} monthly goal${missingWeekly === 1 ? "" : "s"} in the current month without weekly follow-through`,
-                `${unlinkedToday} unlinked priorit${unlinkedToday === 1 ? "y" : "ies"} today`,
-              ].map((line) => (
-                <div
-                  key={line}
-                  className="rounded-2xl p-4"
-                  style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.12)" }}
-                >
-                  <p className="text-sm leading-relaxed" style={{ color: "#8a5b12" }}>
-                    {line}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div
-            className="rounded-[28px] p-6"
-            style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
-          >
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
-              Dashboard signal
-            </p>
-            <div className="mt-4 space-y-3 text-sm" style={{ color: "#5d6d67" }}>
-              <p>Execution streak: {metrics.executionStreak} day{metrics.executionStreak === 1 ? "" : "s"}</p>
-              <p>Yesterday completion: {metrics.yesterdayCompletion}%</p>
-              <p>Weekly consistency average: {metrics.weeklyConsistency.length ? Math.round(metrics.weeklyConsistency.reduce((sum, value) => sum + value, 0) / metrics.weeklyConsistency.length) : 0}%</p>
-            </div>
+        <div className="mt-6 pt-6 border-t" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-6">
+            {[
+              { label: "Overall Completion", value: `${averageYearProgress}%`, accent: "#1a1f1e", note: null },
+              { label: "Consistency (weekly avg)", value: `${consistency}%`, accent: "#1a1f1e", note: null },
+              { label: "Day Streak", value: streak, accent: "#1a1f1e", note: null },
+              { label: `Weeks Remaining in Q${currentQuarter}`, value: remainingWeeks, accent: "#1a1f1e", note: null },
+            ].map((stat, index) => (
+              <div
+                key={stat.label}
+                className="min-w-0 lg:pl-8"
+                style={{
+                  borderLeft: index === 0 ? "none" : "1px solid rgba(0,0,0,0.06)",
+                  paddingLeft: index === 0 ? 0 : undefined,
+                }}
+              >
+                <p className="text-[34px] font-headline font-extrabold leading-none" style={{ color: stat.accent }}>
+                  {stat.value}
+                </p>
+                <p className="text-sm mt-2 leading-relaxed max-w-[170px]" style={{ color: "#6b7c75" }}>
+                  {stat.label}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <div>
-        <h2 className="font-headline font-bold text-lg" style={{ color: "#1a1f1e" }}>
-          Other years in your workspace
-        </h2>
-        {priorYears.length === 0 ? (
-          <p className="text-sm mt-3" style={{ color: "#8a9e97" }}>
+      <div
+        className="rounded-[28px] p-6"
+        style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
+      >
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
+              Other years
+            </p>
+            <h2 className="font-headline font-bold text-xl mt-2" style={{ color: "#1a1f1e" }}>
+              Past goal years
+            </h2>
+          </div>
+        </div>
+
+        {yearRows.length === 0 ? (
+          <p className="text-sm mt-4" style={{ color: "#8a9e97" }}>
             No other years are stored yet.
           </p>
         ) : (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {priorYears.map((year) => (
+          <div className="mt-4 space-y-3">
+            {yearRows.map((row) => (
               <button
-                key={year}
+                key={row.year}
                 type="button"
-                onClick={() => router.push(`/dashboard/goals/${year}`)}
-                className="px-4 py-2 rounded-xl text-sm font-bold"
-                style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.08)", color: "#1a1f1e" }}
+                onClick={() => router.push(`/dashboard/goals/${row.year}`)}
+                className="w-full rounded-2xl p-4 text-left flex items-center justify-between gap-4 transition-colors"
+                style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.05)" }}
               >
-                {year}
+                <div>
+                  <p className="text-lg font-headline font-bold" style={{ color: "#1a1f1e" }}>
+                    {row.year}
+                  </p>
+                  <p className="text-sm mt-1" style={{ color: "#6b7c75" }}>
+                    {row.count} yearly goal{row.count === 1 ? "" : "s"} · {row.completed} completed
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-bold" style={{ color: "#1a1f1e" }}>
+                    {row.progress}%
+                  </span>
+                  <span className="material-symbols-outlined text-[18px]" style={{ color: "#8a9e97" }}>
+                    chevron_right
+                  </span>
+                </div>
               </button>
             ))}
           </div>

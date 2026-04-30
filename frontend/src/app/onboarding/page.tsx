@@ -11,10 +11,10 @@ import { StepWeekly, WeeklyAIGuidancePanel } from "@/components/onboarding/StepW
 import { StepDaily, DailyAIGuidancePanel } from "@/components/onboarding/StepDaily";
 
 const STEPS = [
-  { num: 1, label: "Yearly Goals" },
-  { num: 2, label: "Monthly Targets" },
-  { num: 3, label: "Weekly Plan" },
-  { num: 4, label: "Daily Setup" },
+  { num: 1, label: "Set yearly goals" },
+  { num: 2, label: "Plan this month" },
+  { num: 3, label: "Plan this week" },
+  { num: 4, label: "Set up today" },
 ];
 
 export default function OnboardingPage() {

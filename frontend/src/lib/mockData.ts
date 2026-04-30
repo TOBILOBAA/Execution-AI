@@ -10,21 +10,79 @@ import type {
   MonthReport,
   WeekReport,
 } from "./types";
+import type { WeekStartsOn } from "./types";
 
-// ─── Current context (always live — never hardcoded) ──────────────────────────
-const _now = new Date();
-export const TODAY = _now.toISOString().slice(0, 10); // YYYY-MM-DD
-export const CURRENT_YEAR = _now.getFullYear();
-export const CURRENT_MONTH = _now.getMonth() + 1; // 1-12
+// ─── Current context — lazy getters (never captured at import time) ─────────
+//
+// Long-running tabs (especially across midnight or week boundaries) need to
+// read "today/now" on every render. Exported constants captured once at
+// module-import froze stale labels and goal-list filters until a hard refresh.
+// Always call the getter — never alias the result to a const at module scope.
 
-// ISO week number
-function _isoWeek(d: Date): number {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+function _localDateParts(date: Date, timezone?: string) {
+  if (!timezone) {
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+    };
+  }
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? date.getFullYear());
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? date.getMonth() + 1);
+  const day = Number(parts.find((part) => part.type === "day")?.value ?? date.getDate());
+  return { year, month, day };
 }
-export const CURRENT_WEEK = _isoWeek(_now);
+
+function _weekStartFor(date: Date, weekStartsOn: WeekStartsOn): Date {
+  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const weekday = copy.getUTCDay();
+  const offset = weekStartsOn === "sunday" ? weekday : (weekday + 6) % 7;
+  copy.setUTCDate(copy.getUTCDate() - offset);
+  return copy;
+}
+
+function _weekNumber(date: Date, weekStartsOn: WeekStartsOn): number {
+  const weekOneStart = _weekStartFor(new Date(Date.UTC(date.getUTCFullYear(), 0, 1)), weekStartsOn);
+  const currentWeekStart = _weekStartFor(date, weekStartsOn);
+  return Math.floor((currentWeekStart.getTime() - weekOneStart.getTime()) / 604800000) + 1;
+}
+
+/** Today as YYYY-MM-DD in the user's local timezone or a provided IANA timezone. */
+export function getToday(timezone?: string): string {
+  const d = new Date();
+  const { year, month, day } = _localDateParts(d, timezone);
+  const yyyy = String(year);
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Current calendar year. */
+export function getCurrentYear(): number {
+  return new Date().getFullYear();
+}
+
+/** Current month (1-12). */
+export function getCurrentMonth(): number {
+  return new Date().getMonth() + 1;
+}
+
+/** Current planning week number for the configured week model. */
+export function getCurrentWeek(weekStartsOn: WeekStartsOn = "monday"): number {
+  const now = new Date();
+  return _weekNumber(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())), weekStartsOn);
+}
+
+// Seed-only snapshots for the static MOCK_* arrays below (intentionally frozen
+// at import time — they only feed demo data, never live filters).
+const _SEED_TODAY = getToday();
 
 // ─── Categories ───────────────────────────────────────────────────────────────
 export const DEFAULT_CATEGORIES: Category[] = [
@@ -213,7 +271,7 @@ export const MOCK_DAILY_PRIORITIES: DailyPriority[] = [
     title: "Finalize Architectural Framework Review",
     description: "Complete the full structural review and prepare for sign-off.",
     weeklyGoalId: "wg-1",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "high",
@@ -227,7 +285,7 @@ export const MOCK_DAILY_PRIORITIES: DailyPriority[] = [
     title: "Client Strategy Alignment Meeting",
     description: "Sync with client on Q4 strategic direction and next steps.",
     weeklyGoalId: "wg-1",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "high",
@@ -241,7 +299,7 @@ export const MOCK_DAILY_PRIORITIES: DailyPriority[] = [
     title: "Deep Work Session: Module 4 Prototyping",
     description: "Focused build session for the core module prototype.",
     weeklyGoalId: "wg-1",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "high",
@@ -256,7 +314,7 @@ export const MOCK_SECONDARY_TASKS: DailyPriority[] = [
   {
     id: "st-1",
     title: "Clear email inbox to zero",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "medium",
@@ -267,7 +325,7 @@ export const MOCK_SECONDARY_TASKS: DailyPriority[] = [
   {
     id: "st-2",
     title: "Update weekly expense tracker",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "low",
@@ -278,7 +336,7 @@ export const MOCK_SECONDARY_TASKS: DailyPriority[] = [
   {
     id: "st-3",
     title: "Order new office supplies",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "medium",
@@ -289,7 +347,7 @@ export const MOCK_SECONDARY_TASKS: DailyPriority[] = [
   {
     id: "st-4",
     title: "Read 20 pages of current book",
-    date: TODAY,
+    date: _SEED_TODAY,
     status: "active",
     completed: false,
     priority: "low",

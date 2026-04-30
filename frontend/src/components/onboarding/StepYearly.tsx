@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { CURRENT_YEAR } from "@/lib/mockData";
+import { getCurrentYear } from "@/lib/mockData";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
 import { AddGoalModal } from "./AddGoalModal";
 import { AddCategoryModal } from "./AddCategoryModal";
@@ -81,12 +81,13 @@ export function StepYearly({ onNext }: Props) {
   const [modalCatId, setModalCatId] = useState<string>("");
   const [showCatModal, setShowCatModal] = useState(false);
   const [leaveBusy, setLeaveBusy] = useState(false);
+  const [leaveError, setLeaveError] = useState("");
 
   const fallbackCategoryId = categories[0]?.id ?? "";
   const getGoalsForCat = (catId: string) =>
     yearlyGoals.filter(
       (g) =>
-        g.year === CURRENT_YEAR &&
+        g.year === getCurrentYear() &&
         (g.categoryId === catId || (!g.categoryId && catId === fallbackCategoryId)),
     );
 
@@ -107,7 +108,7 @@ export function StepYearly({ onNext }: Props) {
         title,
         categoryId: modalCatId,
         ...(description ? { description } : {}),
-        year: CURRENT_YEAR,
+        year: getCurrentYear(),
         status: "active",
         progress: 0,
         targetDate,
@@ -122,6 +123,11 @@ export function StepYearly({ onNext }: Props) {
   const isEditMode = goalModal !== null && typeof goalModal !== "string";
 
   const handleLeaveYearly = async () => {
+    if (yearlyGoals.filter(g => g.year === getCurrentYear()).length < 1) {
+      setLeaveError("Add at least one yearly goal before continuing.");
+      return;
+    }
+    setLeaveError("");
     setLeaveBusy(true);
     const ok = await syncYearlyGoalsToServer();
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
@@ -139,11 +145,11 @@ export function StepYearly({ onNext }: Props) {
         {/* Heading */}
         <div className="text-center mb-8">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight mb-2.5" style={{ color: "#1a1f1e" }}>
-            Define Your Year
+            Set your yearly goals.
           </h1>
           <p className="text-sm leading-relaxed max-w-md mx-auto" style={{ color: "#6b7b74" }}>
-            Architect your focus. Set high-impact goals that are specific,
-            measurable, and aligned with your long-term vision.
+            What do you want to accomplish in {getCurrentYear()}? Group them by category. Your monthly, weekly, and daily
+            plans flow from these.
           </p>
         </div>
 
@@ -187,12 +193,15 @@ export function StepYearly({ onNext }: Props) {
             }}
           >
             <span className="material-symbols-outlined text-[17px]">add_circle</span>
-            Add Custom Category
+            + Add custom category
           </button>
         </div>
 
         {/* Next Step */}
-        <div className="flex justify-end pt-8 pb-2">
+        <div className="flex flex-col items-end gap-2 pt-8 pb-2">
+          {leaveError && (
+            <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>{leaveError}</p>
+          )}
           <button
             type="button"
             disabled={leaveBusy}
@@ -200,7 +209,7 @@ export function StepYearly({ onNext }: Props) {
             className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none"
             style={{ background: "#006c4a", boxShadow: "0 2px 12px rgba(0,108,74,0.22)" }}
           >
-            {leaveBusy ? "Saving…" : "Next Step"}
+            {leaveBusy ? "Saving…" : "Next"}
             <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
           </button>
         </div>
@@ -333,7 +342,7 @@ function CategoryCard({
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,108,74,0.22)"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
           >
             <span className="material-symbols-outlined text-[16px]">add</span>
-            Add Goal
+            + Add yearly goal
           </button>
         </div>
       )}

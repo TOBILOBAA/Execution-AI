@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
@@ -11,17 +11,19 @@ import { ModalController } from "@/components/modals/ModalController";
 import { DashboardKickoffModal } from "@/components/dashboard/DashboardKickoffModal";
 import { DashboardEveningReminder } from "@/components/dashboard/DashboardEveningReminder";
 import { DashboardNextDayReview } from "@/components/dashboard/DashboardNextDayReview";
+import { DashboardPeriodReviewPrompts } from "@/components/dashboard/DashboardPeriodReviewPrompts";
 import { SyncErrorBanner } from "@/components/SyncErrorBanner";
 import { useBackendSync } from "@/hooks/useBackendSync";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { currentUser, onboardingComplete, authReady, workspaceHydrating } = useAppStore(
+  const { currentUser, onboardingComplete, authReady, workspaceHydrating, backendReady } = useAppStore(
     useShallow((state) => ({
       currentUser: state.currentUser,
       onboardingComplete: state.onboardingComplete,
       authReady: state.authReady,
       workspaceHydrating: state.workspaceHydrating,
+      backendReady: state.backendReady,
     })),
   );
 
@@ -34,12 +36,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.replace("/auth");
       return;
     }
+    if (!backendReady) {
+      // Backend session is not linked to an auth user — user hasn't completed sign-up flow on server.
+      router.replace("/auth");
+      return;
+    }
     if (!onboardingComplete) {
       router.replace("/onboarding");
     }
-  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, router]);
+  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
 
-  if (!authReady || workspaceHydrating || !currentUser || !onboardingComplete) {
+  if (!authReady || workspaceHydrating || !currentUser || !backendReady || !onboardingComplete) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
         <div className="flex flex-col items-center gap-3">
@@ -65,8 +72,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <ModalController />
       <DashboardKickoffModal />
-      <DashboardNextDayReview />
       <DashboardEveningReminder />
+      <DashboardNextDayReview />
+      <Suspense fallback={null}>
+        <DashboardPeriodReviewPrompts />
+      </Suspense>
     </div>
   );
 }

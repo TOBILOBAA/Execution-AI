@@ -219,4 +219,3 @@ class AIDailyPlanOutput(BaseModel):
     reasoning: str
     top_priorities: list[AIGoalItem]
     secondary_tasks: list[AIGoalItem]
-    foundational_habits: list[str]

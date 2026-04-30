@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use } from "react";
 import { useRouter } from "next/navigation";
+import { GoalCompletionButton } from "@/components/goals/GoalCompletionButton";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
 import { useAppStore } from "@/lib/store";
@@ -29,6 +30,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
   const router = useRouter();
   const openModal = useAppStore((state) => state.openModal);
   const toggleDailyPriority = useAppStore((state) => state.toggleDailyPriority);
+  const updateWeeklyGoal = useAppStore((state) => state.updateWeeklyGoal);
   const {
     ready,
     loading,
@@ -101,6 +103,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
 
   const activeHabits = habits.filter((habit) => habit.active);
   const isCurrentWeek = focusWeek === currentWeekNumber;
+  const weekEditable = year === Number((selectedWeekStart ?? `${year}-01-01`).slice(0, 4)) && isCurrentWeek;
 
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto w-full">
@@ -114,7 +117,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
               style={{ color: "#8a9e97" }}
             >
               <span className="material-symbols-outlined text-[15px]">arrow_back</span>
-              {year} strategy view
+              Yearly goals
             </button>
             <span style={{ color: "#d1d9d5" }}>/</span>
             <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "#006c4a" }}>
@@ -211,26 +214,46 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                {mainGoal ? (
+                {mainGoal && mainGoal.editable ? (
+                  <>
+                    <GoalCompletionButton
+                      completed={mainGoal.status === "completed" || mainGoal.progress >= 100}
+                      onClick={() =>
+                        updateWeeklyGoal(mainGoal.id, {
+                          status: mainGoal.status === "completed" || mainGoal.progress >= 100 ? "active" : "completed",
+                          progress: mainGoal.status === "completed" || mainGoal.progress >= 100 ? Math.min(mainGoal.progress, 99) : 100,
+                        })
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => openModal("edit-weekly-goal", mainGoal)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+                      style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                      Edit main goal
+                    </button>
+                  </>
+                ) : weekEditable ? (
                   <button
                     type="button"
-                    onClick={() => openModal("edit-weekly-goal", mainGoal)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
-                    style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">edit</span>
-                    Edit main goal
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => openModal("add-weekly-goal")}
+                    onClick={() => openModal("add-weekly-goal", { yearOverride: year, monthOverride: linkedMonthly?.month, weekOverride: focusWeek, defaultIsMain: true })}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
                     style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
                     Add weekly goal
                   </button>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+                    style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
+                    title="This period is locked. You can review it, but only the current period is editable."
+                  >
+                    <span className="material-symbols-outlined text-[16px]">lock</span>
+                    Locked
+                  </span>
                 )}
               </div>
             </div>
@@ -299,14 +322,38 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
                           {goal.description || "No description saved yet."}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => openModal("edit-weekly-goal", goal)}
-                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
-                      >
-                        <span className="material-symbols-outlined text-[16px]" style={{ color: "#6b7c75" }}>edit</span>
-                      </button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {goal.editable ? (
+                          <>
+                            <GoalCompletionButton
+                              completed={goal.status === "completed" || goal.progress >= 100}
+                              onClick={() =>
+                                updateWeeklyGoal(goal.id, {
+                                  status: goal.status === "completed" || goal.progress >= 100 ? "active" : "completed",
+                                  progress: goal.status === "completed" || goal.progress >= 100 ? Math.min(goal.progress, 99) : 100,
+                                })
+                              }
+                            />
+                            <button
+                              type="button"
+                              onClick={() => openModal("edit-weekly-goal", goal)}
+                              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                              style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+                            >
+                              <span className="material-symbols-outlined text-[16px]" style={{ color: "#6b7c75" }}>edit</span>
+                            </button>
+                          </>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                            style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
+                            title="This period is locked. You can review it, but only the current period is editable."
+                          >
+                            <span className="material-symbols-outlined text-[14px]">lock</span>
+                            Locked
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="mt-4 h-2 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.06)" }}>
                       <div className="h-full rounded-full" style={{ width: `${goal.progress}%`, background: "#006c4a" }} />
@@ -354,11 +401,11 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
                           >
                             <button
                               type="button"
-                              onClick={() => toggleDailyPriority(priority.id)}
+                              onClick={() => priority.editable && toggleDailyPriority(priority.id)}
                               className="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0"
                               style={{ borderColor: priority.completed ? "#006c4a" : "#d1d9d5", background: priority.completed ? "#006c4a" : "transparent" }}
                             >
-                              {priority.completed && <span className="material-symbols-outlined text-[12px] text-white">check</span>}
+                              {priority.editable && priority.completed && <span className="material-symbols-outlined text-[12px] text-white">check</span>}
                             </button>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>

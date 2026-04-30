@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "clean": "node scripts/reset-next-cache.mjs",
+    "dev": "next dev --turbo",
+    "dev:webpack": "next dev --webpack",
+    "build": "node scripts/reset-next-cache.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "test:otp": "node scripts/test-supabase-otp.mjs",

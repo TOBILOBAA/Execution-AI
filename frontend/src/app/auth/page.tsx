@@ -9,7 +9,9 @@ import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudPasswordAuthEnabled, isC
 
 type Mode = "signin" | "signup" | "forgot";
 
-const cloudOtpEnabled = isCloudOtpAuthEnabled();
+// OTP path is intentionally disabled for MVP. The code is preserved for post-MVP.
+// To re-enable: replace `false` with `isCloudOtpAuthEnabled()`.
+const cloudOtpEnabled = false;
 const cloudPassword = isCloudPasswordAuthEnabled();
 const authLocalOnly = isAuthLocalOnly();
 const showLocalSeedPanel = isAuthLocalOnly() || !isCloudSupabaseConfigured();
@@ -100,11 +102,11 @@ export default function AuthPage() {
     if (mode === "forgot") {
       const trimmedEmail = email.trim().toLowerCase();
       if (!trimmedEmail) {
-        setError("Enter the email you used to register.");
+        setError("Enter your email.");
         return;
       }
       if (!EMAIL_FORMAT.test(trimmedEmail)) {
-        setError("Please enter a valid email address.");
+        setError("That doesn't look like a valid email.");
         return;
       }
       setLoading(true);
@@ -114,23 +116,23 @@ export default function AuthPage() {
         setError(r.error ?? "Could not send reset email.");
         return;
       }
-      setInfo("If an account exists for that address, we sent a reset link. Check your inbox (and Resend/Supabase logs if testing).");
+      setInfo("Check your inbox. The reset link is good for 1 hour.");
       return;
     }
 
     const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail) {
-      setError("Please enter your email.");
+      setError("Enter your email.");
       return;
     }
     if (!EMAIL_FORMAT.test(trimmedEmail)) {
-      setError("Please enter a valid email address (e.g. name@domain.com).");
+      setError("That doesn't look like a valid email.");
       return;
     }
 
     if (cloudOtpEnabled) {
       if (mode === "signup" && !otpAwaitingCode && !name.trim()) {
-        setError("Please enter your full name.");
+        setError("Enter your name before continuing.");
         return;
       }
 
@@ -170,15 +172,15 @@ export default function AuthPage() {
     }
 
     if (!password.trim()) {
-      setError("Please fill in all fields.");
+      setError("Enter your password.");
       return;
     }
     if (mode === "signup" && !name.trim()) {
-      setError("Please enter your full name.");
+      setError("Enter your name before continuing.");
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (password.length < 8) {
+      setError("Use 8 characters or more.");
       return;
     }
 
@@ -199,7 +201,9 @@ export default function AuthPage() {
         return;
       }
       if (result.needsEmailConfirmation) {
-        setInfo("We sent a confirmation link to your inbox. Open it to verify your email, then sign in here.");
+        // Email confirmation is disabled for MVP — project-level Supabase setting controls this.
+        // If the user lands here it means they need to confirm; show a message rather than silently failing.
+        setInfo("Check your inbox for a confirmation link, then sign in here.");
         setLoading(false);
         return;
       }
@@ -225,44 +229,45 @@ export default function AuthPage() {
 
   const heading =
     mode === "forgot"
-      ? "Reset password"
+      ? "Reset your password."
       : cloudOtpVerify
         ? "Enter your code"
         : mode === "signin"
-          ? "Welcome back"
-          : "Create your account";
+          ? "Welcome back."
+          : "Set up your execution loop.";
 
   const subline =
     mode === "forgot"
-      ? "We will email you a link to set a new password (Resend SMTP in Supabase)."
+      ? "Enter the email you signed up with. We'll send a reset link."
+      : cloudOtpVerify
+        ? `Code sent to ${email.trim() || "your email"}. It expires after a few minutes.`
       : cloudOtpEnabled && mode === "signin" && !cloudOtpVerify
         ? "We will email you a one-time 6-digit code. Or use the demo account below."
         : cloudOtpEnabled && mode === "signup" && !cloudOtpVerify
           ? "We will email you a one-time code to verify this address — no password to remember."
-          : cloudOtpEnabled && cloudOtpVerify
-            ? `Code sent to ${email.trim() || "your email"}. It expires after a few minutes.`
-            : cloudPassword && mode === "signin"
-              ? "Supabase email + password. In Dashboard → Authentication → Providers → Email, turn off “Confirm email” for instant sign-in while you test (turn it back on for production)."
-              : cloudPassword && mode === "signup"
-                ? "Creates the user in Supabase with this password (1–2 test accounts are enough to exercise the product)."
-              : authLocalOnly
-                ? mode === "signin"
-                  ? "No company email domain needed. Use a seeded profile or sign up with any address — each user gets their own workspace on your API."
-                  : "Creates another browser-only account (good for comparing onboarding or dashboard states)."
-                : mode === "signin"
-                  ? "Sign in with email and password (local registry)."
-                  : "Create a local account with email and password.";
+          : cloudPassword && mode === "signin"
+            ? "Pick up where today left off."
+          : cloudPassword && mode === "signup"
+            ? "One account. Yearly, monthly, weekly, and daily goals — all linked."
+            : authLocalOnly
+              ? mode === "signin"
+                ? "No company email domain needed. Use a seeded profile or sign up with any address — each user gets their own workspace on your API."
+                : "Creates another browser-only account (good for comparing onboarding or dashboard states)."
+              : mode === "signin"
+                ? "Sign in with email and password (local registry)."
+                : "Create a local account with email and password.";
 
   const submitLabel = () => {
     if (mode === "forgot") return "Send reset link";
     if (cloudOtpEnabled) return cloudOtpVerify ? "Verify & continue" : "Send code";
-    return mode === "signin" ? "Sign In" : "Create Account";
+    return mode === "signup" ? "Begin" : "Sign in";
   };
 
   const loadingLabel = () => {
     if (mode === "forgot") return "Sending…";
     if (cloudOtpEnabled) return cloudOtpVerify ? "Verifying…" : "Sending code…";
-    return mode === "signin" ? "Signing in…" : "Creating account…";
+    if (mode === "signup") return "Setting up your account…";
+    return "Signing in…";
   };
 
   return (
@@ -369,7 +374,7 @@ export default function AuthPage() {
                   boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
                 }}
               >
-                {m === "signin" ? "Sign In" : "Sign Up"}
+                {m === "signin" ? "Sign in" : "Sign up"}
               </button>
             ))}
           </div>
@@ -465,7 +470,7 @@ export default function AuthPage() {
               {mode === "signup" && !cloudOtpVerify && (
                 <div>
                   <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: "#6b7c75" }}>
-                    Full Name
+                    Name
                   </label>
                   <div className="relative">
                     <span
@@ -481,7 +486,7 @@ export default function AuthPage() {
                         setName(e.target.value);
                         setError("");
                       }}
-                      placeholder="Alex Chen"
+                      placeholder="Your full name"
                       className="w-full pl-10 pr-4 py-3 rounded-xl text-sm outline-none transition-all"
                       style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#1a1f1e", background: "#fafcfb" }}
                       onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(0,108,74,0.5)")}
@@ -494,7 +499,7 @@ export default function AuthPage() {
               {!cloudOtpVerify && (
                 <div>
                   <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: "#6b7c75" }}>
-                    Email Address
+                    Email
                   </label>
                   <div className="relative">
                     <span
@@ -627,7 +632,7 @@ export default function AuthPage() {
                         setPassword(e.target.value);
                         setError("");
                       }}
-                      placeholder={mode === "signin" ? "Your password" : "Min. 6 characters"}
+                      placeholder={mode === "signin" ? "Your password" : "At least 8 characters"}
                       className="w-full pl-10 pr-12 py-3 rounded-xl text-sm outline-none transition-all"
                       style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#1a1f1e", background: "#fafcfb" }}
                       onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(0,108,74,0.5)")}
@@ -644,7 +649,7 @@ export default function AuthPage() {
                   </div>
                   {mode === "signup" && (
                     <p className="text-[11px] mt-1.5" style={{ color: "#a8b5af" }}>
-                      Use at least 6 characters.
+                      Used to protect your data. Nothing more.
                     </p>
                   )}
                 </div>
@@ -710,14 +715,14 @@ export default function AuthPage() {
               <p className="text-center text-sm mt-5" style={{ color: "#8a9e97" }}>
                 {mode === "signin" ? (
                   <>
-                    Don&apos;t have an account?{" "}
+                    New to Execution AI?{" "}
                     <button
                       type="button"
                       onClick={() => switchMode("signup")}
                       className="font-bold transition-opacity hover:opacity-70"
                       style={{ color: "#006c4a" }}
                     >
-                      Sign up free
+                      Sign up
                     </button>
                   </>
                 ) : (
@@ -739,8 +744,7 @@ export default function AuthPage() {
         </div>
 
         <p className="text-center text-[11px] mt-6 max-w-xs" style={{ color: "#a8b5af" }}>
-          By continuing you agree to our <span className="underline cursor-pointer">Terms of Service</span> and{" "}
-          <span className="underline cursor-pointer">Privacy Policy</span>.
+          By continuing you accept our Terms and Privacy.
         </p>
       </div>
     </div>

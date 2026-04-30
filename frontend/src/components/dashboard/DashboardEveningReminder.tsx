@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAppStore } from "@/lib/store";
-import { TODAY } from "@/lib/mockData";
+import { getToday } from "@/lib/mockData";
 import {
   useEveningReviewReminder,
   EVENING_REMINDER_DISMISS_STORAGE_KEY,
@@ -16,7 +16,7 @@ function pad2(n: number) {
 
 function DashboardEveningReminderInner() {
   const searchParams = useSearchParams();
-  const testEvening = searchParams.get("evening_test") === "1";
+  const testEvening = searchParams?.get("evening_test") === "1";
 
   useEffect(() => {
     if (!testEvening || typeof window === "undefined") return;
@@ -63,8 +63,8 @@ function DashboardEveningReminderInner() {
 
   if (!eveningOpen) return null;
 
-  const priorities = dailyPriorities.filter((p) => p.date === TODAY);
-  const tasks = secondaryTasks.filter((t) => t.date === TODAY);
+  const priorities = dailyPriorities.filter((p) => p.date === getToday());
+  const tasks = secondaryTasks.filter((t) => t.date === getToday());
 
   return (
     <EveningReviewModal

@@ -14,7 +14,7 @@ const NAV_ITEMS = [
 ];
 
 export function Sidebar() {
-  const pathname  = usePathname();
+  const pathname  = usePathname() ?? "";
   const router    = useRouter();
   const { currentUser, signOut } = useAppStore(
     useShallow((state) => ({
