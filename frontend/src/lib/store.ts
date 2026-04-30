@@ -44,6 +44,7 @@ import { formatApiError } from "./apiErrors";
 import { getSupabaseBrowser } from "./supabaseClient";
 import type { User } from "@supabase/supabase-js";
 import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudSupabaseConfigured } from "./authMode";
+import { getWeekNumber, listWeeksForYearThroughWeek } from "./goalsView";
 
 /** Align onboarding UI with the workspace row in Supabase (source of truth when logged in). */
 async function pullOnboardingFromServer(sessionId: string): Promise<{
@@ -199,9 +200,36 @@ interface AppState {
     | { ok: false; code: "no_session" | "yearly_sync_failed" | "no_yearly_on_server" | "api_error" }
   >;
   approveMonthlyPlan: (year: number, month: number, goals?: unknown[]) => Promise<boolean>;
-  generateWeeklyPlan: (year: number, weekNumber: number) => Promise<{ draft: unknown } | null>;
+  generateWeeklyPlan: (
+    year: number,
+    weekNumber: number,
+  ) => Promise<
+    | { ok: true; draft: unknown }
+    | {
+        ok: false;
+        code:
+          | "no_session"
+          | "invalid_week"
+          | "monthly_sync_failed"
+          | "no_monthly_on_server"
+          | "api_error";
+      }
+  >;
   approveWeeklyPlan: (year: number, weekNumber: number, goals?: unknown[]) => Promise<boolean>;
-  generateDailyPlan: (date: string) => Promise<{ draft: unknown } | null>;
+  generateDailyPlan: (
+    date: string,
+  ) => Promise<
+    | { ok: true; draft: unknown }
+    | {
+        ok: false;
+        code:
+          | "no_session"
+          | "invalid_date"
+          | "weekly_sync_failed"
+          | "no_weekly_or_habits"
+          | "api_error";
+      }
+  >;
   approveDailyPlan: (date: string, priorities?: unknown[]) => Promise<boolean>;
 
   // ── Report generation ────────────────────────────────────────────────────────
@@ -1880,15 +1908,54 @@ export const useAppStore = create<AppState>()(
       },
 
       generateWeeklyPlan: async (year, weekNumber) => {
-        const { sessionId } = get();
-        if (!sessionId) return null;
+        const { sessionId, sessionWeekStartsOn } = get();
+        if (!sessionId) return { ok: false as const, code: "no_session" };
+
+        const weeks = listWeeksForYearThroughWeek(year, weekNumber, sessionWeekStartsOn);
+        const row = weeks.find((w) => w.weekNumber === weekNumber);
+        if (!row) {
+          return { ok: false as const, code: "invalid_week" };
+        }
+        const anchorMonth = row.month;
+
         try {
+          const synced = await get().syncMonthlyGoalsToServer(year, anchorMonth);
+          if (!synced) {
+            return { ok: false as const, code: "monthly_sync_failed" };
+          }
+          let monthlyPlan;
+          try {
+            monthlyPlan = await monthlyPlanApi.get(sessionId, year, anchorMonth);
+          } catch (e) {
+            if (e instanceof ApiError && e.status === 404) {
+              return { ok: false as const, code: "no_monthly_on_server" };
+            }
+            set({
+              syncError: formatApiError("Monthly plan (load)", e),
+              syncStatus: "failed",
+            });
+            return { ok: false as const, code: "api_error" };
+          }
+          if ((monthlyPlan.goals?.length ?? 0) === 0) {
+            return { ok: false as const, code: "no_monthly_on_server" };
+          }
+
           const result = await weeklyPlanApi.generate(sessionId, year, weekNumber);
-          set({ syncError: null });
-          return { draft: result.ai_draft };
+          set({ syncError: null, syncStatus: "saved" });
+          return { ok: true as const, draft: result.ai_draft };
         } catch (e) {
-          set({ syncError: formatApiError("Weekly plan (AI generate)", e) });
-          return null;
+          if (
+            e instanceof ApiError &&
+            e.status === 404 &&
+            (e.message.includes("Monthly goals") || e.message.includes("monthly"))
+          ) {
+            return { ok: false as const, code: "no_monthly_on_server" };
+          }
+          set({
+            syncError: formatApiError("Weekly plan (AI generate)", e),
+            syncStatus: "failed",
+          });
+          return { ok: false as const, code: "api_error" };
         }
       },
       approveWeeklyPlan: async (year, weekNumber, goals) => {
@@ -1930,15 +1997,49 @@ export const useAppStore = create<AppState>()(
       },
 
       generateDailyPlan: async (date) => {
-        const { sessionId } = get();
-        if (!sessionId) return null;
+        const { sessionId, sessionWeekStartsOn } = get();
+        if (!sessionId) return { ok: false as const, code: "no_session" };
+
+        const planDay = new Date(`${date}T12:00:00`);
+        if (Number.isNaN(planDay.getTime())) {
+          return { ok: false as const, code: "invalid_date" };
+        }
+        const y = planDay.getFullYear();
+        const wn = getWeekNumber(planDay, sessionWeekStartsOn);
+
         try {
+          const synced = await get().syncWeeklyGoalsToServer(y, wn);
+          if (!synced) {
+            return { ok: false as const, code: "weekly_sync_failed" };
+          }
+
+          let weeklyGoalsCount = 0;
+          try {
+            const wp = await weeklyPlanApi.get(sessionId, y, wn);
+            weeklyGoalsCount = wp.goals?.length ?? 0;
+          } catch {
+            weeklyGoalsCount = 0;
+          }
+          const activeHabits = get().habits.filter((h) => h.active);
+          if (weeklyGoalsCount === 0 && activeHabits.length === 0) {
+            return { ok: false as const, code: "no_weekly_or_habits" };
+          }
+
           const result = await dailyPlanApi.generate(sessionId, date);
-          set({ syncError: null });
-          return { draft: result.ai_draft };
+          set({ syncError: null, syncStatus: "saved" });
+          return { ok: true as const, draft: result.ai_draft };
         } catch (e) {
-          set({ syncError: formatApiError("Daily plan (AI generate)", e) });
-          return null;
+          if (
+            e instanceof ApiError &&
+            e.status === 404 &&
+            (e.message.includes("Weekly goals") ||
+              e.message.includes("habits") ||
+              e.message.includes("weekly plan"))
+          ) {
+            return { ok: false as const, code: "no_weekly_or_habits" };
+          }
+          set({ syncError: formatApiError("Daily plan (AI generate)", e), syncStatus: "failed" });
+          return { ok: false as const, code: "api_error" };
         }
       },
       approveDailyPlan: async (date, priorities) => {
