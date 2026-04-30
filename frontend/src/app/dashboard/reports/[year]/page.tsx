@@ -375,7 +375,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
       label: `Q${quarter}`,
       months,
       snapshot,
-      hasReport: snapshot.months.length > 0,
+      hasReport: Boolean(snapshot.report || snapshot.months.length > 0),
       status,
     };
   });
@@ -623,9 +623,9 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       label: "Execution Score",
                       value: executionGrade.grade,
                       subvalue: `${executionScore} / 100`,
-                      helper: executionGrade.label,
+                      helper: `${executionGrade.label} · ${executionGrade.rangeLabel}`,
                       detail:
-                        "A simplified grade for your execution system. It blends completion, consistency, alignment, realism, and momentum.",
+                        "A = 85-100, B = 70-84, C = 55-69, D = 40-54, F = 0-39. The grade blends completion, consistency, alignment, realism, and momentum.",
                     },
                     {
                       label: "Completion",

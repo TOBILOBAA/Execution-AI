@@ -36,6 +36,7 @@ class ReportType(str, Enum):
     daily = "daily"
     weekly = "weekly"
     monthly = "monthly"
+    quarterly = "quarterly"
     yearly = "yearly"
 
 

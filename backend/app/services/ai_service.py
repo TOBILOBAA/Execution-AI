@@ -30,6 +30,7 @@ from app.schemas.reports import (
     DailyNarrative,
     WeeklyNarrative,
     MonthlyNarrative,
+    QuarterlyNarrative,
     YearlyNarrative,
 )
 
@@ -190,6 +191,49 @@ You must:
 - Return ONLY valid JSON matching the exact schema requested
 - Be concise and specific — not generic or vague
 - Never invent goals that contradict the user's stated intentions"""
+
+_GENERIC_COPY_NEGATIVES = """Forbidden phrasings — never produce these:
+- "Great job", "Well done", "Keep it up", "You're doing great", "Amazing work"
+- "Stay focused", "Keep going", "One step at a time"
+- Any motivational-poster cliche
+- Any generic prescription like "be more consistent"
+
+Output must be honest, specific, and grounded in the evidence provided.
+Lead with names + numbers when possible.
+No questions. No cheerleading. No advice outside the execution lane.
+`tailored_pattern` must name a real pattern visible in the execution diary.
+`tailored_action` must directly respond to that exact pattern."""
+
+
+def _json_block(data: object) -> str:
+    return json.dumps(data, indent=2, ensure_ascii=True)
+
+
+def _report_context_block(
+    goal_context: dict | None,
+    execution_diary: dict | None,
+    *,
+    yearly_key: str,
+    monthly_key: str,
+    weekly_key: str,
+) -> str:
+    context = goal_context or {}
+    diary = execution_diary or {}
+    return f"""### Goal Hierarchy Context
+Yearly goals:
+{_json_block(context.get(yearly_key, []))}
+
+Monthly goals:
+{_json_block(context.get(monthly_key, []))}
+
+Weekly goals:
+{_json_block(context.get(weekly_key, []))}
+
+Active habits:
+{_json_block(context.get("active_habits", []))}
+
+### Execution Diary (structured evidence)
+{_json_block(diary)}"""
 
 
 # ─── Monthly Plan Generation ──────────────────────────────────────────────────
@@ -457,27 +501,12 @@ Return ONLY valid JSON."""
 
 # ─── Daily Report Generation ──────────────────────────────────────────────────
 
-_GENERIC_COPY_NEGATIVES = """FORBIDDEN phrases (do not use under any circumstances):
-- "Great job", "Well done", "Keep it up", "You're doing great", "Amazing work"
-- "Stay focused", "Keep going", "One step at a time"
-- Any motivational poster cliché
-Output must be honest, specific, and grounded in the data provided. Never invent achievements.
-tailored_pattern = a concrete behavioral or execution pattern observed in this data specifically.
-tailored_action = one specific, actionable recommendation based on that pattern."""
-
-
-def build_execution_diary(items: list[dict]) -> str:
-    """Compact execution diary for report prompts: title + completion status per item."""
-    if not items:
-        return "No execution data available."
-    lines = []
-    for item in items[:30]:  # cap at 30 to keep prompt size manageable
-        status = "✓" if item.get("completed") else "✗"
-        title = item.get("title", "Untitled")
-        lines.append(f"{status} {title}")
-    return "\n".join(lines)
-
-def generate_daily_report(metrics: dict, date_str: str) -> DailyNarrative:
+def generate_daily_report(
+    metrics: dict,
+    date_str: str,
+    goal_context: dict | None = None,
+    execution_diary: dict | None = None,
+) -> DailyNarrative:
     prompt = f"""{_SYSTEM_ROLE}
 
 ## Task: Generate Daily Execution Report
@@ -491,6 +520,14 @@ def generate_daily_report(metrics: dict, date_str: str) -> DailyNarrative:
 - Overall completion rate: {metrics['completion_rate']}%
 - Estimated minutes planned: {metrics['estimated_minutes_planned']}
 - Estimated minutes completed: {metrics['estimated_minutes_completed']}
+
+{_report_context_block(
+    goal_context,
+    execution_diary,
+    yearly_key="yearly_goals_summary",
+    monthly_key="monthly_goals_summary",
+    weekly_key="weekly_goals_full",
+)}
 
 ### Instructions
 Write a brief, honest, insight-driven daily reflection. Be direct. Avoid corporate filler.
@@ -507,14 +544,19 @@ Identify the top win and the key miss if applicable. Give one concrete focus for
 
 Return ONLY valid JSON."""
 
+    _log_prompt("daily_report", prompt)
     raw = _call_gemini(prompt)
     return _parse_and_validate(raw, DailyNarrative)
 
 
 # ─── Weekly Report Generation ─────────────────────────────────────────────────
 
-def generate_weekly_report(metrics: dict, week_label: str, execution_items: list[dict] | None = None) -> WeeklyNarrative:
-    diary = build_execution_diary(execution_items or [])
+def generate_weekly_report(
+    metrics: dict,
+    week_label: str,
+    goal_context: dict | None = None,
+    execution_diary: dict | None = None,
+) -> WeeklyNarrative:
     prompt = f"""{_SYSTEM_ROLE}
 
 ## Task: Generate Weekly Execution Report
@@ -529,8 +571,13 @@ def generate_weekly_report(metrics: dict, week_label: str, execution_items: list
 - Habit consistency: {metrics['habit_consistency']}%
 - Days with data: {metrics['days_with_data']}
 
-### Execution Diary
-{diary}
+{_report_context_block(
+    goal_context,
+    execution_diary,
+    yearly_key="yearly_goals_summary",
+    monthly_key="monthly_goals_full",
+    weekly_key="weekly_goals_full",
+)}
 
 ### Instructions
 {_GENERIC_COPY_NEGATIVES}
@@ -555,8 +602,12 @@ Return ONLY valid JSON."""
 
 # ─── Monthly Report Generation ────────────────────────────────────────────────
 
-def generate_monthly_report(metrics: dict, month_label: str, execution_items: list[dict] | None = None) -> MonthlyNarrative:
-    diary = build_execution_diary(execution_items or [])
+def generate_monthly_report(
+    metrics: dict,
+    month_label: str,
+    goal_context: dict | None = None,
+    execution_diary: dict | None = None,
+) -> MonthlyNarrative:
     prompt = f"""{_SYSTEM_ROLE}
 
 ## Task: Generate Monthly Execution Report
@@ -571,8 +622,13 @@ def generate_monthly_report(metrics: dict, month_label: str, execution_items: li
 - Best week: Week {metrics.get('best_week', 'N/A')}
 - Weeks tracked: {metrics['weeks_count']}
 
-### Execution Diary (sampled goals/tasks)
-{diary}
+{_report_context_block(
+    goal_context,
+    execution_diary,
+    yearly_key="yearly_goals_full",
+    monthly_key="monthly_goals_full",
+    weekly_key="weekly_goals_summary",
+)}
 
 ### Instructions
 {_GENERIC_COPY_NEGATIVES}
@@ -596,10 +652,67 @@ Return ONLY valid JSON."""
     return _parse_and_validate(raw, MonthlyNarrative)
 
 
+# ─── Quarterly Report Generation ──────────────────────────────────────────────
+
+def generate_quarterly_report(
+    metrics: dict,
+    quarter_label: str,
+    goal_context: dict | None = None,
+    execution_diary: dict | None = None,
+) -> QuarterlyNarrative:
+    prompt = f"""{_SYSTEM_ROLE}
+
+## Task: Generate Quarterly Execution Report
+
+### Quarter: {quarter_label}
+
+### Metrics (computed by code)
+- Tasks completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
+- Avg monthly completion: {metrics['avg_monthly_completion']}%
+- Months tracked: {metrics['months_count']}
+- Completion: {metrics['completion']}%
+- Consistency: {metrics['consistency']}%
+- Alignment: {metrics['alignment']}%
+- Realism: {metrics['realism']}%
+- Momentum: {metrics['momentum']}%
+- Execution score: {metrics['execution_score']}%
+
+{_report_context_block(
+    goal_context,
+    execution_diary,
+    yearly_key="yearly_goals_full",
+    monthly_key="monthly_goals_full",
+    weekly_key="weekly_goals_summary",
+)}
+
+### Instructions
+{_GENERIC_COPY_NEGATIVES}
+
+### Required JSON Output Schema
+{{
+  "summary": "<2-3 sentence quarter summary>",
+  "key_pattern": "<dominant behavioral or execution pattern in this quarter>",
+  "reflection": "<honest quarterly reflection>",
+  "next_quarter_focus": "<single concrete focus for next quarter>",
+  "tailored_pattern": "<specific behavioral pattern from this user's quarterly data>",
+  "tailored_action": "<one concrete recommendation based on that pattern>"
+}}
+
+Return ONLY valid JSON."""
+
+    _log_prompt("quarterly_report", prompt)
+    raw = _call_gemini(prompt)
+    return _parse_and_validate(raw, QuarterlyNarrative)
+
+
 # ─── Yearly Report Generation ─────────────────────────────────────────────────
 
-def generate_yearly_report(metrics: dict, year: int, execution_items: list[dict] | None = None) -> YearlyNarrative:
-    diary = build_execution_diary(execution_items or [])
+def generate_yearly_report(
+    metrics: dict,
+    year: int,
+    goal_context: dict | None = None,
+    execution_diary: dict | None = None,
+) -> YearlyNarrative:
     prompt = f"""{_SYSTEM_ROLE}
 
 ## Task: Generate Yearly Execution Report
@@ -614,8 +727,13 @@ def generate_yearly_report(metrics: dict, year: int, execution_items: list[dict]
 - Execution streak: {metrics['execution_streak']} days
 - Year-over-year change: {metrics.get('percent_change', 'N/A')}%
 
-### Execution Diary (sampled goals/tasks)
-{diary}
+{_report_context_block(
+    goal_context,
+    execution_diary,
+    yearly_key="yearly_goals_full",
+    monthly_key="monthly_goals_full",
+    weekly_key="weekly_goals_summary",
+)}
 
 ### Instructions
 {_GENERIC_COPY_NEGATIVES}

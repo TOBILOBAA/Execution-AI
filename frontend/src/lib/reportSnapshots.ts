@@ -11,6 +11,7 @@ export interface YearReportSnapshot {
 export interface QuarterReportSnapshot {
   quarter: 1 | 2 | 3 | 4;
   label: string;
+  report: ApiReport | null;
   months: ApiReport[];
   avgCompletion: number | null;
   topPillar: string | null;
@@ -113,6 +114,9 @@ export function listQuarterSnapshots(reports: ApiReport[], year: number): Quarte
   const monthlyReports = reports
     .filter((report) => report.report_type === "monthly" && report.period_year === year && report.period_month)
     .sort((a, b) => (a.period_month ?? 0) - (b.period_month ?? 0));
+  const quarterlyReports = reports
+    .filter((report) => report.report_type === "quarterly" && report.period_year === year && report.period_quarter)
+    .sort((a, b) => (a.period_quarter ?? 0) - (b.period_quarter ?? 0));
 
   const quarterMonths: Array<{ quarter: 1 | 2 | 3 | 4; label: string; months: number[] }> = [
     { quarter: 1, label: "Q1", months: [1, 2, 3] },
@@ -122,13 +126,18 @@ export function listQuarterSnapshots(reports: ApiReport[], year: number): Quarte
   ];
 
   return quarterMonths.map(({ quarter, label, months }) => {
+    const quarterlyReport =
+      quarterlyReports.find((report) => report.period_quarter === quarter) ?? null;
     const quarterReports = monthlyReports.filter((report) => months.includes(report.period_month ?? 0));
+    const quarterlyMetrics = quarterlyReport ? asRecord(quarterlyReport.metrics) : {};
     const completionValues = quarterReports
       .map((report) => monthlyCompletionRate(report))
       .filter((value): value is number => value !== null);
-    const avgCompletion = completionValues.length
-      ? Math.round(completionValues.reduce((sum, value) => sum + value, 0) / completionValues.length)
-      : null;
+    const avgCompletion =
+      asNumber(quarterlyMetrics.avg_monthly_completion) ??
+      (completionValues.length
+        ? Math.round(completionValues.reduce((sum, value) => sum + value, 0) / completionValues.length)
+        : null);
 
     const pillarCounts = new Map<string, number>();
     for (const report of quarterReports) {
@@ -146,6 +155,7 @@ export function listQuarterSnapshots(reports: ApiReport[], year: number): Quarte
     }
 
     const summary =
+      asString(asRecord(quarterlyReport?.ai_narrative).summary) ??
       quarterReports
         .map((report) => monthlySummary(report))
         .find((value): value is string => Boolean(value?.trim())) ?? null;
@@ -153,6 +163,7 @@ export function listQuarterSnapshots(reports: ApiReport[], year: number): Quarte
     return {
       quarter,
       label,
+      report: quarterlyReport,
       months: quarterReports,
       avgCompletion,
       topPillar,

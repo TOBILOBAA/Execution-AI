@@ -296,9 +296,13 @@ export interface ApiReport {
   period_date?: string;
   period_week?: number;
   period_month?: number;
+  period_quarter?: number;
   period_year: number;
   metrics: Record<string, unknown>;
   ai_narrative?: Record<string, unknown>;
+  tailored_pattern?: string | null;
+  tailored_action?: string | null;
+  has_execution_data?: boolean;
   ai_generated_at?: string;
   status: string;
   created_at: string;
@@ -593,6 +597,9 @@ export const reportsApi = {
 
   generateMonthly: (sessionId: string, year: number, month: number) =>
     post<ApiReport>("/reports/monthly/generate", { session_id: sessionId, year, month }, AI_GENERATE_TIMEOUT_MS),
+
+  generateQuarterly: (sessionId: string, year: number, quarter: number) =>
+    post<ApiReport>("/reports/quarterly/generate", { session_id: sessionId, year, quarter }, AI_GENERATE_TIMEOUT_MS),
 
   generateYearly: (sessionId: string, year: number) =>
     post<ApiReport>("/reports/yearly/generate", { session_id: sessionId, year }, AI_GENERATE_TIMEOUT_MS),
