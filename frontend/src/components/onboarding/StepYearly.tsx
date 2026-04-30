@@ -123,7 +123,7 @@ export function StepYearly({ onNext }: Props) {
   const isEditMode = goalModal !== null && typeof goalModal !== "string";
 
   const handleLeaveYearly = async () => {
-    if (yearlyGoals.filter(g => g.year === CURRENT_YEAR).length < 1) {
+    if (yearlyGoals.filter(g => g.year === getCurrentYear()).length < 1) {
       setLeaveError("Add at least one yearly goal before continuing.");
       return;
     }
