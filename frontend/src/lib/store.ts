@@ -62,6 +62,13 @@ async function pullOnboardingFromServer(sessionId: string): Promise<{
   }
 }
 
+/**
+ * Merge overlapping dashboard fetches for the same session + plan date.
+ * `attachBackendAfterAuth` and `useBackendSync` both call loadDashboard on entry;
+ * without coalescing that duplicates `/dashboard/{id}` back-to-back.
+ */
+const dashboardLoadsInFlight = new Map<string, Promise<void>>();
+
 // ── Auth types ─────────────────────────────────────────────────────────────────
 export interface AuthUser { id: string; name: string; email: string; plan: string }
 interface StoredUser { id: string; name: string; email: string; password: string; plan: string }
@@ -988,31 +995,41 @@ export const useAppStore = create<AppState>()(
         const { sessionId, activeDashboardDate } = get();
         if (!sessionId) return;
         const requestedDate = planDate ?? activeDashboardDate;
-        try {
-          const [data, categories] = await Promise.all([
-            dashboardApi.get(sessionId, requestedDate),
-            categoriesApi.list(sessionId).catch(() => null),
-          ]);
-          set((s) => ({
-            ...s,
-            ...(
-              categories
-                ? categories.length > 0 || s.onboardingComplete || s.categories.length === 0
-                  ? { categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon, color: c.color })) }
-                  : {}
-                : {}
-            ),
-            ...mapDashboardToStore(data, {
-              yearlyGoals: s.yearlyGoals,
-              monthlyGoals: s.monthlyGoals,
-              weeklyGoals: s.weeklyGoals,
-            }),
-            activeDashboardDate: data.today,
-            syncError: null,
-          }));
-        } catch (e) {
-          set({ syncError: formatApiError("Load dashboard from server", e) });
+        const inflightKey = `${sessionId}:${requestedDate}`;
+        let pending = dashboardLoadsInFlight.get(inflightKey);
+        if (!pending) {
+          pending = (async () => {
+            try {
+              const [data, categories] = await Promise.all([
+                dashboardApi.get(sessionId, requestedDate),
+                categoriesApi.list(sessionId).catch(() => null),
+              ]);
+              set((s) => ({
+                ...s,
+                ...(
+                  categories
+                    ? categories.length > 0 || s.onboardingComplete || s.categories.length === 0
+                      ? { categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon, color: c.color })) }
+                      : {}
+                    : {}
+                ),
+                ...mapDashboardToStore(data, {
+                  yearlyGoals: s.yearlyGoals,
+                  monthlyGoals: s.monthlyGoals,
+                  weeklyGoals: s.weeklyGoals,
+                }),
+                activeDashboardDate: data.today,
+                syncError: null,
+              }));
+            } catch (e) {
+              set({ syncError: formatApiError("Load dashboard from server", e) });
+            } finally {
+              dashboardLoadsInFlight.delete(inflightKey);
+            }
+          })();
+          dashboardLoadsInFlight.set(inflightKey, pending);
         }
+        await pending;
       },
 
       syncReports: async () => {
