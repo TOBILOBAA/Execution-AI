@@ -206,6 +206,7 @@ interface AppState {
   generateDailyReport: (date: string) => Promise<ApiReport | null>;
   generateWeeklyReport: (year: number, weekNumber: number) => Promise<ApiReport | null>;
   generateMonthlyReport: (year: number, month: number) => Promise<ApiReport | null>;
+  generateQuarterlyReport: (year: number, quarter: number) => Promise<ApiReport | null>;
   generateYearlyReport: (year: number) => Promise<ApiReport | null>;
 
   // ── Modal ───────────────────────────────────────────────────────────────────
@@ -1955,6 +1956,18 @@ export const useAppStore = create<AppState>()(
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Monthly report (AI generate)", e) });
+          return null;
+        }
+      },
+      generateQuarterlyReport: async (year, quarter) => {
+        const { sessionId } = get();
+        if (!sessionId) return null;
+        try {
+          const r = await reportsApi.generateQuarterly(sessionId, year, quarter);
+          set({ syncError: null });
+          return r;
+        } catch (e) {
+          set({ syncError: formatApiError("Quarterly report (AI generate)", e) });
           return null;
         }
       },

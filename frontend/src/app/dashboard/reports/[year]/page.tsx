@@ -1,9 +1,10 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { reportsApi, type ApiReport } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
+import { useShallow } from "zustand/react/shallow";
 import { MetricInfoTooltip } from "@/components/reports/MetricInfoTooltip";
 import {
   average,
@@ -20,6 +21,7 @@ import {
   monthName,
   monthlyCompletionRate,
   buildQuarterReviewNarrative,
+  type QuarterReportSnapshot,
   monthlySummary,
   monthlyTopPillar,
   yearlyCompletionRate,
@@ -52,6 +54,20 @@ function asString(value: unknown): string | null {
 function narrativeField(report: ApiReport | null, key: string): string | null {
   if (!report) return null;
   return asString(asRecord(report.ai_narrative)[key]);
+}
+
+/** Gemini quarterly narrative fields from persisted report snapshot */
+function quarterlyNarrativeFromReport(report: ApiReport | null | undefined): {
+  summary: string;
+  reflection: string;
+  nextFocus: string | null;
+} {
+  const nar = report?.ai_narrative ? asRecord(report.ai_narrative) : {};
+  return {
+    summary: asString(nar.summary) ?? "",
+    reflection: asString(nar.reflection) ?? "",
+    nextFocus: asString(nar.next_quarter_focus) ?? null,
+  };
 }
 
 function completionBadge(rate: number | null) {
@@ -244,11 +260,19 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   const { year: yearStr } = use(params);
   const year = parseInt(yearStr, 10);
   const router = useRouter();
-  const sessionId = useAppStore((state) => state.sessionId);
-  const monthlyGoals = useAppStore((state) => state.monthlyGoals);
-  const openModal = useAppStore((state) => state.openModal);
+  const { sessionId, monthlyGoals, openModal, generateQuarterlyReport, generateDailyReport } = useAppStore(
+    useShallow((state) => ({
+      sessionId: state.sessionId,
+      monthlyGoals: state.monthlyGoals,
+      openModal: state.openModal,
+      generateQuarterlyReport: state.generateQuarterlyReport,
+      generateDailyReport: state.generateDailyReport,
+    })),
+  );
   const [reports, setReports] = useState<ApiReport[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [generatingQuarter, setGeneratingQuarter] = useState<number | null>(null);
+  const [generatingDailyDate, setGeneratingDailyDate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ArchiveTab>("overview");
   const [expandedDailyMonths, setExpandedDailyMonths] = useState<number[]>(() => [new Date().getMonth() + 1]);
 
@@ -289,6 +313,100 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   const quarterSnapshots = useMemo(() => listQuarterSnapshots(reports ?? [], year), [reports, year]);
   const weeklyReports = useMemo(() => getWeeklyReportsForYear(reports ?? [], year), [reports, year]);
   const dailyReports = useMemo(() => getDailyReportsForYear(reports ?? [], year), [reports, year]);
+
+  const handleQuarterlyGemini = useCallback(
+    async (quarterNum: 1 | 2 | 3 | 4, snapshot: QuarterReportSnapshot) => {
+      setGeneratingQuarter(quarterNum);
+      try {
+        const saved = await generateQuarterlyReport(year, quarterNum);
+        if (!saved || !sessionId) return;
+        const list = await reportsApi.list(sessionId);
+        setReports(list);
+        const persisted =
+          list.find(
+            (r) =>
+              r.report_type === "quarterly" &&
+              r.period_year === year &&
+              r.period_quarter === quarterNum,
+          ) ?? saved;
+        const nextQuarter = quarterNum === 4 ? 1 : ((quarterNum + 1) as 1 | 2 | 3 | 4);
+        const nextYear = quarterNum === 4 ? year + 1 : year;
+        const fallback = buildQuarterReviewNarrative(snapshot, {
+          year,
+          quarter: quarterNum,
+          nextQuarter,
+          nextYear,
+        });
+        const ai = quarterlyNarrativeFromReport(persisted);
+        openModal("quarterly-report", {
+          year,
+          quarter: quarterNum,
+          coveredMonths: fallback?.coveredMonths ?? snapshot.months.map((m) => monthName(m.period_month)),
+          avgCompletion: snapshot.avgCompletion,
+          topPillar: snapshot.topPillar,
+          summary:
+            ai.summary ||
+            fallback?.summary ||
+            "Monthly reports exist in this quarter, but the AI review could not be formed yet.",
+          reflection:
+            ai.reflection ||
+            fallback?.reflection ||
+            "The quarter reflection is waiting on stronger monthly reporting depth.",
+          nextFocus: ai.nextFocus ?? fallback?.nextFocus ?? null,
+        });
+      } finally {
+        setGeneratingQuarter(null);
+      }
+    },
+    [year, sessionId, generateQuarterlyReport, openModal],
+  );
+
+  const openQuarterlyModalLocal = useCallback(
+    (quarterNum: 1 | 2 | 3 | 4, snapshot: QuarterReportSnapshot) => {
+      const persisted = snapshot.report;
+      const nextQuarter = quarterNum === 4 ? 1 : ((quarterNum + 1) as 1 | 2 | 3 | 4);
+      const nextYear = quarterNum === 4 ? year + 1 : year;
+      const fallback = buildQuarterReviewNarrative(snapshot, {
+        year,
+        quarter: quarterNum,
+        nextQuarter,
+        nextYear,
+      });
+      const ai = quarterlyNarrativeFromReport(persisted);
+      openModal("quarterly-report", {
+        year,
+        quarter: quarterNum,
+        coveredMonths: fallback?.coveredMonths ?? snapshot.months.map((m) => monthName(m.period_month)),
+        avgCompletion: snapshot.avgCompletion,
+        topPillar: snapshot.topPillar,
+        summary:
+          ai.summary ||
+          fallback?.summary ||
+          "Monthly reports exist in this quarter, but the AI review could not be formed yet.",
+        reflection:
+          ai.reflection ||
+          fallback?.reflection ||
+          "The quarter reflection is waiting on stronger monthly reporting depth.",
+        nextFocus: ai.nextFocus ?? fallback?.nextFocus ?? null,
+      });
+    },
+    [year, openModal],
+  );
+
+  const handleDailyGemini = useCallback(
+    async (dateIso: string) => {
+      setGeneratingDailyDate(dateIso);
+      try {
+        const saved = await generateDailyReport(dateIso);
+        if (!saved || !sessionId) return;
+        const list = await reportsApi.list(sessionId);
+        setReports(list);
+      } finally {
+        setGeneratingDailyDate(null);
+      }
+    },
+    [sessionId, generateDailyReport],
+  );
 
   if (Number.isNaN(year)) {
     return (
@@ -1070,6 +1188,26 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       <p className="text-sm leading-relaxed" style={{ color: inactive.color }}>
                         {periodAvailabilityMessage({ kind: "quarter", label: quarter.label, status: quarter.status })}
                       </p>
+                      {quarter.status !== "future" && (
+                        <button
+                          type="button"
+                          disabled={generatingQuarter === quarter.quarter}
+                          onClick={() =>
+                            void handleQuarterlyGemini(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
+                          }
+                          className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-85 disabled:opacity-50"
+                          style={{ background: "#003d2b" }}
+                        >
+                          {generatingQuarter === quarter.quarter ? (
+                            "Generating…"
+                          ) : (
+                            <>
+                              Run AI quarterly review
+                              <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   );
                 }
@@ -1124,30 +1262,41 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       {quarter.snapshot.summary ??
                         "Monthly reports exist in this quarter, but no stitched quarter narrative has been formed yet."}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        openModal("quarterly-report", {
-                          year,
-                          quarter: quarter.quarter,
-                          coveredMonths: quarterNarrative?.coveredMonths ?? [],
-                          avgCompletion: quarter.snapshot.avgCompletion,
-                          topPillar: quarter.snapshot.topPillar,
-                          summary:
-                            quarterNarrative?.summary ??
-                            "Monthly reports exist in this quarter, but the AI review could not be formed yet.",
-                          reflection:
-                            quarterNarrative?.reflection ??
-                            "The quarter reflection is waiting on stronger monthly reporting depth.",
-                          nextFocus: quarterNarrative?.nextFocus ?? null,
-                        })
-                      }
-                      className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-85"
-                      style={{ background: "#003d2b" }}
-                    >
-                      AI generate quarterly review
-                      <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-                    </button>
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                      <button
+                        type="button"
+                        disabled={generatingQuarter === quarter.quarter}
+                        onClick={() =>
+                          void handleQuarterlyGemini(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
+                        }
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-85 disabled:opacity-50"
+                        style={{ background: "#003d2b" }}
+                      >
+                        {generatingQuarter === quarter.quarter ? (
+                          "Generating…"
+                        ) : quarterlyNarrativeFromReport(quarter.snapshot.report).summary ? (
+                          <>
+                            Regenerate AI quarterly review
+                            <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                          </>
+                        ) : (
+                          <>
+                            Run AI quarterly review
+                            <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openQuarterlyModalLocal(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
+                        }
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-opacity hover:opacity-85"
+                        style={{ borderColor: "rgba(0,61,43,0.35)", color: "#003d2b" }}
+                      >
+                        View quarterly review
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -1405,6 +1554,19 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                                     status: entry.status,
                                   })}
                                 </p>
+                                {entry.status !== "future" && (
+                                  <button
+                                    type="button"
+                                    disabled={generatingDailyDate === entry.date}
+                                    onClick={() => void handleDailyGemini(entry.date)}
+                                    className="mt-2 w-full rounded-lg py-2 text-[9px] font-bold uppercase tracking-widest text-white transition-opacity hover:opacity-90 disabled:opacity-45"
+                                    style={{ background: "#006c4a" }}
+                                  >
+                                    {generatingDailyDate === entry.date
+                                      ? "Generating…"
+                                      : "Run AI daily review"}
+                                  </button>
+                                )}
                               </div>
                             );
                           }
@@ -1430,6 +1592,21 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                                   firstSentence(narrativeField(entry.report, "reflection")) ??
                                   "Open the saved daily report details."}
                               </p>
+                              {entry.status !== "future" && (
+                                <button
+                                  type="button"
+                                  disabled={generatingDailyDate === entry.date}
+                                  onClick={() => void handleDailyGemini(entry.date)}
+                                  className="mt-2 w-full rounded-lg py-2 text-[9px] font-bold uppercase tracking-widest transition-opacity hover:opacity-90 disabled:opacity-45"
+                                  style={{ background: "rgba(0,108,74,0.12)", color: "#006c4a" }}
+                                >
+                                  {generatingDailyDate === entry.date
+                                    ? "Generating…"
+                                    : narrativeField(entry.report, "summary")
+                                      ? "Regenerate AI daily review"
+                                      : "Run AI daily review"}
+                                </button>
+                              )}
                             </div>
                           );
                         })}
