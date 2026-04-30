@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -64,7 +64,34 @@ def is_current_daily_period(db: Client, session_id: UUID, target_date: date) -> 
 
 def is_plannable_daily_period(db: Client, session_id: UUID, target_date: date) -> bool:
     today = get_session_today(db, session_id)
-    return target_date == today or target_date == today.fromordinal(today.toordinal() + 1)
+    return target_date == today or target_date == (today + timedelta(days=1))
+
+
+def is_plannable_yearly_period(db: Client, session_id: UUID, year: int) -> bool:
+    today = get_session_today(db, session_id)
+    return year == today.year or year == (today.year + 1)
+
+
+def is_plannable_monthly_period(db: Client, session_id: UUID, year: int, month: int) -> bool:
+    today = get_session_today(db, session_id)
+    next_month_date = date(
+        today.year + (1 if today.month == 12 else 0),
+        1 if today.month == 12 else today.month + 1,
+        1,
+    )
+    return (year, month) in {
+        (today.year, today.month),
+        (next_month_date.year, next_month_date.month),
+    }
+
+
+def is_plannable_weekly_period(db: Client, session_id: UUID, year: int, week_number: int) -> bool:
+    today = get_session_today(db, session_id)
+    week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
+    next_week_day = today + timedelta(days=7)
+    current_key = (today.year, week_number_for(today, week_starts_on))
+    next_key = (next_week_day.year, week_number_for(next_week_day, week_starts_on))
+    return (year, week_number) == current_key or (year, week_number) == next_key
 
 
 def assert_period_current_yearly(session_id: UUID, year: int, db: Client) -> None:
@@ -89,4 +116,19 @@ def assert_period_current_daily(session_id: UUID, target_date: date, db: Client)
 
 def assert_period_plannable_daily(session_id: UUID, target_date: date, db: Client) -> None:
     if not is_plannable_daily_period(db, session_id, target_date):
+        raise PeriodLockedError()
+
+
+def assert_period_plannable_yearly(session_id: UUID, year: int, db: Client) -> None:
+    if not is_plannable_yearly_period(db, session_id, year):
+        raise PeriodLockedError()
+
+
+def assert_period_plannable_monthly(session_id: UUID, year: int, month: int, db: Client) -> None:
+    if not is_plannable_monthly_period(db, session_id, year, month):
+        raise PeriodLockedError()
+
+
+def assert_period_plannable_weekly(session_id: UUID, year: int, week_number: int, db: Client) -> None:
+    if not is_plannable_weekly_period(db, session_id, year, week_number):
         raise PeriodLockedError()
