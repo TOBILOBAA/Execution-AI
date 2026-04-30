@@ -19,7 +19,7 @@ from uuid import UUID
 from supabase import Client
 
 import app.db.sessions as sessions_db
-from app.utils.date_utils import get_temporal_context, week_number_for
+from app.utils.date_utils import get_temporal_context, get_week_boundaries, week_number_for
 from app.utils.metrics import (
     compute_weighted_daily_completion,
     compute_completion_rate,
