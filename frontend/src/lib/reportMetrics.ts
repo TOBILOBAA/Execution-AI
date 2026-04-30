@@ -2,6 +2,7 @@ export interface ExecutionGrade {
   grade: "A" | "B" | "C" | "D" | "F";
   label: string;
   message: string;
+  rangeLabel: string;
 }
 
 export function average(values: number[]): number {
@@ -54,6 +55,7 @@ export function getExecutionGrade(score: number): ExecutionGrade {
       grade: "A",
       label: "Elite Execution",
       message: "You’re executing consistently and staying aligned with your plans.",
+      rangeLabel: "85-100",
     };
   }
   if (score >= 70) {
@@ -61,6 +63,7 @@ export function getExecutionGrade(score: number): ExecutionGrade {
       grade: "B",
       label: "Strong Execution",
       message: "You’re doing well, but small inefficiencies are limiting your output.",
+      rangeLabel: "70-84",
     };
   }
   if (score >= 55) {
@@ -68,6 +71,7 @@ export function getExecutionGrade(score: number): ExecutionGrade {
       grade: "C",
       label: "Average Execution",
       message: "Your execution is unstable. Good periods are being offset by avoidable drop-offs.",
+      rangeLabel: "55-69",
     };
   }
   if (score >= 40) {
@@ -75,11 +79,13 @@ export function getExecutionGrade(score: number): ExecutionGrade {
       grade: "D",
       label: "Weak Execution",
       message: "You’re planning more than you’re reliably executing right now.",
+      rangeLabel: "40-54",
     };
   }
   return {
     grade: "F",
     label: "Critical",
     message: "There is no stable execution system in place yet.",
+    rangeLabel: "0-39",
   };
 }

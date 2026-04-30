@@ -29,9 +29,11 @@ from app.utils.metrics import (
     aggregate_daily_metrics,
     aggregate_weekly_metrics,
     aggregate_monthly_metrics,
+    aggregate_quarterly_metrics,
     aggregate_yearly_metrics,
 )
 from app.services import ai_service
+from app.services.report_context import build_execution_diary, build_report_prompt_context
 import app.db.plans as plans_db
 import app.db.habits as habits_db
 import app.db.reports as reports_db
@@ -42,16 +44,98 @@ def _report_identity(
     report_type: str,
     period_year: int | None,
     period_month: int | None = None,
+    period_quarter: int | None = None,
     period_week: int | None = None,
     period_date: str | None = None,
-) -> tuple[str, int | None, int | None, int | None, str | None]:
+) -> tuple[str, int | None, int | None, int | None, int | None, str | None]:
     if report_type == "daily":
-        return (report_type, period_year, None, None, period_date)
+        return (report_type, period_year, None, None, None, period_date)
     if report_type == "weekly":
-        return (report_type, period_year, None, period_week, None)
+        return (report_type, period_year, None, None, period_week, None)
     if report_type == "monthly":
-        return (report_type, period_year, period_month, None, None)
-    return (report_type, period_year, None, None, None)
+        return (report_type, period_year, period_month, None, None, None)
+    if report_type == "quarterly":
+        return (report_type, period_year, None, period_quarter, None, None)
+    return (report_type, period_year, None, None, None, None)
+
+
+def _quarter_months(quarter: int) -> tuple[int, int, int]:
+    start_month = ((quarter - 1) * 3) + 1
+    return (start_month, start_month + 1, start_month + 2)
+
+
+def _quarter_label(year: int, quarter: int) -> str:
+    return f"Q{quarter} {year}"
+
+
+def _period_window(report: dict, week_starts_on: str) -> tuple[date, date] | None:
+    report_type = report.get("report_type")
+    year = report.get("period_year")
+    if report_type == "daily" and report.get("period_date"):
+        report_date = date.fromisoformat(report["period_date"])
+        return report_date, report_date
+    if report_type == "weekly" and year and report.get("period_week"):
+        return get_week_boundaries(year, report["period_week"], week_starts_on)
+    if report_type == "monthly" and year and report.get("period_month"):
+        month = report["period_month"]
+        return date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1])
+    if report_type == "quarterly" and year and report.get("period_quarter"):
+        months = _quarter_months(report["period_quarter"])
+        start = date(year, months[0], 1)
+        end = date(year, months[-1], calendar.monthrange(year, months[-1])[1])
+        return start, end
+    if report_type == "yearly" and year:
+        return date(year, 1, 1), date(year, 12, 31)
+    return None
+
+
+def _has_execution_data_between(db: Client, session_id: UUID, start: date, end: date) -> bool:
+    priorities = (
+        db.table("daily_priorities")
+        .select("id")
+        .eq("session_id", str(session_id))
+        .gte("date", start.isoformat())
+        .lte("date", end.isoformat())
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if priorities:
+        return True
+
+    completed_habits = (
+        db.table("habit_logs")
+        .select("id")
+        .eq("session_id", str(session_id))
+        .eq("completed", True)
+        .gte("date", start.isoformat())
+        .lte("date", end.isoformat())
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    return bool(completed_habits)
+
+
+def _decorate_report(db: Client, session_id: UUID, report: dict) -> dict:
+    week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
+    window = _period_window(report, week_starts_on)
+    ai_narrative = report.get("ai_narrative") if isinstance(report.get("ai_narrative"), dict) else None
+    tailored_pattern = report.get("tailored_pattern") or (ai_narrative or {}).get("tailored_pattern")
+    tailored_action = report.get("tailored_action") or (ai_narrative or {}).get("tailored_action")
+    has_execution_data = (
+        _has_execution_data_between(db, session_id, window[0], window[1])
+        if window is not None
+        else False
+    )
+    return {
+        **report,
+        "tailored_pattern": tailored_pattern,
+        "tailored_action": tailored_action,
+        "has_execution_data": has_execution_data,
+    }
 
 
 # ─── Daily Report ─────────────────────────────────────────────────────────────
@@ -93,11 +177,18 @@ def generate_daily_report(db: Client, session_id: UUID, report_date: date) -> di
         habits_total=habits_total,
     )
     metrics["date"] = report_date.isoformat()
+    goal_context = build_report_prompt_context(session_id, report_date, report_date, db)
+    execution_diary = build_execution_diary(session_id, report_date, report_date, db)
 
     # AI narrative
     ai_narrative = None
     try:
-        narrative = ai_service.generate_daily_report(metrics, report_date.isoformat())
+        narrative = ai_service.generate_daily_report(
+            metrics,
+            report_date.isoformat(),
+            goal_context=goal_context,
+            execution_diary=execution_diary,
+        )
         ai_narrative = narrative.model_dump()
     except Exception as exc:
         logger.error("daily_report_ai_failed", date=report_date.isoformat(), error=str(exc))
@@ -116,7 +207,7 @@ def generate_daily_report(db: Client, session_id: UUID, report_date: date) -> di
 
     _log_generation(db, session_id, "daily_report")
     logger.info("daily_report_generated", session_id=str(session_id), date=report_date.isoformat())
-    return report
+    return _decorate_report(db, session_id, report)
 
 
 # ─── Weekly Report ────────────────────────────────────────────────────────────
@@ -154,10 +245,17 @@ def generate_weekly_report(
     metrics["week_number"] = week_number
     metrics["week_start"] = week_start.isoformat()
     metrics["week_end"] = week_end.isoformat()
+    goal_context = build_report_prompt_context(session_id, week_start, week_end, db)
+    execution_diary = build_execution_diary(session_id, week_start, week_end, db)
 
     ai_narrative = None
     try:
-        narrative = ai_service.generate_weekly_report(metrics, week_label)
+        narrative = ai_service.generate_weekly_report(
+            metrics,
+            week_label,
+            goal_context=goal_context,
+            execution_diary=execution_diary,
+        )
         ai_narrative = narrative.model_dump()
     except Exception as exc:
         logger.error("weekly_report_ai_failed", week=week_number, error=str(exc))
@@ -169,13 +267,15 @@ def generate_weekly_report(
         "period_month": weekly_plan.get("month") if weekly_plan else week_start.month,
         "metrics": metrics,
         "ai_narrative": ai_narrative,
+        "tailored_pattern": ai_narrative.get("tailored_pattern") if ai_narrative else None,
+        "tailored_action": ai_narrative.get("tailored_action") if ai_narrative else None,
         "ai_generated_at": datetime.now(timezone.utc).isoformat() if ai_narrative else None,
         "status": "ready" if ai_narrative else "failed",
     })
 
     _log_generation(db, session_id, "weekly_report")
     logger.info("weekly_report_generated", session_id=str(session_id), week=week_number)
-    return report
+    return _decorate_report(db, session_id, report)
 
 
 # ─── Monthly Report ───────────────────────────────────────────────────────────
@@ -219,10 +319,19 @@ def generate_monthly_report(
     metrics = aggregate_monthly_metrics(monthly_goals, weekly_summaries)
     metrics["year"] = year
     metrics["month"] = month
+    month_start = date(year, month, 1)
+    month_end = date(year, month, calendar.monthrange(year, month)[1])
+    goal_context = build_report_prompt_context(session_id, month_start, month_end, db)
+    execution_diary = build_execution_diary(session_id, month_start, month_end, db)
 
     ai_narrative = None
     try:
-        narrative = ai_service.generate_monthly_report(metrics, month_label)
+        narrative = ai_service.generate_monthly_report(
+            metrics,
+            month_label,
+            goal_context=goal_context,
+            execution_diary=execution_diary,
+        )
         ai_narrative = narrative.model_dump()
     except Exception as exc:
         logger.error("monthly_report_ai_failed", month=month, error=str(exc))
@@ -233,13 +342,78 @@ def generate_monthly_report(
         "period_year": year,
         "metrics": metrics,
         "ai_narrative": ai_narrative,
+        "tailored_pattern": ai_narrative.get("tailored_pattern") if ai_narrative else None,
+        "tailored_action": ai_narrative.get("tailored_action") if ai_narrative else None,
         "ai_generated_at": datetime.now(timezone.utc).isoformat() if ai_narrative else None,
         "status": "ready" if ai_narrative else "failed",
     })
 
     _log_generation(db, session_id, "monthly_report")
     logger.info("monthly_report_generated", session_id=str(session_id), month=month)
-    return report
+    return _decorate_report(db, session_id, report)
+
+
+# ─── Quarterly Report ─────────────────────────────────────────────────────────
+
+def generate_quarterly_report(db: Client, session_id: UUID, year: int, quarter: int) -> dict:
+    months = _quarter_months(quarter)
+    month_label = ", ".join(month_name(month) for month in months)
+    category_lookup = {
+        row["id"]: row["name"]
+        for row in categories_db.list_categories(db, session_id)
+    }
+    monthly_summaries_by_key: dict[tuple[int, int], dict] = {}
+
+    for month in months:
+        monthly_summaries_by_key[(year, month)] = _build_monthly_summary(
+            db,
+            session_id,
+            year,
+            month,
+            category_lookup,
+            {},
+        )
+
+    summary = _build_quarterly_summary(
+        db,
+        session_id,
+        year,
+        quarter,
+        monthly_summaries_by_key,
+    )
+    metrics = summary["metrics"]
+    quarter_start = date(year, months[0], 1)
+    quarter_end = date(year, months[-1], calendar.monthrange(year, months[-1])[1])
+    goal_context = build_report_prompt_context(session_id, quarter_start, quarter_end, db)
+    execution_diary = build_execution_diary(session_id, quarter_start, quarter_end, db)
+
+    ai_narrative = None
+    try:
+        narrative = ai_service.generate_quarterly_report(
+            metrics,
+            _quarter_label(year, quarter),
+            goal_context=goal_context,
+            execution_diary=execution_diary,
+        )
+        ai_narrative = narrative.model_dump()
+    except Exception as exc:
+        logger.error("quarterly_report_ai_failed", year=year, quarter=quarter, error=str(exc))
+
+    report = reports_db.upsert_report(db, session_id, {
+        "report_type": "quarterly",
+        "period_year": year,
+        "period_quarter": quarter,
+        "metrics": metrics,
+        "ai_narrative": ai_narrative,
+        "tailored_pattern": ai_narrative.get("tailored_pattern") if ai_narrative else None,
+        "tailored_action": ai_narrative.get("tailored_action") if ai_narrative else None,
+        "ai_generated_at": datetime.now(timezone.utc).isoformat() if ai_narrative else None,
+        "status": "ready" if ai_narrative else "failed",
+    })
+
+    _log_generation(db, session_id, "quarterly_report")
+    logger.info("quarterly_report_generated", session_id=str(session_id), year=year, quarter=quarter, months=month_label)
+    return _decorate_report(db, session_id, report)
 
 
 # ─── Yearly Report ────────────────────────────────────────────────────────────
@@ -294,10 +468,19 @@ def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
 
     metrics = aggregate_yearly_metrics(monthly_summaries, streak, prev_completion)
     metrics["year"] = year
+    year_start = date(year, 1, 1)
+    year_end = date(year, 12, 31)
+    goal_context = build_report_prompt_context(session_id, year_start, year_end, db)
+    execution_diary = build_execution_diary(session_id, year_start, year_end, db)
 
     ai_narrative = None
     try:
-        narrative = ai_service.generate_yearly_report(metrics, year)
+        narrative = ai_service.generate_yearly_report(
+            metrics,
+            year,
+            goal_context=goal_context,
+            execution_diary=execution_diary,
+        )
         ai_narrative = narrative.model_dump()
     except Exception as exc:
         logger.error("yearly_report_ai_failed", year=year, error=str(exc))
@@ -307,13 +490,15 @@ def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
         "period_year": year,
         "metrics": metrics,
         "ai_narrative": ai_narrative,
+        "tailored_pattern": ai_narrative.get("tailored_pattern") if ai_narrative else None,
+        "tailored_action": ai_narrative.get("tailored_action") if ai_narrative else None,
         "ai_generated_at": datetime.now(timezone.utc).isoformat() if ai_narrative else None,
         "status": "ready" if ai_narrative else "failed",
     })
 
     _log_generation(db, session_id, "yearly_report")
     logger.info("yearly_report_generated", session_id=str(session_id), year=year)
-    return report
+    return _decorate_report(db, session_id, report)
 
 
 def list_reports(db: Client, session_id: UUID) -> list[dict]:
@@ -324,15 +509,17 @@ def list_reports(db: Client, session_id: UUID) -> list[dict]:
             report["report_type"],
             report.get("period_year"),
             report.get("period_month"),
+            report.get("period_quarter"),
             report.get("period_week"),
             report.get("period_date"),
         ): report
         for report in [*existing_reports, *generated_reports]
     }
-    return sorted(
+    ordered = sorted(
         merged.values(),
         key=lambda report: (
             -(report.get("period_year") or 0),
+            -(report.get("period_quarter") or 0),
             -(report.get("period_month") or 0),
             -(report.get("period_week") or 0),
             report.get("period_date") or "",
@@ -340,6 +527,7 @@ def list_reports(db: Client, session_id: UUID) -> list[dict]:
         ),
         reverse=False,
     )
+    return [_decorate_report(db, session_id, report) for report in ordered]
 
 
 def _log_generation(db: Client, session_id: UUID, gen_type: str) -> None:
@@ -368,6 +556,7 @@ def ensure_historical_reports(
             report["report_type"],
             report.get("period_year"),
             report.get("period_month"),
+            report.get("period_quarter"),
             report.get("period_week"),
             report.get("period_date"),
         )
@@ -533,6 +722,44 @@ def ensure_historical_reports(
         )
         existing_keys.add(report_key)
 
+    quarter_keys = {
+        (year, quarter)
+        for year, month in months
+        for quarter in [((month - 1) // 3) + 1]
+    }
+
+    for year, quarter in sorted(quarter_keys):
+        report_key = _report_identity("quarterly", year, period_quarter=quarter)
+        summary = _build_quarterly_summary(
+            db,
+            session_id,
+            year,
+            quarter,
+            monthly_summaries_by_key,
+        )
+
+        if report_key in existing_keys:
+            continue
+
+        generated_reports.append(
+            _upsert_or_stage_report(
+                db,
+                session_id,
+                {
+                    "report_type": "quarterly",
+                    "period_year": year,
+                    "period_quarter": quarter,
+                    "metrics": summary["metrics"],
+                    "ai_narrative": summary["ai_narrative"],
+                    "tailored_pattern": summary["ai_narrative"].get("tailored_pattern"),
+                    "tailored_action": summary["ai_narrative"].get("tailored_action"),
+                    "ai_generated_at": None,
+                    "status": "ready",
+                },
+            )
+        )
+        existing_keys.add(report_key)
+
     years = {
         row["year"]
         for row in yearly_rows
@@ -602,13 +829,18 @@ def _upsert_or_stage_report(db: Client, session_id: UUID, data: dict) -> dict:
             session_id=str(session_id),
             report_type=data.get("report_type"),
             year=data.get("period_year"),
+            quarter=data.get("period_quarter"),
             month=data.get("period_month"),
             week=data.get("period_week"),
             error=str(exc),
         )
         now_iso = datetime.now(timezone.utc).isoformat()
         return {
-            "id": f"staged-{data.get('report_type')}-{data.get('period_year')}-{data.get('period_month')}-{data.get('period_week')}-{data.get('period_date') or 'na'}",
+            "id": (
+                f"staged-{data.get('report_type')}-{data.get('period_year')}-"
+                f"{data.get('period_quarter')}-{data.get('period_month')}-"
+                f"{data.get('period_week')}-{data.get('period_date') or 'na'}"
+            ),
             "session_id": str(session_id),
             **data,
             "created_at": now_iso,
@@ -748,5 +980,77 @@ def _build_yearly_summary(
         "key_pattern": f"Average monthly completion settled at {metrics['avg_monthly_completion']}%.",
         "reflection": "This yearly snapshot was reconstructed from the saved history currently in your workspace.",
         "next_year_focus": "Keep importing or tracking each current week so the yearly archive stays truthful end to end.",
+    }
+    return {"metrics": metrics, "ai_narrative": ai_narrative}
+
+
+def _build_quarterly_summary(
+    db: Client,
+    session_id: UUID,
+    year: int,
+    quarter: int,
+    monthly_summaries_by_key: dict[tuple[int, int], dict],
+) -> dict:
+    months = _quarter_months(quarter)
+    monthly_metrics: list[dict] = []
+    for month in months:
+        cached = monthly_summaries_by_key.get((year, month))
+        if cached is not None:
+            monthly_metrics.append(cached["metrics"])
+            continue
+
+        category_lookup = {
+            row["id"]: row["name"]
+            for row in categories_db.list_categories(db, session_id)
+        }
+        fallback = _build_monthly_summary(
+            db,
+            session_id,
+            year,
+            month,
+            category_lookup,
+            {},
+        )
+        monthly_metrics.append(fallback["metrics"])
+
+    yearly_goals = [
+        goal
+        for goal in (
+            db.table("yearly_goals")
+            .select("id")
+            .eq("session_id", str(session_id))
+            .eq("year", year)
+            .execute()
+            .data
+            or []
+        )
+    ]
+    monthly_goals = [
+        goal
+        for goal in (
+            db.table("monthly_goals")
+            .select("id,yearly_goal_id,month")
+            .eq("session_id", str(session_id))
+            .eq("year", year)
+            .in_("month", list(months))
+            .execute()
+            .data
+            or []
+        )
+    ]
+    linked_monthly = sum(1 for goal in monthly_goals if goal.get("yearly_goal_id"))
+    metrics = aggregate_quarterly_metrics(
+        monthly_metrics,
+        yearly_goals_total=len(monthly_goals) or len(yearly_goals),
+        yearly_goals_linked=linked_monthly,
+    )
+    metrics["year"] = year
+    metrics["quarter"] = quarter
+
+    ai_narrative = {
+        "summary": f"{_quarter_label(year, quarter)} spans {month_name(months[0])} to {month_name(months[-1])}.",
+        "key_pattern": f"Average monthly completion settled at {metrics['avg_monthly_completion']}%.",
+        "reflection": "This quarterly narrative was reconstructed from the saved monthly archive rather than a live AI generation pass.",
+        "next_quarter_focus": f"Use {_quarter_label(year, quarter + 1) if quarter < 4 else _quarter_label(year + 1, 1)} to tighten one repeated execution leak instead of carrying every theme forward at once.",
     }
     return {"metrics": metrics, "ai_narrative": ai_narrative}

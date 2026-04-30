@@ -19,7 +19,7 @@ import {
   TODAY,
 } from "./mockData";
 import { isUuid } from "./uuid";
-import type { DashboardMetrics, YearReport } from "./types";
+import type { DashboardMetrics } from "./types";
 import {
   ApiError,
   categoriesApi,
@@ -143,7 +143,7 @@ interface AppState {
   secondaryTasks: DailyPriority[];
   habits: FoundationalHabit[];
   metrics: DashboardMetrics;
-  reports: YearReport[];
+  reports: ApiReport[];
 
   // ── Backend sync ─────────────────────────────────────────────────────────────
   loadDashboard: (planDate?: string) => Promise<void>;
@@ -986,8 +986,8 @@ export const useAppStore = create<AppState>()(
         const { sessionId } = get();
         if (!sessionId) return;
         try {
-          await reportsApi.list(sessionId);
-          // Reports are complex — keep local mock until fully replaced
+          const reports = await reportsApi.list(sessionId);
+          set({ reports, syncError: null });
         } catch (e) {
           set({ syncError: formatApiError("Load reports list", e) });
         }

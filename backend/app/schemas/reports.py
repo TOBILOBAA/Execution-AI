@@ -125,6 +125,8 @@ class WeeklyNarrative(BaseModel):
     key_pattern: str | None = None
     reflection: str
     next_week_priority: str
+    tailored_pattern: str = Field(..., min_length=1)
+    tailored_action: str = Field(..., min_length=1)
 
 
 class MonthlyNarrative(BaseModel):
@@ -134,6 +136,17 @@ class MonthlyNarrative(BaseModel):
     key_lesson: str | None = None
     reflection: str
     next_month_focus: str
+    tailored_pattern: str = Field(..., min_length=1)
+    tailored_action: str = Field(..., min_length=1)
+
+
+class QuarterlyNarrative(BaseModel):
+    summary: str
+    key_pattern: str | None = None
+    reflection: str
+    next_quarter_focus: str
+    tailored_pattern: str = Field(..., min_length=1)
+    tailored_action: str = Field(..., min_length=1)
 
 
 class YearlyNarrative(BaseModel):
@@ -143,6 +156,8 @@ class YearlyNarrative(BaseModel):
     key_pattern: str | None = None
     reflection: str
     next_year_focus: str
+    tailored_pattern: str = Field(..., min_length=1)
+    tailored_action: str = Field(..., min_length=1)
 
 
 # ─── Full report snapshot response ────────────────────────────────────────────
@@ -154,9 +169,13 @@ class ReportResponse(BaseModel):
     period_date: date | None = None
     period_week: int | None = None
     period_month: int | None = None
+    period_quarter: int | None = None
     period_year: int
     metrics: dict
     ai_narrative: dict | None
+    tailored_pattern: str | None = None
+    tailored_action: str | None = None
+    has_execution_data: bool = False
     ai_generated_at: datetime | None
     status: ReportStatus
     created_at: datetime

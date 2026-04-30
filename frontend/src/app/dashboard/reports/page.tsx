@@ -151,7 +151,8 @@ export default function ReportsPage() {
               label: "Execution Score",
               value: `${executionGrade.grade}`,
               subvalue: `${executionScore} / 100`,
-              detail: "A branded grade for your overall execution quality across completion, consistency, alignment, realism, and momentum.",
+              helper: `${executionGrade.label} · ${executionGrade.rangeLabel}`,
+              detail: "A = 85-100, B = 70-84, C = 55-69, D = 40-54, F = 0-39. The grade blends completion, consistency, alignment, realism, and momentum.",
             },
             {
               label: "Completion",
@@ -201,6 +202,11 @@ export default function ReportsPage() {
               <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
                 {metric.subvalue}
               </p>
+              {"helper" in metric && metric.helper && (
+                <p className="text-xs mt-2" style={{ color: "#006c4a" }}>
+                  {metric.helper}
+                </p>
+              )}
             </div>
           ))}
         </div>

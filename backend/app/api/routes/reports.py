@@ -11,6 +11,7 @@ from app.schemas.reports import (
     DailyReportRequest,
     WeeklyReportRequest,
     MonthlyReportRequest,
+    QuarterlyReportRequest,
     YearlyReportRequest,
 )
 from app.services import report_service
@@ -72,5 +73,17 @@ def generate_yearly_report(
     """Generate or regenerate a yearly execution report."""
     try:
         return report_service.generate_yearly_report(db, body.session_id, body.year)
+    except RuntimeError as exc:
+        raise AIGenerationError(str(exc)) from exc
+
+
+@router.post("/quarterly/generate")
+def generate_quarterly_report(
+    body: QuarterlyReportRequest,
+    db: Client = Depends(get_db),
+):
+    """Generate or regenerate a quarterly execution report."""
+    try:
+        return report_service.generate_quarterly_report(db, body.session_id, body.year, body.quarter)
     except RuntimeError as exc:
         raise AIGenerationError(str(exc)) from exc
