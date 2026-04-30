@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import type { YearlyGoal } from "@/lib/types";
-import { getCurrentYear } from "@/lib/mockData";
 
 interface Props {
   open: boolean;
@@ -13,16 +12,18 @@ interface Props {
 }
 
 export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
-  const { categories, addYearlyGoal, updateYearlyGoal, removeYearlyGoal } = useAppStore(
+  const { categories, addYearlyGoal, updateYearlyGoal, removeYearlyGoal, activeDashboardDate } = useAppStore(
     useShallow((state) => ({
       categories: state.categories,
       addYearlyGoal: state.addYearlyGoal,
       updateYearlyGoal: state.updateYearlyGoal,
       removeYearlyGoal: state.removeYearlyGoal,
+      activeDashboardDate: state.activeDashboardDate,
     })),
   );
   const isEdit = !!initialData;
   const titleId = isEdit ? "yearly-goal-edit-title" : "yearly-goal-add-title";
+  const activeDashboardYear = Number(activeDashboardDate.slice(0, 4)) || new Date().getFullYear();
 
   const [title, setCategoryTitle] = useState(initialData?.title ?? "");
   const [categoryId, setCategoryId] = useState(
@@ -71,7 +72,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
         title: title.trim(),
         categoryId,
         ...(description.trim() ? { description: description.trim() } : {}),
-        year: getCurrentYear(),
+        year: activeDashboardYear,
         status: "active",
         progress: 0,
         targetDate: targetDate || undefined,

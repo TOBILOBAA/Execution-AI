@@ -12,6 +12,7 @@ from app.services import execution_service
 import app.db.plans as plans_db
 import app.db.sessions as sessions_db
 from app.utils.date_utils import week_number_for
+from app.utils.period_guards import assert_period_current_daily, get_session_today
 
 router = APIRouter(tags=["Execution"])
 
@@ -45,6 +46,9 @@ def toggle_task_status(
     db: Client = Depends(get_db),
 ):
     """Mark a task (daily priority) complete or incomplete."""
+    item = plans_db.get_daily_priority(db, task_id, session_id)
+    if item:
+        assert_period_current_daily(session_id, date.fromisoformat(item["date"]), db)
     return execution_service.toggle_daily_priority(db, session_id, task_id, completed)
 
 
@@ -56,6 +60,9 @@ def update_task(
     db: Client = Depends(get_db),
 ):
     """Update task fields (title, notes, priority, estimated_minutes, etc.)."""
+    item = plans_db.get_daily_priority(db, task_id, session_id)
+    if item:
+        assert_period_current_daily(session_id, date.fromisoformat(item["date"]), db)
     return execution_service.update_daily_priority_fields(
         db, session_id, task_id, body.model_dump(exclude_unset=True)
     )
@@ -69,6 +76,7 @@ def create_task(
     db: Client = Depends(get_db),
 ):
     """Manually add a task to a daily plan."""
+    assert_period_current_daily(session_id, plan_date, db)
     plan = _ensure_daily_plan_row(db, session_id, plan_date)
     data = {
         **body.model_dump(),
@@ -115,4 +123,6 @@ def toggle_habit_status(
     db: Client = Depends(get_db),
 ):
     """Mark a habit as complete or incomplete for a given date (defaults to today)."""
-    return execution_service.toggle_habit(db, session_id, habit_id, completed, log_date)
+    effective_log_date = log_date or get_session_today(db, session_id)
+    assert_period_current_daily(session_id, effective_log_date, db)
+    return execution_service.toggle_habit(db, session_id, habit_id, completed, effective_log_date)

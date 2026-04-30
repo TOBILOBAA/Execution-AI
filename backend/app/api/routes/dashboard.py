@@ -6,6 +6,7 @@ from supabase import Client
 from app.api.deps import get_db
 from app.services import dashboard_service
 from app.schemas.dashboard import NextDayReviewApproveRequest
+from app.utils.period_guards import get_session_today
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -46,7 +47,7 @@ def approve_next_day_review(
 
     If `plan_date` is omitted, the backend uses the current local date on the server.
     """
-    effective_date = plan_date or date.today()
+    effective_date = plan_date or get_session_today(db, session_id)
     return dashboard_service.approve_next_day_review(
         db,
         session_id,

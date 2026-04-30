@@ -1,7 +1,7 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { use, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { GoalsHierarchyNav } from "@/components/goals/GoalsHierarchyNav";
 import { GoalsInfoTooltip } from "@/components/goals/GoalsInfoTooltip";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
@@ -15,6 +15,7 @@ import {
   getProgressTone,
   listWeeksForYearThroughWeek,
 } from "@/lib/goalsView";
+import { useAppStore } from "@/lib/store";
 
 const STATUS_GUIDE_DETAIL = [
   "Completed: weekly goals already finished.",
@@ -23,8 +24,10 @@ const STATUS_GUIDE_DETAIL = [
   "Not Started: goals with no progress yet.",
 ].join(" ");
 
-function formatHeaderDate() {
-  return new Date().toLocaleDateString("en-US", {
+function formatHeaderDate(todayIso: string) {
+  const date = new Date(`${todayIso}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return todayIso;
+  return date.toLocaleDateString("en-US", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -36,6 +39,8 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
   const { year: yearStr } = use(params);
   const year = parseInt(yearStr, 10);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sessionWeekStartsOn = useAppStore((state) => state.sessionWeekStartsOn);
   const [page, setPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
@@ -43,15 +48,28 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
     ready,
     loading,
     error,
+    today,
     currentMonth,
     currentWeekNumber,
     weeklyGoals,
   } = useGoalsHierarchy(year);
 
-  const liveYear = new Date().getFullYear();
+  const liveYear = Number(today.slice(0, 4));
   const maxSavedWeek = weeklyGoals.reduce((max, goal) => Math.max(max, goal.weekNumber), 0);
   const throughWeek = year === liveYear ? currentWeekNumber : Math.max(currentWeekNumber, maxSavedWeek);
-  const weekSlots = useMemo(() => listWeeksForYearThroughWeek(year, throughWeek), [year, throughWeek]);
+  const weekSlots = useMemo(
+    () => listWeeksForYearThroughWeek(year, throughWeek, sessionWeekStartsOn),
+    [sessionWeekStartsOn, throughWeek, year],
+  );
+  const monthQuery = searchParams?.get("month");
+  const selectedMonth =
+    monthQuery === "all" || !monthQuery
+      ? "all"
+      : Math.max(1, Math.min(12, parseInt(monthQuery, 10) || currentMonth));
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedMonth, sortOrder]);
 
   if (Number.isNaN(year)) {
     return (
@@ -79,7 +97,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
     );
   }
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = today;
 
   const rows = weekSlots.map((slot) => {
     const goals = weeklyGoals.filter((goal) => goal.weekNumber === slot.weekNumber);
@@ -95,7 +113,11 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
     };
   });
 
-  const sortedRows = [...rows].sort((a, b) =>
+  const filteredRows = selectedMonth === "all"
+    ? rows
+    : rows.filter((row) => row.month === selectedMonth);
+
+  const sortedRows = [...filteredRows].sort((a, b) =>
     sortOrder === "desc" ? b.weekNumber - a.weekNumber : a.weekNumber - b.weekNumber,
   );
   const pageSize = 12;
@@ -139,7 +161,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
             style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#1a1f1e" }}
           >
             <span className="material-symbols-outlined text-[17px]">calendar_month</span>
-            <span>{formatHeaderDate()}</span>
+            <span>{formatHeaderDate(today)}</span>
           </div>
         </div>
 

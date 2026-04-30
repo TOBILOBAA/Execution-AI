@@ -35,6 +35,7 @@ export interface YearlyGoal {
   progress: number; // 0–100
   targetDate?: string; // ISO date string
   aiSuggested?: boolean;
+  editable?: boolean;
 }
 
 export interface MonthlyGoal {
@@ -52,6 +53,7 @@ export interface MonthlyGoal {
   priority: PriorityLevel;
   isMain: boolean;
   aiSuggested?: boolean;
+  editable?: boolean;
 }
 
 export interface WeeklyGoal {
@@ -69,6 +71,7 @@ export interface WeeklyGoal {
   goalType?: "tactical" | "operational"; // for secondary goals
   workload?: string;
   aiSuggested?: boolean;
+  editable?: boolean;
 }
 
 export interface DailyPriority {
@@ -84,6 +87,7 @@ export interface DailyPriority {
   isMain: boolean;
   tag?: string;
   aiSuggested?: boolean;
+  editable?: boolean;
 }
 
 // ─── Habits ───────────────────────────────────────────────────────────────────

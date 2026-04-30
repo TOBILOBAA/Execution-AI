@@ -402,7 +402,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
 function mapApiGoalToPriority(p: {
   id: string; title: string; description?: string; date: string;
   status: string; completed: boolean; priority: string; estimated_minutes?: number;
-  is_main: boolean; tag?: string; ai_suggested: boolean; weekly_goal_id?: string;
+  is_main: boolean; tag?: string; ai_suggested: boolean; weekly_goal_id?: string; editable?: boolean;
 }): DailyPriority {
   return {
     id: p.id,
@@ -417,6 +417,7 @@ function mapApiGoalToPriority(p: {
     isMain: p.is_main,
     tag: p.tag,
     aiSuggested: p.ai_suggested,
+    editable: p.editable,
   };
 }
 
@@ -455,6 +456,7 @@ function mapApiYearlyGoalToStore(g: ApiYearlyGoal): YearlyGoal {
     status: g.status as YearlyGoal["status"],
     progress: g.progress,
     aiSuggested: g.ai_suggested,
+    editable: g.editable,
   };
 }
 
@@ -474,6 +476,7 @@ function mapApiMonthlyGoalToStore(g: ApiMonthlyGoal): MonthlyGoal {
     priority: g.priority as MonthlyGoal["priority"],
     isMain: g.is_main,
     aiSuggested: g.ai_suggested,
+    editable: g.editable,
   };
 }
 
@@ -493,6 +496,7 @@ function mapApiWeeklyGoalToStore(g: ApiWeeklyGoal): WeeklyGoal {
     goalType: g.goal_type as WeeklyGoal["goalType"],
     workload: g.workload,
     aiSuggested: g.ai_suggested,
+    editable: g.editable,
   };
 }
 

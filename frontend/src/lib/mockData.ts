@@ -10,6 +10,7 @@ import type {
   MonthReport,
   WeekReport,
 } from "./types";
+import type { WeekStartsOn } from "./types";
 
 // ─── Current context — lazy getters (never captured at import time) ─────────
 //
@@ -18,20 +19,48 @@ import type {
 // module-import froze stale labels and goal-list filters until a hard refresh.
 // Always call the getter — never alias the result to a const at module scope.
 
-function _isoWeek(d: Date): number {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+function _localDateParts(date: Date, timezone?: string) {
+  if (!timezone) {
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+    };
+  }
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? date.getFullYear());
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? date.getMonth() + 1);
+  const day = Number(parts.find((part) => part.type === "day")?.value ?? date.getDate());
+  return { year, month, day };
 }
 
-/** Today as YYYY-MM-DD in the user's local timezone. */
-export function getToday(): string {
+function _weekStartFor(date: Date, weekStartsOn: WeekStartsOn): Date {
+  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const weekday = copy.getUTCDay();
+  const offset = weekStartsOn === "sunday" ? weekday : (weekday + 6) % 7;
+  copy.setUTCDate(copy.getUTCDate() - offset);
+  return copy;
+}
+
+function _weekNumber(date: Date, weekStartsOn: WeekStartsOn): number {
+  const weekOneStart = _weekStartFor(new Date(Date.UTC(date.getUTCFullYear(), 0, 1)), weekStartsOn);
+  const currentWeekStart = _weekStartFor(date, weekStartsOn);
+  return Math.floor((currentWeekStart.getTime() - weekOneStart.getTime()) / 604800000) + 1;
+}
+
+/** Today as YYYY-MM-DD in the user's local timezone or a provided IANA timezone. */
+export function getToday(timezone?: string): string {
   const d = new Date();
-  // Use local components — toISOString() is UTC and shifts ±1 day at boundaries.
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+  const { year, month, day } = _localDateParts(d, timezone);
+  const yyyy = String(year);
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 
@@ -45,9 +74,10 @@ export function getCurrentMonth(): number {
   return new Date().getMonth() + 1;
 }
 
-/** Current ISO week number. */
-export function getCurrentWeek(): number {
-  return _isoWeek(new Date());
+/** Current planning week number for the configured week model. */
+export function getCurrentWeek(weekStartsOn: WeekStartsOn = "monday"): number {
+  const now = new Date();
+  return _weekNumber(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())), weekStartsOn);
 }
 
 // Seed-only snapshots for the static MOCK_* arrays below (intentionally frozen

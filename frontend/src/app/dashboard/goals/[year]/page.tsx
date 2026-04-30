@@ -19,8 +19,10 @@ import { useAppStore } from "@/lib/store";
 
 type FilterKey = "all" | "on-track" | "at-risk" | "not-started" | "completed";
 
-function formatHeaderDate() {
-  return new Date().toLocaleDateString("en-US", {
+function formatHeaderDate(todayIso: string) {
+  const date = new Date(`${todayIso}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return todayIso;
+  return date.toLocaleDateString("en-US", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -42,6 +44,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
     ready,
     loading,
     error,
+    today,
     currentMonth,
     currentWeekNumber,
     yearlyGoals,
@@ -56,6 +59,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
 
   const monthlyByYearly = useMemo(() => groupMonthlyGoalsByYearly(monthlyGoals), [monthlyGoals]);
   const weeklyByMonthly = useMemo(() => groupWeeklyGoalsByMonthly(weeklyGoals), [weeklyGoals]);
+  const yearEditable = year === Number(today.slice(0, 4));
 
   if (Number.isNaN(year)) {
     return (
@@ -89,7 +93,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
       (sum, monthlyGoal) => sum + (weeklyByMonthly.get(monthlyGoal.id)?.length ?? 0),
       0,
     );
-    const state = classifyGoalState(goal);
+    const state = classifyGoalState(goal, today);
     const category = categories.find((item) => item.id === goal.categoryId);
     const firstScheduledMonth = [...linkedMonthly].sort((a, b) => a.month - b.month)[0] ?? null;
     return {
@@ -177,17 +181,28 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
               style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#1a1f1e" }}
             >
               <span className="material-symbols-outlined text-[17px]">calendar_month</span>
-              <span>{formatHeaderDate()}</span>
+              <span>{formatHeaderDate(today)}</span>
             </div>
-            <button
-              type="button"
-              onClick={() => openModal("add-yearly-goal")}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
-              style={{ background: "#006c4a", color: "#fff" }}
-            >
-              <span className="material-symbols-outlined text-[16px]">add</span>
-              Add Goal
-            </button>
+            {yearEditable ? (
+              <button
+                type="button"
+                onClick={() => openModal("add-yearly-goal")}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+                style={{ background: "#006c4a", color: "#fff" }}
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                Add Goal
+              </button>
+            ) : (
+              <span
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+                style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
+                title="This period is locked. You can review it, but only the current period is editable."
+              >
+                <span className="material-symbols-outlined text-[16px]">lock</span>
+                Read only
+              </span>
+            )}
           </div>
         </div>
 
@@ -330,25 +345,38 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
                       </td>
                       <td className="px-4 py-4 align-top">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <GoalCompletionButton
-                            completed={completed}
-                            onClick={() =>
-                              updateYearlyGoal(row.goal.id, {
-                                status: completed ? "active" : "completed",
-                                progress: completed ? Math.min(row.goal.progress, 99) : 100,
-                              })
-                            }
-                          />
-                          <button
-                            type="button"
-                            onClick={() => openModal("edit-yearly-goal", row.goal)}
-                            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold"
-                            style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#4b635b" }}
-                            aria-label="Edit yearly goal"
-                          >
-                            <span className="material-symbols-outlined text-[17px]">edit</span>
-                            Edit
-                          </button>
+                          {row.goal.editable ? (
+                            <>
+                              <GoalCompletionButton
+                                completed={completed}
+                                onClick={() =>
+                                  updateYearlyGoal(row.goal.id, {
+                                    status: completed ? "active" : "completed",
+                                    progress: completed ? Math.min(row.goal.progress, 99) : 100,
+                                  })
+                                }
+                              />
+                              <button
+                                type="button"
+                                onClick={() => openModal("edit-yearly-goal", row.goal)}
+                                className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold"
+                                style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#4b635b" }}
+                                aria-label="Edit yearly goal"
+                              >
+                                <span className="material-symbols-outlined text-[17px]">edit</span>
+                                Edit
+                              </button>
+                            </>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold"
+                              style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
+                              title="This period is locked. You can review it, but only the current period is editable."
+                            >
+                              <span className="material-symbols-outlined text-[17px]">lock</span>
+                              Locked
+                            </span>
+                          )}
                         </div>
                       </td>
                     </tr>
