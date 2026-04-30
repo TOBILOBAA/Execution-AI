@@ -1,4 +1,4 @@
-import type { DailyPriority, GoalStatus, MonthlyGoal, WeeklyGoal, YearlyGoal } from "./types";
+import type { DailyPriority, GoalStatus, MonthlyGoal, WeeklyGoal, WeekStartsOn, YearlyGoal } from "./types";
 
 export const GOALS_MONTH_NAMES = [
   "January",
@@ -133,25 +133,26 @@ export function countGoalStates<T extends GoalLike>(
   );
 }
 
-function startOfIsoWeek(date: Date): Date {
+function startOfWeek(date: Date, weekStartsOn: WeekStartsOn = "monday"): Date {
   const copy = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const day = copy.getUTCDay() || 7;
-  copy.setUTCDate(copy.getUTCDate() + 1 - day);
+  const weekday = copy.getUTCDay();
+  const offset = weekStartsOn === "sunday" ? weekday : (weekday + 6) % 7;
+  copy.setUTCDate(copy.getUTCDate() - offset);
   return copy;
 }
 
-function endOfIsoWeek(date: Date): Date {
-  const start = startOfIsoWeek(date);
+function endOfWeek(date: Date, weekStartsOn: WeekStartsOn = "monday"): Date {
+  const start = startOfWeek(date, weekStartsOn);
   const end = new Date(start);
   end.setUTCDate(start.getUTCDate() + 6);
   return end;
 }
 
-export function getIsoWeekNumber(date: Date): number {
-  const copy = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  copy.setUTCDate(copy.getUTCDate() + 4 - (copy.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(copy.getUTCFullYear(), 0, 1));
-  return Math.ceil((((copy.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+export function getWeekNumber(date: Date, weekStartsOn: WeekStartsOn = "monday"): number {
+  const normalized = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const weekOneStart = startOfWeek(new Date(Date.UTC(normalized.getUTCFullYear(), 0, 1)), weekStartsOn);
+  const currentWeekStart = startOfWeek(normalized, weekStartsOn);
+  return Math.floor((currentWeekStart.getTime() - weekOneStart.getTime()) / 604800000) + 1;
 }
 
 export function formatWeekWindow(start: Date, end: Date): string {
@@ -164,6 +165,15 @@ export function listWeeksForMonth(year: number, month: number): Array<{
   weekNumber: number;
   start: string;
   end: string;
+}>;
+export function listWeeksForMonth(
+  year: number,
+  month: number,
+  weekStartsOn?: WeekStartsOn,
+): Array<{
+  weekNumber: number;
+  start: string;
+  end: string;
 }> {
   const first = new Date(Date.UTC(year, month - 1, 1));
   const last = new Date(Date.UTC(year, month, 0));
@@ -171,11 +181,11 @@ export function listWeeksForMonth(year: number, month: number): Array<{
   const rows: Array<{ weekNumber: number; start: string; end: string }> = [];
 
   for (let day = new Date(first); day <= last; day.setUTCDate(day.getUTCDate() + 1)) {
-    const weekNumber = getIsoWeekNumber(day);
+    const weekNumber = getWeekNumber(day, weekStartsOn);
     if (seen.has(weekNumber)) continue;
     seen.add(weekNumber);
-    const start = startOfIsoWeek(day);
-    const end = endOfIsoWeek(day);
+    const start = startOfWeek(day, weekStartsOn);
+    const end = endOfWeek(day, weekStartsOn);
     rows.push({
       weekNumber,
       start: start.toISOString().slice(0, 10),
@@ -189,10 +199,10 @@ export function listWeeksForMonth(year: number, month: number): Array<{
 export function listWeeksForYearThroughWeek(
   year: number,
   throughWeek: number,
+  weekStartsOn: WeekStartsOn = "monday",
 ): Array<{ weekNumber: number; start: string; end: string; month: number }> {
   const safeWeek = Math.max(1, throughWeek);
-  const weekOneAnchor = new Date(Date.UTC(year, 0, 4));
-  const weekOneStart = startOfIsoWeek(weekOneAnchor);
+  const weekOneStart = startOfWeek(new Date(Date.UTC(year, 0, 1)), weekStartsOn);
 
   return Array.from({ length: safeWeek }, (_, index) => {
     const weekNumber = index + 1;

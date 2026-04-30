@@ -41,6 +41,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
     loading,
     error,
     lastSyncedAt,
+    today,
     currentMonth,
     monthlyGoals,
     weeklyGoals,
@@ -115,6 +116,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
     : 0;
   const mainFocus = monthCards.find((card) => card.mainGoal)?.mainGoal ?? null;
   const currentMonthInQuarter = months.includes(currentMonth);
+  const currentYear = Number(today.slice(0, 4));
   const activeHabits = habits.filter((habit) => habit.active);
 
   return (
@@ -246,6 +248,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
           <div className="space-y-5">
             {monthCards.map((card) => {
               const isCurrent = currentMonthInQuarter && card.month === currentMonth;
+              const monthEditable = year === currentYear && card.month === Number(today.slice(5, 7));
               const missingWeeklyForMonth = card.goals.filter((goal) => (weeklyByMonthly.get(goal.id)?.length ?? 0) === 0).length;
               return (
                 <div
@@ -278,7 +281,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
-                      {card.mainGoal ? (
+                      {card.mainGoal && card.mainGoal.editable ? (
                         <>
                           <GoalCompletionButton
                             completed={card.mainGoal.status === "completed" || card.mainGoal.progress >= 100}
@@ -299,16 +302,25 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                             Edit main goal
                           </button>
                         </>
-                      ) : (
+                      ) : monthEditable ? (
                         <button
                           type="button"
-                          onClick={() => openModal("add-monthly-goal")}
+                          onClick={() => openModal("add-monthly-goal", { yearOverride: year, monthOverride: card.month, defaultIsMain: true })}
                           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
                           style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
                         >
                           <span className="material-symbols-outlined text-[16px]">add</span>
                           Add monthly goal
                         </button>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+                          style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
+                          title="This period is locked. You can review it, but only the current period is editable."
+                        >
+                          <span className="material-symbols-outlined text-[16px]">lock</span>
+                          Locked
+                        </span>
                       )}
                     </div>
                   </div>
@@ -378,23 +390,36 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                               </p>
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <GoalCompletionButton
-                                completed={goal.status === "completed" || goal.progress >= 100}
-                                onClick={() =>
-                                  updateMonthlyGoal(goal.id, {
-                                    status: goal.status === "completed" || goal.progress >= 100 ? "active" : "completed",
-                                    progress: goal.status === "completed" || goal.progress >= 100 ? Math.min(goal.progress, 99) : 100,
-                                  })
-                                }
-                              />
-                              <button
-                                type="button"
-                                onClick={() => openModal("edit-monthly-goal", goal)}
-                                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                                style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
-                              >
-                                <span className="material-symbols-outlined text-[16px]" style={{ color: "#6b7c75" }}>edit</span>
-                              </button>
+                              {goal.editable ? (
+                                <>
+                                  <GoalCompletionButton
+                                    completed={goal.status === "completed" || goal.progress >= 100}
+                                    onClick={() =>
+                                      updateMonthlyGoal(goal.id, {
+                                        status: goal.status === "completed" || goal.progress >= 100 ? "active" : "completed",
+                                        progress: goal.status === "completed" || goal.progress >= 100 ? Math.min(goal.progress, 99) : 100,
+                                      })
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => openModal("edit-monthly-goal", goal)}
+                                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                                    style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+                                  >
+                                    <span className="material-symbols-outlined text-[16px]" style={{ color: "#6b7c75" }}>edit</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
+                                  title="This period is locked. You can review it, but only the current period is editable."
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">lock</span>
+                                  Locked
+                                </span>
+                              )}
                             </div>
                           </div>
                         ))}

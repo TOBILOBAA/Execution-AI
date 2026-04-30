@@ -114,6 +114,7 @@ export interface ApiYearlyGoal {
   progress: number;
   target_date?: string;
   ai_suggested: boolean;
+  editable?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -135,6 +136,7 @@ export interface ApiMonthlyGoal {
   target_date?: string;
   workload?: string;
   ai_suggested: boolean;
+  editable?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -156,6 +158,7 @@ export interface ApiWeeklyGoal {
   goal_type?: string;
   workload?: string;
   ai_suggested: boolean;
+  editable?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -176,6 +179,7 @@ export interface ApiDailyPriority {
   is_main: boolean;
   tag?: string;
   ai_suggested: boolean;
+  editable?: boolean;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -556,6 +560,9 @@ export const dashboardApi = {
 // ─── Goals Hierarchy ──────────────────────────────────────────────────────────
 
 export const goalsApi = {
+  years: (sessionId: string) =>
+    get<number[]>(`/goals/years/${sessionId}`),
+
   hierarchy: (
     sessionId: string,
     opts?: { year?: number; weekNumber?: number },

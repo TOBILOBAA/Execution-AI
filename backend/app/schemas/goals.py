@@ -54,6 +54,7 @@ class YearlyGoalResponse(BaseModel):
     progress: int
     target_date: str | None = None
     ai_suggested: bool
+    editable: bool | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -61,7 +62,7 @@ class YearlyGoalResponse(BaseModel):
 # ─── Monthly Goals ────────────────────────────────────────────────────────────
 
 class MonthlyGoalCreate(BaseModel):
-    yearly_goal_id: UUID | None = None
+    yearly_goal_id: UUID
     category_id: UUID | None = None
     title: str = Field(..., min_length=1, max_length=300)
     description: str | None = None
@@ -72,6 +73,7 @@ class MonthlyGoalCreate(BaseModel):
 
 
 class MonthlyGoalUpdate(BaseModel):
+    yearly_goal_id: UUID | None = None
     title: str | None = None
     description: str | None = None
     status: GoalStatus | None = None
@@ -100,6 +102,7 @@ class MonthlyGoalResponse(BaseModel):
     target_date: str | None = None
     workload: str | None = None
     ai_suggested: bool
+    editable: bool | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -107,7 +110,7 @@ class MonthlyGoalResponse(BaseModel):
 # ─── Weekly Goals ─────────────────────────────────────────────────────────────
 
 class WeeklyGoalCreate(BaseModel):
-    monthly_goal_id: UUID | None = None
+    monthly_goal_id: UUID
     title: str = Field(..., min_length=1, max_length=300)
     description: str | None = None
     is_main: bool = False
@@ -145,6 +148,7 @@ class WeeklyGoalResponse(BaseModel):
     goal_type: str | None = None
     workload: str | None = None
     ai_suggested: bool
+    editable: bool | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -152,7 +156,7 @@ class WeeklyGoalResponse(BaseModel):
 # ─── Daily Priorities ─────────────────────────────────────────────────────────
 
 class DailyPriorityCreate(BaseModel):
-    weekly_goal_id: UUID | None = None
+    weekly_goal_id: UUID
     title: str = Field(..., min_length=1, max_length=300)
     description: str | None = None
     priority: PriorityLevel = PriorityLevel.medium
@@ -190,6 +194,7 @@ class DailyPriorityResponse(BaseModel):
     is_main: bool
     tag: str | None
     ai_suggested: bool
+    editable: bool | None = None
     notes: str | None
     created_at: datetime
     updated_at: datetime

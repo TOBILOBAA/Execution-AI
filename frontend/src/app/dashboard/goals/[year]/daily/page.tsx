@@ -21,8 +21,10 @@ const STATUS_GUIDE_DETAIL = [
   "Not Started: priorities with no progress yet.",
 ].join(" ");
 
-function formatHeaderDate() {
-  return new Date().toLocaleDateString("en-US", {
+function formatHeaderDate(todayIso: string) {
+  const date = new Date(`${todayIso}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return todayIso;
+  return date.toLocaleDateString("en-US", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -47,7 +49,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     yearDailyPriorities,
   } = useGoalsHierarchy(year);
 
-  const liveYear = new Date().getFullYear();
+  const liveYear = Number(today.slice(0, 4));
   const throughDate =
     year === liveYear
       ? today
@@ -140,7 +142,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
             style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#1a1f1e" }}
           >
             <span className="material-symbols-outlined text-[17px]">calendar_month</span>
-            <span>{formatHeaderDate()}</span>
+            <span>{formatHeaderDate(today)}</span>
           </div>
         </div>
 

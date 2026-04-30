@@ -1,22 +1,27 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
+import { goalsApi } from "@/lib/api";
 import { averageProgress, countGoalStates, getQuarterFromMonth } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
 
-function weeksRemainingInQuarter(month: number) {
+function weeksRemainingInQuarter(todayIso: string, month: number) {
+  const [year, , day] = todayIso.split("-").map(Number);
   const quarter = getQuarterFromMonth(month);
   const quarterEndMonth = quarter * 3;
-  const now = new Date();
-  const quarterEnd = new Date(now.getFullYear(), quarterEndMonth, 0);
+  const quarterEnd = new Date(Date.UTC(year, quarterEndMonth, 0));
+  const now = new Date(Date.UTC(year, month - 1, day));
   const diff = quarterEnd.getTime() - now.getTime();
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24 * 7)));
 }
 
-function formatHeaderDate() {
-  return new Date().toLocaleDateString("en-US", {
+function formatHeaderDate(todayIso: string) {
+  const date = new Date(`${todayIso}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return todayIso;
+  return date.toLocaleDateString("en-US", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -26,9 +31,13 @@ function formatHeaderDate() {
 
 export default function GoalsOverviewPage() {
   const router = useRouter();
-  const currentYear = new Date().getFullYear();
   const metrics = useAppStore((state) => state.metrics);
   const allKnownYearlyGoals = useAppStore((state) => state.yearlyGoals);
+  const sessionId = useAppStore((state) => state.sessionId);
+  const backendReady = useAppStore((state) => state.backendReady);
+  const activeDashboardDate = useAppStore((state) => state.activeDashboardDate);
+  const [currentYear, setCurrentYear] = useState<number>(() => Number(activeDashboardDate.slice(0, 4)) || new Date().getFullYear());
+  const [knownYears, setKnownYears] = useState<number[]>([currentYear]);
   const {
     ready,
     loading,
@@ -37,6 +46,31 @@ export default function GoalsOverviewPage() {
     today,
     yearlyGoals,
   } = useGoalsHierarchy(currentYear);
+
+  useEffect(() => {
+    const sessionYear = Number(today.slice(0, 4));
+    if (sessionYear && sessionYear !== currentYear) {
+      setCurrentYear(sessionYear);
+    }
+  }, [currentYear, today]);
+
+  useEffect(() => {
+    if (!sessionId || !backendReady) {
+      setKnownYears([currentYear]);
+      return;
+    }
+    let cancelled = false;
+    void goalsApi.years(sessionId)
+      .then((years) => {
+        if (!cancelled && years.length > 0) setKnownYears(years);
+      })
+      .catch(() => {
+        if (!cancelled) setKnownYears([currentYear]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [backendReady, currentYear, sessionId]);
 
   if (!ready || loading) {
     return (
@@ -55,11 +89,12 @@ export default function GoalsOverviewPage() {
     : 0;
   const streak = metrics.executionStreak;
   const currentQuarter = getQuarterFromMonth(currentMonth);
-  const remainingWeeks = weeksRemainingInQuarter(currentMonth);
+  const remainingWeeks = weeksRemainingInQuarter(today, currentMonth);
   const progressRing = `conic-gradient(#0b7a53 ${averageYearProgress * 3.6}deg, #edf3ef 0deg)`;
 
-  const knownYears = [...new Set([...allKnownYearlyGoals.map((goal) => goal.year), currentYear])].sort((a, b) => b - a);
-  const pastYears = knownYears.filter((year) => year !== currentYear);
+  const fallbackYears = [...new Set([...allKnownYearlyGoals.map((goal) => goal.year), currentYear])].sort((a, b) => b - a);
+  const effectiveYears = knownYears.length > 0 ? knownYears : fallbackYears;
+  const pastYears = effectiveYears.filter((year) => year !== currentYear);
 
   const yearRows = pastYears.map((year) => {
     const goals = allKnownYearlyGoals.filter((goal) => goal.year === year);
@@ -91,7 +126,7 @@ export default function GoalsOverviewPage() {
 
         <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "#1a1f1e" }}>
           <span className="material-symbols-outlined text-[18px]">calendar_month</span>
-          <span>{formatHeaderDate()}</span>
+          <span>{formatHeaderDate(today)}</span>
         </div>
       </div>
 

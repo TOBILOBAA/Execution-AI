@@ -22,6 +22,7 @@ import type {
   WeeklyGoal,
   YearlyGoal,
 } from "@/lib/types";
+import { getWeekNumber } from "@/lib/goalsView";
 
 type GoalsSlice = Pick<
   ReturnType<typeof useAppStore.getState>,
@@ -78,6 +79,7 @@ function mapApiYearlyGoal(goal: ApiYearlyGoal): YearlyGoal {
     progress: goal.progress,
     targetDate: goal.target_date,
     aiSuggested: goal.ai_suggested,
+    editable: goal.editable,
   };
 }
 
@@ -97,6 +99,7 @@ function mapApiMonthlyGoal(goal: ApiMonthlyGoal): MonthlyGoal {
     priority: goal.priority as MonthlyGoal["priority"],
     isMain: goal.is_main,
     aiSuggested: goal.ai_suggested,
+    editable: goal.editable,
   };
 }
 
@@ -116,6 +119,7 @@ function mapApiWeeklyGoal(goal: ApiWeeklyGoal): WeeklyGoal {
     goalType: goal.goal_type as WeeklyGoal["goalType"],
     workload: goal.workload,
     aiSuggested: goal.ai_suggested,
+    editable: goal.editable,
   };
 }
 
@@ -133,6 +137,7 @@ function mapApiDailyPriority(priority: ApiDailyPriority): DailyPriority {
     isMain: priority.is_main,
     tag: priority.tag,
     aiSuggested: priority.ai_suggested,
+    editable: priority.editable,
   };
 }
 
@@ -206,6 +211,7 @@ export function useGoalsHierarchy(
 ): UseGoalsHierarchyResult {
   const requestedWeekNumber = opts?.weekNumber;
   const sessionId = useAppStore((state): GoalsSlice["sessionId"] => state.sessionId);
+  const sessionWeekStartsOn = useAppStore((state) => state.sessionWeekStartsOn);
   const backendReady = useAppStore((state): GoalsSlice["backendReady"] => state.backendReady);
   const workspaceHydrating = useAppStore((state): GoalsSlice["workspaceHydrating"] => state.workspaceHydrating);
   const storeCategories = useAppStore((state): GoalsSlice["categories"] => state.categories);
@@ -214,13 +220,19 @@ export function useGoalsHierarchy(
   const storeWeeklyGoals = useAppStore((state): GoalsSlice["weeklyGoals"] => state.weeklyGoals);
   const storeDailyPriorities = useAppStore((state): GoalsSlice["dailyPriorities"] => state.dailyPriorities);
   const storeHabits = useAppStore((state): GoalsSlice["habits"] => state.habits);
+  const activeDashboardDate = useAppStore((state) => state.activeDashboardDate);
+
+  const fallbackDate = useMemo(() => {
+    const parsed = new Date(`${activeDashboardDate}T12:00:00`);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }, [activeDashboardDate]);
 
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const [today, setToday] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth() + 1);
+  const [today, setToday] = useState<string>(activeDashboardDate);
+  const [currentMonth, setCurrentMonth] = useState<number>(fallbackDate.getMonth() + 1);
   const [currentWeekNumber, setCurrentWeekNumber] = useState<number | null>(null);
   const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(requestedWeekNumber ?? null);
   const [selectedWeekStart, setSelectedWeekStart] = useState<string | null>(null);
@@ -271,12 +283,8 @@ export function useGoalsHierarchy(
   }, [refresh]);
 
   const currentWeekFallback = useMemo(() => {
-    const now = new Date();
-    const date = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-    return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  }, []);
+    return getWeekNumber(fallbackDate, sessionWeekStartsOn);
+  }, [fallbackDate, sessionWeekStartsOn]);
 
   const effectiveCurrentWeek = currentWeekNumber ?? currentWeekFallback;
   const effectiveSelectedWeek = selectedWeekNumber ?? requestedWeekNumber ?? null;

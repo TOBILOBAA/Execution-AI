@@ -14,6 +14,11 @@ class ConflictError(HTTPException):
         super().__init__(status_code=status.HTTP_409_CONFLICT, detail=message)
 
 
+class PeriodLockedError(HTTPException):
+    def __init__(self, message: str = "This period is locked."):
+        super().__init__(status_code=status.HTTP_409_CONFLICT, detail=message)
+
+
 class ValidationError(HTTPException):
     def __init__(self, message: str):
         super().__init__(

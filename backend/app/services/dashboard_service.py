@@ -27,11 +27,19 @@ from app.utils.metrics import (
 import app.db.plans as plans_db
 import app.db.habits as habits_db
 import app.db.yearly_goals as yg_db
+from app.utils.period_guards import (
+    get_session_temporal_context,
+    get_session_today,
+    is_current_daily_period,
+    is_current_monthly_period,
+    is_current_weekly_period,
+    is_current_yearly_period,
+)
 
 
 def get_dashboard(db: Client, session_id: UUID, plan_date: date | None = None) -> dict:
     week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
-    ctx = get_temporal_context(reference_date=plan_date, week_starts_on=week_starts_on)
+    ctx = get_session_temporal_context(db, session_id, plan_date)
 
     # ── Today's data ─────────────────────────────────────────────────────────
     today = ctx.today
@@ -135,6 +143,15 @@ def get_dashboard(db: Client, session_id: UUID, plan_date: date | None = None) -
     monthly_goals_total = len(monthly_goals)
     monthly_goals_done = sum(1 for g in monthly_goals if g.get("status") == "completed")
 
+    for item in all_priorities:
+        item["editable"] = is_current_daily_period(db, session_id, date.fromisoformat(item["date"]))
+    for goal in weekly_goals:
+        goal["editable"] = is_current_weekly_period(db, session_id, int(goal["year"]), int(goal["week_number"]))
+    for goal in monthly_goals:
+        goal["editable"] = is_current_monthly_period(db, session_id, int(goal["year"]), int(goal["month"]))
+    for goal in yearly_goals:
+        goal["editable"] = is_current_yearly_period(db, session_id, int(goal["year"]))
+
     # ── Assemble response ─────────────────────────────────────────────────────
     return {
         "session_id": str(session_id),
@@ -178,7 +195,7 @@ def get_next_day_review(db: Client, session_id: UUID, plan_date: date | None = N
       plus the active weekly goals to propose a clean starting point.
     """
     week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
-    ctx = get_temporal_context(week_starts_on=week_starts_on)
+    ctx = get_session_temporal_context(db, session_id)
     target_date = plan_date or ctx.today
     source_date = target_date - timedelta(days=1)
     target_week_number = week_number_for(target_date, week_starts_on)
