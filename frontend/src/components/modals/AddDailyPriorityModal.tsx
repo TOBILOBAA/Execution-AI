@@ -56,6 +56,8 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
   const availableWeeklyGoals = weeklyGoals.filter(
     (goal) => goal.year === referenceWeekYear && goal.weekNumber === referenceWeekNumber,
   );
+  const mainPriorityCapReached =
+    !initialData && dailyPriorities.filter((priority) => priority.date === activeDashboardDate).length >= 3;
 
   useEffect(() => {
     if (!open) return;
@@ -98,6 +100,10 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
   };
 
   const handleSaveSingle = () => {
+    if (mainPriorityCapReached) {
+      setSingleError("You can only save up to 3 main priorities for this day.");
+      return;
+    }
     if (!singleTitle.trim()) { setSingleError("Priority title is required"); return; }
     if (!singleWeeklyGoalId) { setSingleError("Pick a weekly goal first"); return; }
     if (initialData) {
@@ -269,6 +275,11 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
                   onBlur={(e) => (e.currentTarget.style.border = singleError ? "1.5px solid #ef4444" : "1.5px solid rgba(0,0,0,0.07)")}
                 />
                 {singleError && <p className="text-xs" style={{ color: "#ef4444" }}>{singleError}</p>}
+                {mainPriorityCapReached && !singleError && (
+                  <p className="text-xs" style={{ color: "#a25a5a" }}>
+                    This day already has 3 main priorities. Remove or edit one before adding another.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
@@ -317,11 +328,24 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
           </button>
           <button
             onClick={isBatchEdit ? handleSaveBatch : handleSaveSingle}
-            disabled={!isBatchEdit && !singleWeeklyGoalId}
+            disabled={!isBatchEdit && (!singleWeeklyGoalId || mainPriorityCapReached)}
             className="px-7 py-3 rounded-xl text-sm font-bold text-white transition-all"
-            style={{ background: "#006c4a", boxShadow: "0 2px 10px rgba(0,108,74,0.20)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#004d38")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#006c4a")}
+            style={{
+              background: !isBatchEdit && (!singleWeeklyGoalId || mainPriorityCapReached) ? "#8a9e97" : "#006c4a",
+              boxShadow: !isBatchEdit && (!singleWeeklyGoalId || mainPriorityCapReached)
+                ? "none"
+                : "0 2px 10px rgba(0,108,74,0.20)",
+            }}
+            onMouseEnter={(e) => {
+              if (!(!isBatchEdit && (!singleWeeklyGoalId || mainPriorityCapReached))) {
+                e.currentTarget.style.background = "#004d38";
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = !isBatchEdit && (!singleWeeklyGoalId || mainPriorityCapReached)
+                ? "#8a9e97"
+                : "#006c4a";
+            }}
           >
             {isBatchEdit ? "Save Changes" : initialData ? "Save Priority" : "Add Priority"}
           </button>

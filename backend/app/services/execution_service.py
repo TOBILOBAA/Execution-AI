@@ -16,6 +16,7 @@ from app.core.exceptions import NotFoundError, PlanLockedError
 from app.core.logging import logger
 import app.db.plans as plans_db
 import app.db.habits as habits_db
+import app.db.reports as reports_db
 import app.db.yearly_goals as yg_db
 from app.utils.period_guards import assert_period_current_daily, assert_period_current_monthly, assert_period_current_weekly, assert_period_current_yearly, get_session_today
 
@@ -39,6 +40,7 @@ def toggle_daily_priority(
     }
 
     result = plans_db.update_daily_priority(db, priority_id, session_id, updates)
+    reports_db.mark_daily_report_stale(db, session_id, date.fromisoformat(item["date"]))
     logger.info(
         "priority_toggled",
         session_id=str(session_id),

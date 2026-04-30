@@ -38,6 +38,7 @@ import app.db.plans as plans_db
 import app.db.habits as habits_db
 import app.db.reports as reports_db
 import app.db.categories as categories_db
+from app.utils.period_guards import get_session_today
 
 
 def _report_identity(
@@ -503,6 +504,18 @@ def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
 
 def list_reports(db: Client, session_id: UUID) -> list[dict]:
     existing_reports = reports_db.list_reports(db, session_id)
+    today = get_session_today(db, session_id)
+    refreshed_reports: list[dict] = []
+    for report in existing_reports:
+        if (
+            report.get("report_type") == "daily"
+            and report.get("period_date") == today.isoformat()
+            and report.get("status") == "stale"
+        ):
+            refreshed_reports.append(generate_daily_report(db, session_id, today))
+        else:
+            refreshed_reports.append(report)
+    existing_reports = refreshed_reports
     generated_reports = ensure_historical_reports(db, session_id, existing_reports)
     merged = {
         _report_identity(

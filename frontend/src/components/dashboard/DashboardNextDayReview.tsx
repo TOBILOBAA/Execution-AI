@@ -543,6 +543,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     weeklyGoals,
     monthlyGoals,
     habits,
+    syncError,
     loadDashboard,
     addHabit,
     updateHabit,
@@ -556,6 +557,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
       weeklyGoals: state.weeklyGoals,
       monthlyGoals: state.monthlyGoals,
       habits: state.habits,
+      syncError: state.syncError,
       loadDashboard: state.loadDashboard,
       addHabit: state.addHabit,
       updateHabit: state.updateHabit,
@@ -670,7 +672,11 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
       const result = await generateDailyPlan(currentReview.today);
       const draft = result?.draft as DailyAIDraft | undefined;
       if (!draft) {
-        setError("AI could not generate a daily plan right now. You can still build the plan manually.");
+        setError(
+          syncError && syncError.includes("Daily plan (AI generate)")
+            ? syncError
+            : "AI could not generate a daily plan right now. You can still build the plan manually.",
+        );
         return;
       }
       const aiPriorities = (draft.top_priorities ?? [])

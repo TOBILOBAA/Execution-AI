@@ -8,9 +8,9 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ModalController } from "@/components/modals/ModalController";
-import { DashboardKickoffModal } from "@/components/dashboard/DashboardKickoffModal";
-import { DashboardEveningReminder } from "@/components/dashboard/DashboardEveningReminder";
-import { DashboardNextDayReview } from "@/components/dashboard/DashboardNextDayReview";
+import { KickoffModal } from "@/components/dashboard/KickoffModal";
+import { CompletionModal } from "@/components/dashboard/CompletionModal";
+import { PlanTomorrowModal } from "@/components/dashboard/PlanTomorrowModal";
 import { DashboardPeriodReviewPrompts } from "@/components/dashboard/DashboardPeriodReviewPrompts";
 import { SyncErrorBanner } from "@/components/SyncErrorBanner";
 import { useBackendSync } from "@/hooks/useBackendSync";
@@ -71,9 +71,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <BottomNav />
       </div>
       <ModalController />
-      <DashboardKickoffModal />
-      <DashboardEveningReminder />
-      <DashboardNextDayReview />
+      <KickoffModal />
+      <CompletionModal />
+      <PlanTomorrowModal />
       <Suspense fallback={null}>
         <DashboardPeriodReviewPrompts />
       </Suspense>

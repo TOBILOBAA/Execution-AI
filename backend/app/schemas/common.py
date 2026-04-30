@@ -45,3 +45,4 @@ class ReportStatus(str, Enum):
     generating = "generating"
     ready = "ready"
     failed = "failed"
+    stale = "stale"

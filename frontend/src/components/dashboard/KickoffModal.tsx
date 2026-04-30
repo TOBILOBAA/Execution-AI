@@ -4,8 +4,8 @@ import { useAppStore } from "@/lib/store";
 import { getToday } from "@/lib/mockData";
 import { DailyKickoffModal } from "./DailyKickoffModal";
 
-/** Renders post-onboarding kickoff on every dashboard route so `kickoffPending` can always be cleared. */
-export function DashboardKickoffModal() {
+/** Canonical kickoff state-machine entrypoint for the home funnel. */
+export function KickoffModal() {
   const dailyPriorities = useAppStore((s) => s.dailyPriorities);
   const secondaryTasks = useAppStore((s) => s.secondaryTasks);
   const habits = useAppStore((s) => s.habits);
