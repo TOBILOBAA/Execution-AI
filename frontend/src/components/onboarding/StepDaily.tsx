@@ -431,6 +431,16 @@ export function StepDaily({ onFinish, onBack }: Props) {
 
   const handleFinish = async () => {
     setLeaveError(null);
+    const todayPrioritiesCount = dailyPriorities.filter(p => p.date === getToday()).length;
+    const todayTasksCount = secondaryTasks.filter(t => t.date === getToday()).length;
+    if (todayPrioritiesCount !== 1) {
+      setLeaveError("You need exactly one main priority for today before continuing.");
+      return;
+    }
+    if (todayTasksCount > 3) {
+      setLeaveError("You can have at most three secondary tasks for today.");
+      return;
+    }
     const ok = await syncDailySetupToServer(getToday());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {

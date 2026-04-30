@@ -17,12 +17,13 @@ import { useBackendSync } from "@/hooks/useBackendSync";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { currentUser, onboardingComplete, authReady, workspaceHydrating } = useAppStore(
+  const { currentUser, onboardingComplete, authReady, workspaceHydrating, backendReady } = useAppStore(
     useShallow((state) => ({
       currentUser: state.currentUser,
       onboardingComplete: state.onboardingComplete,
       authReady: state.authReady,
       workspaceHydrating: state.workspaceHydrating,
+      backendReady: state.backendReady,
     })),
   );
 
@@ -35,12 +36,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.replace("/auth");
       return;
     }
+    if (!backendReady) {
+      // Backend session is not linked to an auth user — user hasn't completed sign-up flow on server.
+      router.replace("/auth");
+      return;
+    }
     if (!onboardingComplete) {
       router.replace("/onboarding");
     }
-  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, router]);
+  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
 
-  if (!authReady || workspaceHydrating || !currentUser || !onboardingComplete) {
+  if (!authReady || workspaceHydrating || !currentUser || !backendReady || !onboardingComplete) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
         <div className="flex flex-col items-center gap-3">

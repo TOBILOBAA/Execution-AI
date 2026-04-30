@@ -458,6 +458,16 @@ export function StepWeekly({ onNext, onBack }: Props) {
 
   const handleLeaveWeekly = async () => {
     setLeaveError(null);
+    const mainGoalsCount = weeklyGoals.filter(g => g.year === getCurrentYear() && g.weekNumber === getCurrentWeek() && g.isMain).length;
+    const secondaryGoalsCount = weeklyGoals.filter(g => g.year === getCurrentYear() && g.weekNumber === getCurrentWeek() && !g.isMain).length;
+    if (mainGoalsCount !== 1) {
+      setLeaveError("You need exactly one main goal for the week before continuing.");
+      return;
+    }
+    if (secondaryGoalsCount > 3) {
+      setLeaveError("You can have at most three secondary goals for the week.");
+      return;
+    }
     const ok = await syncWeeklyGoalsToServer(getCurrentYear(), getCurrentWeek());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {

@@ -81,6 +81,7 @@ export function StepYearly({ onNext }: Props) {
   const [modalCatId, setModalCatId] = useState<string>("");
   const [showCatModal, setShowCatModal] = useState(false);
   const [leaveBusy, setLeaveBusy] = useState(false);
+  const [leaveError, setLeaveError] = useState("");
 
   const fallbackCategoryId = categories[0]?.id ?? "";
   const getGoalsForCat = (catId: string) =>
@@ -122,6 +123,11 @@ export function StepYearly({ onNext }: Props) {
   const isEditMode = goalModal !== null && typeof goalModal !== "string";
 
   const handleLeaveYearly = async () => {
+    if (yearlyGoals.filter(g => g.year === CURRENT_YEAR).length < 1) {
+      setLeaveError("Add at least one yearly goal before continuing.");
+      return;
+    }
+    setLeaveError("");
     setLeaveBusy(true);
     const ok = await syncYearlyGoalsToServer();
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
@@ -192,7 +198,10 @@ export function StepYearly({ onNext }: Props) {
         </div>
 
         {/* Next Step */}
-        <div className="flex justify-end pt-8 pb-2">
+        <div className="flex flex-col items-end gap-2 pt-8 pb-2">
+          {leaveError && (
+            <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>{leaveError}</p>
+          )}
           <button
             type="button"
             disabled={leaveBusy}

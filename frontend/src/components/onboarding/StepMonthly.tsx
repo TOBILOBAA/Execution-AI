@@ -293,6 +293,16 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
   const handleLeaveMonthly = async () => {
     setLeaveError(null);
+    const mainGoalsCount = monthlyGoals.filter(g => g.month === getCurrentMonth() && g.year === getCurrentYear() && g.isMain).length;
+    const secondaryGoalsCount = monthlyGoals.filter(g => g.month === getCurrentMonth() && g.year === getCurrentYear() && !g.isMain).length;
+    if (mainGoalsCount !== 1) {
+      setLeaveError("You need exactly one main goal for the month before continuing.");
+      return;
+    }
+    if (secondaryGoalsCount > 2) {
+      setLeaveError("You can have at most two secondary goals for the month.");
+      return;
+    }
     const ok = await syncMonthlyGoalsToServer(getCurrentYear(), getCurrentMonth());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
