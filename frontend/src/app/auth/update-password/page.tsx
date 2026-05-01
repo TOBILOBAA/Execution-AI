@@ -16,6 +16,7 @@ export default function UpdatePasswordPage() {
   const [error, setError] = useState(() => (getSupabaseBrowser() ? "" : "Supabase is not configured."));
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [status, setStatus] = useState("Checking your reset link…");
 
   useEffect(() => {
     const sb = getSupabaseBrowser();
@@ -23,10 +24,16 @@ export default function UpdatePasswordPage() {
       return;
     }
     const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") setReady(true);
+      if (event === "PASSWORD_RECOVERY") {
+        setReady(true);
+        setStatus("Reset link verified.");
+      }
     });
     void sb.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true);
+      if (session) {
+        setReady(true);
+        setStatus("Reset link verified.");
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -45,14 +52,17 @@ export default function UpdatePasswordPage() {
     const sb = getSupabaseBrowser();
     if (!sb) return;
     setLoading(true);
+    setStatus("Updating your password…");
     const { error: upErr } = await sb.auth.updateUser({ password });
     setLoading(false);
     if (upErr) {
+      setStatus("Reset link verified.");
       setError(upErr.message);
       return;
     }
     await useAppStore.getState().hydrateAuthFromSupabase();
     const done = useAppStore.getState().onboardingComplete;
+    setStatus("Redirecting…");
     router.replace(done ? "/dashboard" : "/onboarding");
   };
 
@@ -69,8 +79,14 @@ export default function UpdatePasswordPage() {
       <div className="bg-white rounded-3xl w-full p-8 shadow-sm" style={{ maxWidth: 420, border: "1.5px solid rgba(0,0,0,0.07)" }}>
         <h1 className="font-headline font-extrabold text-xl mb-1" style={{ color: "#1a1f1e" }}>Set a new password.</h1>
         <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
-          {ready ? "Use 8 characters or more." : "Verifying reset link…"}
+          {ready ? "Use 8 characters or more." : status}
         </p>
+        {!ready && (
+          <div className="mb-5 flex items-center gap-2 text-xs font-semibold" style={{ color: "#6b7c75" }}>
+            <span className="h-2.5 w-2.5 rounded-full animate-pulse" style={{ background: "#006c4a" }} />
+            {status}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{ color: "#6b7c75" }}>New password</label>

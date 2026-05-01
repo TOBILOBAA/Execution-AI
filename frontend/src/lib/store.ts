@@ -119,6 +119,8 @@ interface AppState {
   backendReady: boolean;
   workspaceHydrating: boolean;
   dashboardLoading: boolean;
+  reportsLoading: boolean;
+  reportsHydrated: boolean;
   /** User id that owns the persisted workspace below; changes when a different account signs in. */
   workspaceOwnerId: string | null;
   /** Last server save / sync failure (not persisted). */
@@ -151,7 +153,7 @@ interface AppState {
 
   // ── Backend sync ─────────────────────────────────────────────────────────────
   loadDashboard: (planDate?: string) => Promise<void>;
-  syncReports: () => Promise<void>;
+  syncReports: (force?: boolean) => Promise<ApiReport[] | null>;
 
   // ── CRUD operations ─────────────────────────────────────────────────────────
   addCategory: (cat: Omit<Category, "id">) => void;
@@ -262,7 +264,16 @@ const pendingSecondaryTaskCreates = new Map<string, Promise<void>>();
 const pendingHabitCreates = new Map<string, Promise<void>>();
 const pendingDashboardLoads = new Map<string, Promise<void>>();
 const pendingCategoryLoads = new Map<string, Promise<void>>();
+const pendingReportsLoads = new Map<string, Promise<ApiReport[] | null>>();
 const loadedCategoriesForSession = new Set<string>();
+
+function upsertReport(reports: ApiReport[], incoming: ApiReport): ApiReport[] {
+  const index = reports.findIndex((report) => report.id === incoming.id);
+  if (index === -1) {
+    return [incoming, ...reports];
+  }
+  return reports.map((report, reportIndex) => (reportIndex === index ? incoming : report));
+}
 
 function trackPendingCreate(
   pendingMap: Map<string, Promise<void>>,
@@ -421,6 +432,8 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
       habits: [],
       metrics: EMPTY_DASHBOARD_METRICS,
       reports: [],
+      reportsLoading: false,
+      reportsHydrated: false,
       sessionWeekStartsOn: "monday",
     });
   } else if (prevOwner === null) {
@@ -435,6 +448,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
     set({
       backendReady: false,
       dashboardLoading: false,
+      reportsLoading: false,
       syncError: formatApiError("Start backend session", e),
       workspaceHydrating: false,
     });
@@ -769,6 +783,8 @@ export const useAppStore = create<AppState>()(
             habits: [],
             metrics: EMPTY_DASHBOARD_METRICS,
             reports: [],
+            reportsLoading: false,
+            reportsHydrated: false,
             pendingRecaps: [],
             syncError: null,
             authReady: true,
@@ -835,6 +851,8 @@ export const useAppStore = create<AppState>()(
           habits: [],
           metrics: EMPTY_DASHBOARD_METRICS,
           reports: [],
+          reportsLoading: false,
+          reportsHydrated: false,
           pendingRecaps: [],
           syncError: null,
           authReady: true,
@@ -929,6 +947,8 @@ export const useAppStore = create<AppState>()(
             habits: [],
             metrics: EMPTY_DASHBOARD_METRICS,
             reports: [],
+            reportsLoading: false,
+            reportsHydrated: false,
             pendingRecaps: [],
             syncError: null,
             authReady: true,
@@ -955,6 +975,8 @@ export const useAppStore = create<AppState>()(
           activeDashboardDate: getToday(),
           backendReady: false,
           dashboardLoading: false,
+          reportsLoading: false,
+          reportsHydrated: false,
           workspaceHydrating: false,
           syncError: null,
           pendingRecaps: [],
@@ -965,7 +987,13 @@ export const useAppStore = create<AppState>()(
       hydrateAuthFromSupabase: async () => {
         const sb = getSupabaseBrowser();
         if (!sb || isAuthLocalOnly()) {
-          set({ authReady: true, workspaceHydrating: false, dashboardLoading: false });
+          set({
+            authReady: true,
+            workspaceHydrating: false,
+            dashboardLoading: false,
+            reportsLoading: false,
+            reportsHydrated: false,
+          });
           return;
         }
         const {
@@ -979,6 +1007,8 @@ export const useAppStore = create<AppState>()(
             activeDashboardDate: getToday(),
             backendReady: false,
             dashboardLoading: false,
+            reportsLoading: false,
+            reportsHydrated: false,
             workspaceHydrating: false,
             syncError: null,
             authReady: true,
@@ -1087,6 +1117,8 @@ export const useAppStore = create<AppState>()(
       },
       dismissKickoff: () => set({ kickoffPending: false }),
       dashboardLoading: false,
+      reportsLoading: false,
+      reportsHydrated: false,
 
       // ── Initial data (production: empty until user + server populate) ───────
       categories: DEFAULT_CATEGORIES,
@@ -1140,15 +1172,37 @@ export const useAppStore = create<AppState>()(
         return request;
       },
 
-      syncReports: async () => {
-        const { sessionId } = get();
-        if (!sessionId) return;
-        try {
-          const reports = await reportsApi.list(sessionId);
-          set({ reports, syncError: null });
-        } catch (e) {
-          set({ syncError: formatApiError("Load reports list", e) });
+      syncReports: async (force = false) => {
+        const { sessionId, reportsHydrated, reports } = get();
+        if (!sessionId) return null;
+        if (!force && reportsHydrated) {
+          return reports;
         }
+        const existing = pendingReportsLoads.get(sessionId);
+        if (existing) {
+          return existing;
+        }
+
+        set({ reportsLoading: true });
+        const request = reportsApi
+          .list(sessionId)
+          .then((serverReports) => {
+            set({ reports: serverReports, reportsHydrated: true, syncError: null });
+            return serverReports;
+          })
+          .catch((e) => {
+            set({ syncError: formatApiError("Load reports list", e) });
+            return null;
+          })
+          .finally(() => {
+            if (pendingReportsLoads.get(sessionId) === request) {
+              pendingReportsLoads.delete(sessionId);
+            }
+            set({ reportsLoading: pendingReportsLoads.size > 0 });
+          });
+
+        pendingReportsLoads.set(sessionId, request);
+        return request;
       },
 
       // ── Categories ──────────────────────────────────────────────────────────
@@ -2154,7 +2208,7 @@ export const useAppStore = create<AppState>()(
         if (!sessionId) return null;
         try {
           const r = await reportsApi.generateDaily(sessionId, date);
-          set({ syncError: null });
+          set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Daily report (AI generate)", e) });
@@ -2166,7 +2220,7 @@ export const useAppStore = create<AppState>()(
         if (!sessionId) return null;
         try {
           const r = await reportsApi.generateWeekly(sessionId, year, weekNumber);
-          set({ syncError: null });
+          set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Weekly report (AI generate)", e) });
@@ -2178,7 +2232,7 @@ export const useAppStore = create<AppState>()(
         if (!sessionId) return null;
         try {
           const r = await reportsApi.generateMonthly(sessionId, year, month);
-          set({ syncError: null });
+          set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Monthly report (AI generate)", e) });
@@ -2190,7 +2244,7 @@ export const useAppStore = create<AppState>()(
         if (!sessionId) return null;
         try {
           const r = await reportsApi.generateQuarterly(sessionId, year, quarter);
-          set({ syncError: null });
+          set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Quarterly report (AI generate)", e) });
@@ -2202,7 +2256,7 @@ export const useAppStore = create<AppState>()(
         if (!sessionId) return null;
         try {
           const r = await reportsApi.generateYearly(sessionId, year);
-          set({ syncError: null });
+          set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Yearly report (AI generate)", e) });

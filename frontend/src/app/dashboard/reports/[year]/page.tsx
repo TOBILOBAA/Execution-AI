@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { reportsApi, type ApiReport } from "@/lib/api";
+import { type ApiReport } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { MetricInfoTooltip } from "@/components/reports/MetricInfoTooltip";
@@ -260,17 +260,31 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   const { year: yearStr } = use(params);
   const year = parseInt(yearStr, 10);
   const router = useRouter();
-  const { sessionId, monthlyGoals, openModal, generateQuarterlyReport, generateDailyReport } = useAppStore(
+  const {
+    sessionId,
+    monthlyGoals,
+    reports,
+    reportsLoading,
+    reportsHydrated,
+    syncReports,
+    syncError,
+    openModal,
+    generateQuarterlyReport,
+    generateDailyReport,
+  } = useAppStore(
     useShallow((state) => ({
       sessionId: state.sessionId,
       monthlyGoals: state.monthlyGoals,
+      reports: state.reports,
+      reportsLoading: state.reportsLoading,
+      reportsHydrated: state.reportsHydrated,
+      syncReports: state.syncReports,
+      syncError: state.syncError,
       openModal: state.openModal,
       generateQuarterlyReport: state.generateQuarterlyReport,
       generateDailyReport: state.generateDailyReport,
     })),
   );
-  const [reports, setReports] = useState<ApiReport[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [generatingQuarter, setGeneratingQuarter] = useState<number | null>(null);
   const [generatingDailyDate, setGeneratingDailyDate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ArchiveTab>("overview");
@@ -278,29 +292,13 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
 
   useEffect(() => {
     if (!sessionId || Number.isNaN(year)) return;
+    void syncReports();
+  }, [sessionId, syncReports, year]);
 
-    let cancelled = false;
-    reportsApi
-      .list(sessionId)
-      .then((data) => {
-        if (!cancelled) {
-          setReports(data);
-          setError(null);
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Could not load reports.");
-          setReports([]);
-        }
-      });
+  const error = syncError?.includes("Load reports list") ? syncError : null;
+  const showInitialLoading = Boolean(sessionId && !reportsHydrated && reportsLoading && reports.length === 0);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId, year]);
-
-  const snapshot = useMemo(() => getYearSnapshot(reports ?? [], year), [reports, year]);
+  const snapshot = useMemo(() => getYearSnapshot(reports, year), [reports, year]);
   const yearlyReport = snapshot?.yearly ?? null;
   const monthlyReports = useMemo(() => snapshot?.monthly ?? [], [snapshot]);
   const monthlyRates = useMemo(
@@ -310,18 +308,17 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
         .filter((rate): rate is number => rate !== null),
     [monthlyReports],
   );
-  const quarterSnapshots = useMemo(() => listQuarterSnapshots(reports ?? [], year), [reports, year]);
-  const weeklyReports = useMemo(() => getWeeklyReportsForYear(reports ?? [], year), [reports, year]);
-  const dailyReports = useMemo(() => getDailyReportsForYear(reports ?? [], year), [reports, year]);
+  const quarterSnapshots = useMemo(() => listQuarterSnapshots(reports, year), [reports, year]);
+  const weeklyReports = useMemo(() => getWeeklyReportsForYear(reports, year), [reports, year]);
+  const dailyReports = useMemo(() => getDailyReportsForYear(reports, year), [reports, year]);
 
   const handleQuarterlyGemini = useCallback(
     async (quarterNum: 1 | 2 | 3 | 4, snapshot: QuarterReportSnapshot) => {
       setGeneratingQuarter(quarterNum);
       try {
         const saved = await generateQuarterlyReport(year, quarterNum);
-        if (!saved || !sessionId) return;
-        const list = await reportsApi.list(sessionId);
-        setReports(list);
+        if (!saved) return;
+        const list = (await syncReports(true)) ?? useAppStore.getState().reports;
         const persisted =
           list.find(
             (r) =>
@@ -358,7 +355,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
         setGeneratingQuarter(null);
       }
     },
-    [year, sessionId, generateQuarterlyReport, openModal],
+    [year, generateQuarterlyReport, openModal, syncReports],
   );
 
   const openQuarterlyModalLocal = useCallback(
@@ -398,14 +395,13 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
       setGeneratingDailyDate(dateIso);
       try {
         const saved = await generateDailyReport(dateIso);
-        if (!saved || !sessionId) return;
-        const list = await reportsApi.list(sessionId);
-        setReports(list);
+        if (!saved) return;
+        void syncReports(true);
       } finally {
         setGeneratingDailyDate(null);
       }
     },
-    [sessionId, generateDailyReport],
+    [generateDailyReport, syncReports],
   );
 
   if (Number.isNaN(year)) {
@@ -674,7 +670,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
               Overview shows the full behavioral lowdown. The remaining tabs separate quarterly, monthly, weekly, and daily archives.
             </p>
           </div>
-          {reports === null && (
+          {showInitialLoading && (
             <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c4d0cb" }}>
               Loading
             </span>
@@ -696,7 +692,35 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
             Sign in and create a backend session to view your report history.
           </p>
         </div>
-      ) : !hasAnyData && reports !== null ? (
+      ) : showInitialLoading ? (
+        <div className="space-y-6">
+          <div className="rounded-2xl p-2" style={{ background: "#f4f6f4", border: "1px solid rgba(0,0,0,0.05)" }}>
+            <div className="flex flex-wrap gap-2">
+              {REPORT_TABS.map((tab) => (
+                <div
+                  key={tab.id}
+                  className="h-10 rounded-xl"
+                  style={{ width: tab.label.length * 10 + 48, background: tab.id === "overview" ? "#fff" : "#eef3f0" }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div
+                key={index}
+                className="rounded-2xl p-4 animate-pulse"
+                style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.07)" }}
+              >
+                <div className="h-3 w-24 rounded-full" style={{ background: "#ecf1ee" }} />
+                <div className="mt-4 h-8 w-16 rounded-full" style={{ background: "#f0f4f2" }} />
+                <div className="mt-3 h-3 w-full rounded-full" style={{ background: "#f3f6f4" }} />
+                <div className="mt-2 h-3 w-3/4 rounded-full" style={{ background: "#f3f6f4" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : !hasAnyData ? (
         <div className="rounded-2xl p-6 bg-white" style={{ border: "1.5px dashed rgba(0,108,74,0.25)" }}>
           <p className="text-sm" style={{ color: "#8a9e97" }}>
             No yearly, quarterly, monthly, weekly, or daily report history exists for {year} yet.
@@ -1213,15 +1237,6 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 }
 
                 const tone = archiveCardTone(quarter.snapshot.avgCompletion);
-                const nextQuarter = quarter.quarter === 4 ? 1 : (quarter.quarter + 1) as 1 | 2 | 3 | 4;
-                const nextYear = quarter.quarter === 4 ? year + 1 : year;
-                const quarterNarrative = buildQuarterReviewNarrative(quarter.snapshot, {
-                  year,
-                  quarter: quarter.quarter as 1 | 2 | 3 | 4,
-                  nextQuarter,
-                  nextYear,
-                });
-
                 return (
                   <div
                     key={quarter.label}
