@@ -259,6 +259,9 @@ const pendingWeeklyGoalCreates = new Map<string, Promise<void>>();
 const pendingDailyPriorityCreates = new Map<string, Promise<void>>();
 const pendingSecondaryTaskCreates = new Map<string, Promise<void>>();
 const pendingHabitCreates = new Map<string, Promise<void>>();
+const pendingDashboardLoads = new Map<string, Promise<void>>();
+const pendingCategoryLoads = new Map<string, Promise<void>>();
+const loadedCategoriesForSession = new Set<string>();
 
 function trackPendingCreate(
   pendingMap: Map<string, Promise<void>>,
@@ -283,6 +286,54 @@ async function waitForPendingCreates(
   if (pending.length) {
     await Promise.all(pending);
   }
+}
+
+function applyServerCategories(
+  categories: Awaited<ReturnType<typeof categoriesApi.list>>,
+  set: (partial: Partial<AppState>) => void,
+  get: () => AppState,
+) {
+  const state = get();
+  if (categories.length === 0 && !state.onboardingComplete && state.categories.length > 0) {
+    return;
+  }
+  set({
+    categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon, color: c.color })),
+  });
+}
+
+async function loadCategoriesOnce(
+  sessionId: string,
+  set: (partial: Partial<AppState>) => void,
+  get: () => AppState,
+  opts?: { force?: boolean },
+): Promise<void> {
+  const force = opts?.force ?? false;
+  if (!force && loadedCategoriesForSession.has(sessionId)) {
+    return;
+  }
+  const existing = pendingCategoryLoads.get(sessionId);
+  if (existing) {
+    return existing;
+  }
+
+  const request = categoriesApi
+    .list(sessionId)
+    .then((categories) => {
+      applyServerCategories(categories, set, get);
+      loadedCategoriesForSession.add(sessionId);
+    })
+    .catch((e) => {
+      set({ syncError: formatApiError("Load categories", e) });
+    })
+    .finally(() => {
+      if (pendingCategoryLoads.get(sessionId) === request) {
+        pendingCategoryLoads.delete(sessionId);
+      }
+    });
+
+  pendingCategoryLoads.set(sessionId, request);
+  return request;
 }
 
 // Pre-seeded demo user
@@ -388,9 +439,16 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
     return;
   }
 
-  // Fan out: onboarding metadata + dashboard payload land in parallel.
+  // Fetch categories once per session in the background. They are needed across
+  // onboarding + dashboard, but they should not be attached to every dashboard
+  // hydration request.
+  const categoriesPromise = loadCategoriesOnce(sid, set, get);
+
+  // Fetch onboarding metadata first; only preload dashboard data immediately
+  // when we already know the user is past onboarding.
   const onboardingPromise = pullOnboardingFromServer(sid);
-  const dashboardPromise = get().loadDashboard();
+  let dashboardPromise: Promise<void> | null =
+    preservedOnboardingDone && !switchingAccount ? get().loadDashboard() : null;
 
   // Apply onboarding metadata as soon as it lands so the router can decide
   // /dashboard vs /onboarding without waiting for the dashboard payload.
@@ -406,6 +464,9 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
         onboardingStep: step,
         sessionWeekStartsOn: ob.week_starts_on,
       });
+      if (done && !dashboardPromise) {
+        dashboardPromise = get().loadDashboard();
+      }
       if (done && !ob.onboarding_done) {
         void sessionsApi
           .update(sid, { onboarding_done: true, onboarding_step: 4 })
@@ -421,11 +482,15 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   }
 
   try {
-    await dashboardPromise;
-    if (!get().syncError) set({ syncError: null });
+    if (dashboardPromise) {
+      await dashboardPromise;
+      if (!get().syncError) set({ syncError: null });
+    }
   } catch (e) {
     set({ syncError: formatApiError("Load dashboard from server", e) });
   }
+
+  void categoriesPromise;
 }
 
 // ─── Mapper helpers: API response → frontend types ────────────────────────────
@@ -1035,31 +1100,37 @@ export const useAppStore = create<AppState>()(
         const { sessionId, activeDashboardDate } = get();
         if (!sessionId) return;
         const requestedDate = planDate ?? activeDashboardDate;
-        try {
-          const [data, categories] = await Promise.all([
-            dashboardApi.get(sessionId, requestedDate),
-            categoriesApi.list(sessionId).catch(() => null),
-          ]);
-          set((s) => ({
-            ...s,
-            ...(
-              categories
-                ? categories.length > 0 || s.onboardingComplete || s.categories.length === 0
-                  ? { categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon, color: c.color })) }
-                  : {}
-                : {}
-            ),
-            ...mapDashboardToStore(data, {
-              yearlyGoals: s.yearlyGoals,
-              monthlyGoals: s.monthlyGoals,
-              weeklyGoals: s.weeklyGoals,
-            }),
-            activeDashboardDate: data.today,
-            syncError: null,
-          }));
-        } catch (e) {
-          set({ syncError: formatApiError("Load dashboard from server", e) });
+        const requestKey = `${sessionId}:${requestedDate}`;
+        const existing = pendingDashboardLoads.get(requestKey);
+        if (existing) {
+          return existing;
         }
+
+        const request = dashboardApi
+          .get(sessionId, requestedDate)
+          .then((data) => {
+            set((s) => ({
+              ...s,
+              ...mapDashboardToStore(data, {
+                yearlyGoals: s.yearlyGoals,
+                monthlyGoals: s.monthlyGoals,
+                weeklyGoals: s.weeklyGoals,
+              }),
+              activeDashboardDate: data.today,
+              syncError: null,
+            }));
+          })
+          .catch((e) => {
+            set({ syncError: formatApiError("Load dashboard from server", e) });
+          })
+          .finally(() => {
+            if (pendingDashboardLoads.get(requestKey) === request) {
+              pendingDashboardLoads.delete(requestKey);
+            }
+          });
+
+        pendingDashboardLoads.set(requestKey, request);
+        return request;
       },
 
       syncReports: async () => {
