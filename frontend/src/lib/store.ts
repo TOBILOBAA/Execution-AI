@@ -1102,6 +1102,7 @@ export const useAppStore = create<AppState>()(
           try {
             await sessionsApi.update(sessionId, { onboarding_done: true, onboarding_step: 4 });
             set({ onboardingComplete: true, kickoffPending: true, onboardingStep: 4, syncError: null });
+            await get().loadDashboard(get().activeDashboardDate);
             return true;
           } catch (e) {
             set({ syncError: formatApiError("Complete onboarding on server", e) });
@@ -1959,6 +1960,7 @@ export const useAppStore = create<AppState>()(
         }
 
         set({ syncError: null });
+        await get().loadDashboard(planDate);
         return true;
       },
 
