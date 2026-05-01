@@ -12,6 +12,7 @@ import { AddHabitModal } from "@/components/onboarding/AddHabitModal";
 import {
   startOfLocalWeek,
 } from "@/lib/reportAvailability";
+import { getWeekNumber } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
 import type { DashboardRecapEntry, FoundationalHabit, MonthlyGoal, WeeklyGoal, YearlyGoal } from "@/lib/types";
 
@@ -73,9 +74,9 @@ function formatTargetDate(value?: string) {
 }
 
 function weekNumberForDate(ref: Date, weekStartsOn: "sunday" | "monday") {
-  const weekOneStart = startOfLocalWeek(new Date(ref.getFullYear(), 0, 1), weekStartsOn);
-  const weekStart = startOfLocalWeek(ref, weekStartsOn);
-  return Math.floor((weekStart.getTime() - weekOneStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  // Use the UTC-safe shared helper so DST boundaries do not shift week numbers
+  // inside the review modal flow.
+  return getWeekNumber(ref, weekStartsOn);
 }
 
 function getWeekContext(now: Date, weekStartsOn: "sunday" | "monday") {
