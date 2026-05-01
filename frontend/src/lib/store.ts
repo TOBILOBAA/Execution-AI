@@ -153,6 +153,7 @@ interface AppState {
 
   // ── Backend sync ─────────────────────────────────────────────────────────────
   loadDashboard: (planDate?: string) => Promise<void>;
+  loadCurrentDashboard: () => Promise<void>;
   syncReports: (force?: boolean) => Promise<ApiReport[] | null>;
 
   // ── CRUD operations ─────────────────────────────────────────────────────────
@@ -348,6 +349,46 @@ async function loadCategoriesOnce(
   return request;
 }
 
+async function loadDashboardIntoStore(
+  sessionId: string,
+  requestedDate: string | undefined,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+): Promise<void> {
+  const requestKey = `${sessionId}:${requestedDate ?? "__current__"}`;
+  const existing = pendingDashboardLoads.get(requestKey);
+  if (existing) {
+    return existing;
+  }
+
+  set({ dashboardLoading: true });
+  const request = dashboardApi
+    .get(sessionId, requestedDate)
+    .then((data) => {
+      set((s) => ({
+        ...s,
+        ...mapDashboardToStore(data, {
+          yearlyGoals: s.yearlyGoals,
+          monthlyGoals: s.monthlyGoals,
+          weeklyGoals: s.weeklyGoals,
+        }),
+        activeDashboardDate: data.today,
+        syncError: null,
+      }));
+    })
+    .catch((e) => {
+      set({ syncError: formatApiError("Load dashboard from server", e) });
+    })
+    .finally(() => {
+      if (pendingDashboardLoads.get(requestKey) === request) {
+        pendingDashboardLoads.delete(requestKey);
+      }
+      set({ dashboardLoading: pendingDashboardLoads.size > 0 });
+    });
+
+  pendingDashboardLoads.set(requestKey, request);
+  return request;
+}
+
 // Pre-seeded demo user
 const DEMO_USER: StoredUser = {
   id: "user-demo",
@@ -464,7 +505,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   // when we already know the user is past onboarding.
   const onboardingPromise = pullOnboardingFromServer(sid);
   let dashboardPromise: Promise<void> | null =
-    preservedOnboardingDone && !switchingAccount ? get().loadDashboard() : null;
+    preservedOnboardingDone && !switchingAccount ? get().loadCurrentDashboard() : null;
 
   // Apply onboarding metadata as soon as it lands so the router can decide
   // /dashboard vs /onboarding without waiting for the dashboard payload.
@@ -481,7 +522,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
         sessionWeekStartsOn: ob.week_starts_on,
       });
       if (done && !dashboardPromise) {
-        dashboardPromise = get().loadDashboard();
+        dashboardPromise = get().loadCurrentDashboard();
       }
       if (done && !ob.onboarding_done) {
         void sessionsApi
@@ -1070,7 +1111,7 @@ export const useAppStore = create<AppState>()(
         try {
           const session = await sessionsApi.update(sessionId, { week_starts_on: value });
           set({ sessionWeekStartsOn: session.week_starts_on, syncError: null });
-          await get().loadDashboard();
+          await get().loadCurrentDashboard();
         } catch (e) {
           set({
             sessionWeekStartsOn,
@@ -1102,7 +1143,7 @@ export const useAppStore = create<AppState>()(
           try {
             await sessionsApi.update(sessionId, { onboarding_done: true, onboarding_step: 4 });
             set({ onboardingComplete: true, kickoffPending: true, onboardingStep: 4, syncError: null });
-            await get().loadDashboard(get().activeDashboardDate);
+            await get().loadCurrentDashboard();
             return true;
           } catch (e) {
             set({ syncError: formatApiError("Complete onboarding on server", e) });
@@ -1137,40 +1178,13 @@ export const useAppStore = create<AppState>()(
       loadDashboard: async (planDate) => {
         const { sessionId, activeDashboardDate } = get();
         if (!sessionId) return;
-        const requestedDate = planDate ?? activeDashboardDate;
-        const requestKey = `${sessionId}:${requestedDate}`;
-        const existing = pendingDashboardLoads.get(requestKey);
-        if (existing) {
-          return existing;
-        }
+        return loadDashboardIntoStore(sessionId, planDate ?? activeDashboardDate, set);
+      },
 
-        set({ dashboardLoading: true });
-        const request = dashboardApi
-          .get(sessionId, requestedDate)
-          .then((data) => {
-            set((s) => ({
-              ...s,
-              ...mapDashboardToStore(data, {
-                yearlyGoals: s.yearlyGoals,
-                monthlyGoals: s.monthlyGoals,
-                weeklyGoals: s.weeklyGoals,
-              }),
-              activeDashboardDate: data.today,
-              syncError: null,
-            }));
-          })
-          .catch((e) => {
-            set({ syncError: formatApiError("Load dashboard from server", e) });
-          })
-          .finally(() => {
-            if (pendingDashboardLoads.get(requestKey) === request) {
-              pendingDashboardLoads.delete(requestKey);
-            }
-            set({ dashboardLoading: pendingDashboardLoads.size > 0 });
-          });
-
-        pendingDashboardLoads.set(requestKey, request);
-        return request;
+      loadCurrentDashboard: async () => {
+        const { sessionId } = get();
+        if (!sessionId) return;
+        return loadDashboardIntoStore(sessionId, undefined, set);
       },
 
       syncReports: async (force = false) => {

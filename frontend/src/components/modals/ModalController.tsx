@@ -12,6 +12,7 @@ import { ManageHabitsModal } from "./ManageHabitsModal";
 import { ReportModal } from "./ReportModal";
 import { getWeekNumber } from "@/lib/goalsView";
 import type { Category, DailyPriority, MonthlyGoal, WeeklyGoal } from "@/lib/types";
+import { DEFAULT_CATEGORIES } from "@/lib/mockData";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -86,6 +87,7 @@ function ConnectedDailyPriorityModal({
       updateDailyPriority: state.updateDailyPriority,
     })),
   );
+  const effectiveCategories = categories.length ? categories : DEFAULT_CATEGORIES;
 
   const referenceDate = initialData?.date ?? activeDashboardDate;
   const referenceYear = Number(referenceDate.slice(0, 4)) || new Date().getFullYear();
@@ -106,12 +108,12 @@ function ConnectedDailyPriorityModal({
 
   return (
     <PlanningDailyPriorityModal
-      categories={categories}
+      categories={effectiveCategories}
       weeklyGoals={availableWeeklyGoals}
       initialTitle={initialData?.title}
       initialCategoryId={
-        inferCategoryId(initialData ?? {}, categories, availableWeeklyGoals, relevantMonthlyGoals) ??
-        categories.find((category) => category.name === initialData?.tag)?.id
+        inferCategoryId(initialData ?? {}, effectiveCategories, availableWeeklyGoals, relevantMonthlyGoals) ??
+        effectiveCategories.find((category) => category.name === initialData?.tag)?.id
       }
       initialWeeklyGoalId={inferWeeklyGoalId(initialData ?? {}, availableWeeklyGoals) ?? initialData?.weeklyGoalId}
       initialAllocation={initialData?.estimatedMinutes ?? 30}
@@ -123,7 +125,7 @@ function ConnectedDailyPriorityModal({
             description,
             estimatedMinutes,
             weeklyGoalId,
-            tag: tag ?? categories.find((category) => category.id === categoryId)?.name,
+            tag: tag ?? effectiveCategories.find((category) => category.id === categoryId)?.name,
           });
         } else {
           addDailyPriority({
@@ -131,7 +133,7 @@ function ConnectedDailyPriorityModal({
             description,
             estimatedMinutes,
             weeklyGoalId,
-            tag: tag ?? categories.find((category) => category.id === categoryId)?.name,
+            tag: tag ?? effectiveCategories.find((category) => category.id === categoryId)?.name,
             isMain: true,
             date: activeDashboardDate,
             status: "active",
@@ -172,6 +174,7 @@ function ConnectedSecondaryTaskModal({
       updateSecondaryTask: state.updateSecondaryTask,
     })),
   );
+  const effectiveCategories = categories.length ? categories : DEFAULT_CATEGORIES;
 
   const referenceDate = initialData?.date ?? activeDashboardDate;
   const referenceYear = Number(referenceDate.slice(0, 4)) || new Date().getFullYear();
@@ -192,12 +195,12 @@ function ConnectedSecondaryTaskModal({
 
   return (
     <PlanningSecondaryTaskModal
-      categories={categories}
+      categories={effectiveCategories}
       weeklyGoals={availableWeeklyGoals}
       initialTitle={initialData?.title}
       initialCategoryId={
-        inferCategoryId(initialData ?? {}, categories, availableWeeklyGoals, relevantMonthlyGoals) ??
-        categories.find((category) => category.name === initialData?.tag)?.id
+        inferCategoryId(initialData ?? {}, effectiveCategories, availableWeeklyGoals, relevantMonthlyGoals) ??
+        effectiveCategories.find((category) => category.name === initialData?.tag)?.id
       }
       initialWeeklyGoalId={inferWeeklyGoalId(initialData ?? {}, availableWeeklyGoals) ?? initialData?.weeklyGoalId}
       initialAllocation={initialData?.estimatedMinutes ?? 30}
@@ -209,7 +212,7 @@ function ConnectedSecondaryTaskModal({
             description,
             estimatedMinutes,
             weeklyGoalId,
-            tag: tag ?? categories.find((category) => category.id === categoryId)?.name,
+            tag: tag ?? effectiveCategories.find((category) => category.id === categoryId)?.name,
           });
         } else {
           addSecondaryTask({
@@ -217,7 +220,7 @@ function ConnectedSecondaryTaskModal({
             description,
             estimatedMinutes,
             weeklyGoalId,
-            tag: tag ?? categories.find((category) => category.id === categoryId)?.name,
+            tag: tag ?? effectiveCategories.find((category) => category.id === categoryId)?.name,
             isMain: false,
             date: activeDashboardDate,
             status: "active",
