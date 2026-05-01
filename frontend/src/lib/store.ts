@@ -46,24 +46,6 @@ import type { User } from "@supabase/supabase-js";
 import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudSupabaseConfigured } from "./authMode";
 import { getWeekNumber, listWeeksForYearThroughWeek } from "./goalsView";
 
-/** Align onboarding UI with the workspace row in Supabase (source of truth when logged in). */
-async function pullOnboardingFromServer(sessionId: string): Promise<{
-  onboarding_step: number;
-  onboarding_done: boolean;
-  week_starts_on: WeekStartsOn;
-} | null> {
-  try {
-    const row = await sessionsApi.get(sessionId);
-    return {
-      onboarding_step: row.onboarding_step,
-      onboarding_done: row.onboarding_done,
-      week_starts_on: row.week_starts_on,
-    };
-  } catch {
-    return null;
-  }
-}
-
 // ── Auth types ─────────────────────────────────────────────────────────────────
 export interface AuthUser { id: string; name: string; email: string; plan: string }
 interface StoredUser { id: string; name: string; email: string; password: string; plan: string }
@@ -482,8 +464,19 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   }
 
   let sid: string;
+  let onboardingSnapshot: {
+    onboarding_step: number;
+    onboarding_done: boolean;
+    week_starts_on: WeekStartsOn;
+  };
   try {
-    sid = await ensureBackendSession(userId);
+    const session = await ensureBackendSession(userId);
+    sid = session.id;
+    onboardingSnapshot = {
+      onboarding_step: session.onboarding_step,
+      onboarding_done: session.onboarding_done,
+      week_starts_on: session.week_starts_on,
+    };
     set({ sessionId: sid, backendReady: true });
   } catch (e) {
     set({
@@ -503,7 +496,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
 
   // Fetch onboarding metadata first; only preload dashboard data immediately
   // when we already know the user is past onboarding.
-  const onboardingPromise = pullOnboardingFromServer(sid);
+  const onboardingPromise = Promise.resolve(onboardingSnapshot);
   let dashboardPromise: Promise<void> | null =
     preservedOnboardingDone && !switchingAccount ? get().loadCurrentDashboard() : null;
 
