@@ -1065,6 +1065,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function openMainGoalEditor() {
+    setPlanSectionUnlocked(true);
     if (activeCandidate.type === "weekly") {
       setGoalEditor({ type: "weekly", defaultIsMain: true });
       return;
@@ -1075,6 +1076,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function openSupportingGoalEditor() {
+    setPlanSectionUnlocked(true);
     if (activeCandidate.type === "weekly") {
       setGoalEditor({ type: "weekly", defaultIsMain: false });
       return;
@@ -1085,6 +1087,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function openExistingGoalEditor(goal: WeeklyGoal | MonthlyGoal) {
+    setPlanSectionUnlocked(true);
     if (activeCandidate.type === "weekly") {
       setGoalEditor({ type: "weekly", goal: goal as WeeklyGoal });
       return;
@@ -1167,6 +1170,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function handleHabitSubmit(name: string, icon: string, categoryId: string, frequency: FoundationalHabit["frequency"]) {
+    setPlanSectionUnlocked(true);
     if (habitEditor?.habit) {
       updateHabit(habitEditor.habit.id, { name, icon, categoryId: categoryId || undefined, frequency, active: true });
       setSavedNotice("Foundational habit updated.");
@@ -1400,7 +1404,7 @@ export function DashboardPeriodReviewPrompts() {
           )}
           <p className="text-xs leading-relaxed" style={{ color: "#6f817a" }}>
             {activeCandidate.type === "weekly" || activeCandidate.type === "monthly"
-              ? "Generate an AI draft first—the result appears directly under the button. After that you’ll see board goals and foundational habits so AI stays clearly separate."
+              ? "Start however you want: generate a draft or build the period manually. Either way, the saved board stays separate from the AI draft."
               : "This handoff stays light on purpose: check whether the structure already exists, then open the full board for deeper shaping."}
           </p>
         </div>
@@ -1409,35 +1413,79 @@ export function DashboardPeriodReviewPrompts() {
       {(activeCandidate.type === "weekly" || activeCandidate.type === "monthly") && (
         <SectionCard
           eyebrow="AI support"
-          title={planSectionUnlocked ? "Generate another draft anytime" : "Start with AI"}
+          title={planSectionUnlocked ? "AI support and manual start" : "Choose how to start"}
           description={
             planSectionUnlocked && existingMainGoals.length + existingSecondaryGoals.length > 0
               ? "Saving selected AI items will replace the current saved plan for this period."
-              : "Generate a draft for main and supporting goals. Nothing else opens until then."
+              : "Generate a draft or start adding goals manually right here."
           }
           tone="soft"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {planSectionUnlocked ? (
-              <div className="flex min-w-0 flex-wrap gap-2">
-                <InfoPill>{existingMainGoals.length} main</InfoPill>
-                <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
-              </div>
-            ) : (
-              <p className="min-w-0 flex-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
-                Your draft will show up here as soon as generation finishes.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={handleGenerateDraft}
-              disabled={planLoading}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
-              style={{ background: "#006c4a" }}
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {planSectionUnlocked ? (
+                <div className="flex min-w-0 flex-wrap gap-2">
+                  <InfoPill>{existingMainGoals.length} main</InfoPill>
+                  <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
+                  <InfoPill>{activeHabits.length} habit{activeHabits.length === 1 ? "" : "s"}</InfoPill>
+                </div>
+              ) : (
+                <p className="min-w-0 flex-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
+                  Your AI draft appears here if you generate one. Manual adds also open the saved plan below.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleGenerateDraft}
+                disabled={planLoading}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+                style={{ background: "#006c4a" }}
+              >
+                {planLoading ? "Generating..." : aiButtonLabel(activeCandidate.type)}
+                <span className="material-symbols-outlined text-[15px]">auto_awesome</span>
+              </button>
+            </div>
+
+            <div
+              className="rounded-2xl p-4"
+              style={{ background: "white", border: "1px solid rgba(0,0,0,0.07)" }}
             >
-              {planLoading ? "Generating..." : aiButtonLabel(activeCandidate.type)}
-              <span className="material-symbols-outlined text-[15px]">auto_awesome</span>
-            </button>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                Start manually
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={openMainGoalEditor}
+                  className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                  style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Add main goal
+                </button>
+                <button
+                  type="button"
+                  onClick={openSupportingGoalEditor}
+                  className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                  style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Add supporting
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlanSectionUnlocked(true);
+                    setHabitEditor({});
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                  style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Add habit
+                </button>
+              </div>
+            </div>
           </div>
         </SectionCard>
       )}
@@ -1715,12 +1763,12 @@ export function DashboardPeriodReviewPrompts() {
       {activeCandidate.type === "yearly" && (
         <>
           <SectionCard
-            eyebrow="Board preview"
-            title="Check the next year backbone"
-            description="The yearly view should feel clear before it gets broken into months."
+            eyebrow="Start manually"
+            title="Shape next year directly"
+            description="You should be able to start the next year immediately without hunting for the add action."
             tone="soft"
           >
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 <InfoPill>{activeYearContext?.nextYear ?? yearContext.nextYear}</InfoPill>
                 <InfoPill>{nextYearGoals.length} saved goal{nextYearGoals.length === 1 ? "" : "s"}</InfoPill>
@@ -1735,7 +1783,14 @@ export function DashboardPeriodReviewPrompts() {
                 Add yearly goal
               </button>
             </div>
+          </SectionCard>
 
+          <SectionCard
+            eyebrow="Board preview"
+            title="Check the next year backbone"
+            description="The yearly view should feel clear before it gets broken into months."
+            tone="soft"
+          >
             <div className="grid gap-3 sm:grid-cols-3">
               <OverviewStat label="Yearly goals" value={String(nextYearGoals.length)} />
               <OverviewStat
