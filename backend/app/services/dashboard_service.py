@@ -306,6 +306,11 @@ def get_dashboard(db: Client, session_id: UUID, plan_date: date | None = None) -
     # Get 30 days of history for streak calculation
     since = today - timedelta(days=30)
     habit_history = habits_db.list_habit_logs_for_session(db, session_id, since, today)
+    history_by_habit: dict[str, list[tuple[date, bool]]] = {}
+    for log in habit_history:
+        history_by_habit.setdefault(str(log["habit_id"]), []).append(
+            (date.fromisoformat(log["date"]), bool(log["completed"]))
+        )
 
     for habit in habits:
         hid = habit["id"]
@@ -318,12 +323,8 @@ def get_dashboard(db: Client, session_id: UUID, plan_date: date | None = None) -
                 habits_completed_today += 1
 
         # Compute streak
-        history = [(
-            date.fromisoformat(h["date"]),
-            h["completed"]
-        ) for h in habit_history if h["habit_id"] == hid]
         streak = compute_habit_streak(
-            history,
+            history_by_habit.get(str(hid), []),
             habit.get("frequency", "daily"),
             week_starts_on=week_starts_on,
         )

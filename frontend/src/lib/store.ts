@@ -118,6 +118,7 @@ interface AppState {
   setWeekStartsOn: (value: WeekStartsOn) => Promise<void>;
   backendReady: boolean;
   workspaceHydrating: boolean;
+  dashboardLoading: boolean;
   /** User id that owns the persisted workspace below; changes when a different account signs in. */
   workspaceOwnerId: string | null;
   /** Last server save / sync failure (not persisted). */
@@ -433,6 +434,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   } catch (e) {
     set({
       backendReady: false,
+      dashboardLoading: false,
       syncError: formatApiError("Start backend session", e),
       workspaceHydrating: false,
     });
@@ -952,6 +954,7 @@ export const useAppStore = create<AppState>()(
           sessionWeekStartsOn: "monday",
           activeDashboardDate: getToday(),
           backendReady: false,
+          dashboardLoading: false,
           workspaceHydrating: false,
           syncError: null,
           pendingRecaps: [],
@@ -962,7 +965,7 @@ export const useAppStore = create<AppState>()(
       hydrateAuthFromSupabase: async () => {
         const sb = getSupabaseBrowser();
         if (!sb || isAuthLocalOnly()) {
-          set({ authReady: true, workspaceHydrating: false });
+          set({ authReady: true, workspaceHydrating: false, dashboardLoading: false });
           return;
         }
         const {
@@ -975,6 +978,7 @@ export const useAppStore = create<AppState>()(
             sessionWeekStartsOn: "monday",
             activeDashboardDate: getToday(),
             backendReady: false,
+            dashboardLoading: false,
             workspaceHydrating: false,
             syncError: null,
             authReady: true,
@@ -1082,6 +1086,7 @@ export const useAppStore = create<AppState>()(
         return true;
       },
       dismissKickoff: () => set({ kickoffPending: false }),
+      dashboardLoading: false,
 
       // ── Initial data (production: empty until user + server populate) ───────
       categories: DEFAULT_CATEGORIES,
@@ -1106,6 +1111,7 @@ export const useAppStore = create<AppState>()(
           return existing;
         }
 
+        set({ dashboardLoading: true });
         const request = dashboardApi
           .get(sessionId, requestedDate)
           .then((data) => {
@@ -1127,6 +1133,7 @@ export const useAppStore = create<AppState>()(
             if (pendingDashboardLoads.get(requestKey) === request) {
               pendingDashboardLoads.delete(requestKey);
             }
+            set({ dashboardLoading: pendingDashboardLoads.size > 0 });
           });
 
         pendingDashboardLoads.set(requestKey, request);

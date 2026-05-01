@@ -31,7 +31,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useBackendSync();
 
   useEffect(() => {
-    if (!authReady || workspaceHydrating) return;
+    if (!authReady) return;
+    if (workspaceHydrating && currentUser && onboardingComplete) return;
     if (!currentUser) {
       router.replace("/auth");
       return;
@@ -46,7 +47,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
 
-  if (!authReady || workspaceHydrating || !currentUser || !backendReady || !onboardingComplete) {
+  const canRenderShell = authReady && !!currentUser && backendReady && onboardingComplete;
+
+  if (!canRenderShell) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
         <div className="flex flex-col items-center gap-3">

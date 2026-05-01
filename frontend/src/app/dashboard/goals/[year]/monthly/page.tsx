@@ -45,7 +45,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
 
   const {
     ready,
-    loading,
+    hasCachedData,
     error,
     currentMonth,
     currentWeekNumber,
@@ -98,7 +98,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
     );
   }
 
-  if (!ready || loading) {
+  if (!ready && !hasCachedData) {
     return (
       <GoalsLoadingShell
         eyebrow={`${year} monthly goals`}
