@@ -14,13 +14,13 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<Variant, string> = {
   primary:
-    "primary-gradient text-white font-bold shadow-sm hover:opacity-90 active:scale-[0.98]",
+    "primary-gradient text-white font-bold shadow-sm shadow-[0_12px_24px_rgba(0,108,74,0.16)] enabled:hover:shadow-[0_16px_30px_rgba(0,108,74,0.22)]",
   secondary:
-    "bg-white text-[--color-primary] border ghost-border hover:border-[--color-primary]/30 hover:bg-[--color-surface-container-low] shadow-sm active:scale-[0.98]",
+    "bg-white text-[--color-primary] border ghost-border shadow-sm enabled:hover:border-[--color-primary]/30 enabled:hover:bg-[--color-surface-container-low] enabled:hover:shadow-md",
   ghost:
-    "bg-transparent text-[--color-on-surface-variant] hover:bg-[--color-surface-container-low] active:scale-[0.98]",
+    "bg-transparent text-[--color-on-surface-variant] enabled:hover:bg-[--color-surface-container-low]",
   danger:
-    "bg-red-50 text-red-600 hover:bg-red-100 active:scale-[0.98]",
+    "bg-red-50 text-red-600 enabled:hover:bg-red-100",
 };
 
 const sizeStyles: Record<Size, string> = {
@@ -43,12 +43,17 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center font-bold tracking-wide transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center font-bold tracking-wide",
+        "transition-[transform,box-shadow,background-color,opacity] duration-150",
+        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[--color-primary]/15",
+        "enabled:hover:-translate-y-px enabled:active:translate-y-0 enabled:active:scale-[0.98]",
+        "disabled:opacity-40 disabled:cursor-not-allowed",
         variantStyles[variant],
         sizeStyles[size],
         className
       )}
       disabled={disabled || loading}
+      aria-busy={loading}
       {...props}
     >
       {loading ? (
