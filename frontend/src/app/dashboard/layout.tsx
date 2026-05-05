@@ -14,6 +14,7 @@ import { DashboardNextDayReview } from "@/components/dashboard/DashboardNextDayR
 import { DashboardPeriodReviewPrompts } from "@/components/dashboard/DashboardPeriodReviewPrompts";
 import { SyncErrorBanner } from "@/components/SyncErrorBanner";
 import { useBackendSync } from "@/hooks/useBackendSync";
+import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -48,14 +49,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!authReady || workspaceHydrating || !currentUser || !backendReady || !onboardingComplete) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center animate-pulse" style={{ background: "#006c4a" }}>
-            <span className="material-symbols-outlined text-[20px] text-white">bolt</span>
-          </div>
-          <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>Loading…</p>
-        </div>
-      </div>
+      <AppLoadingScreen
+        eyebrow="Loading the dashboard"
+        title="Bringing today&apos;s workspace online"
+        detail="We are reconnecting your session, syncing the latest execution data, and restoring your dashboard shell."
+      />
     );
   }
 

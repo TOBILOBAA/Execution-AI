@@ -4,14 +4,16 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
+import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 
 export default function RootPage() {
   const router = useRouter();
-  const { currentUser, onboardingComplete, authReady, workspaceHydrating } = useAppStore(
+  const { currentUser, onboardingComplete, authReady, backendReady, workspaceHydrating } = useAppStore(
     useShallow((state) => ({
       currentUser: state.currentUser,
       onboardingComplete: state.onboardingComplete,
       authReady: state.authReady,
+      backendReady: state.backendReady,
       workspaceHydrating: state.workspaceHydrating,
     })),
   );
@@ -20,38 +22,30 @@ export default function RootPage() {
     if (!authReady || workspaceHydrating) return;
     if (!currentUser) {
       router.replace("/auth");
+    } else if (!backendReady) {
+      return;
     } else if (onboardingComplete) {
       router.replace("/dashboard");
     } else {
       router.replace("/onboarding");
     }
-  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, router]);
+  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
 
-  if (!authReady || workspaceHydrating) {
+  if (!authReady || workspaceHydrating || (!!currentUser && !backendReady)) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center animate-pulse" style={{ background: "#006c4a" }}>
-            <span className="material-symbols-outlined text-[20px] text-white">bolt</span>
-          </div>
-          <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>
-            Loading Execution AI
-          </p>
-        </div>
-      </div>
+      <AppLoadingScreen
+        eyebrow="Launching your workspace"
+        title="Checking where to drop you in"
+        detail="We are restoring your session, syncing the latest planning data, and routing you to the right next step."
+      />
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-10 h-10 rounded-2xl flex items-center justify-center animate-pulse" style={{ background: "#006c4a" }}>
-          <span className="material-symbols-outlined text-[20px] text-white">bolt</span>
-        </div>
-        <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>
-          Loading Execution AI
-        </p>
-      </div>
-    </div>
+    <AppLoadingScreen
+      eyebrow="Opening Execution AI"
+      title="Routing to your next screen"
+      detail="Your workspace is ready. We are taking you to auth, onboarding, or today&apos;s dashboard now."
+    />
   );
 }
