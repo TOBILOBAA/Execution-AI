@@ -44,24 +44,6 @@ import { getSupabaseBrowser } from "./supabaseClient";
 import type { User } from "@supabase/supabase-js";
 import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudSupabaseConfigured } from "./authMode";
 
-/** Align onboarding UI with the workspace row in Supabase (source of truth when logged in). */
-async function pullOnboardingFromServer(sessionId: string): Promise<{
-  onboarding_step: number;
-  onboarding_done: boolean;
-  week_starts_on: WeekStartsOn;
-} | null> {
-  try {
-    const row = await sessionsApi.get(sessionId);
-    return {
-      onboarding_step: row.onboarding_step,
-      onboarding_done: row.onboarding_done,
-      week_starts_on: row.week_starts_on,
-    };
-  } catch {
-    return null;
-  }
-}
-
 // ── Auth types ─────────────────────────────────────────────────────────────────
 export interface AuthUser { id: string; name: string; email: string; plan: string }
 interface StoredUser { id: string; name: string; email: string; password: string; plan: string }
@@ -345,8 +327,19 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   }
 
   let sid: string;
+  let onboardingSnapshot: {
+    onboarding_step: number;
+    onboarding_done: boolean;
+    week_starts_on: WeekStartsOn;
+  };
   try {
-    sid = await ensureBackendSession(userId);
+    const session = await ensureBackendSession(userId);
+    sid = session.id;
+    onboardingSnapshot = {
+      onboarding_step: session.onboarding_step,
+      onboarding_done: session.onboarding_done,
+      week_starts_on: session.week_starts_on,
+    };
     set({ sessionId: sid, backendReady: true });
   } catch (e) {
     set({
@@ -358,7 +351,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   }
 
   // Fan out: onboarding metadata + dashboard payload land in parallel.
-  const onboardingPromise = pullOnboardingFromServer(sid);
+  const onboardingPromise = Promise.resolve(onboardingSnapshot);
   const dashboardPromise = get().loadDashboard();
 
   // Apply onboarding metadata as soon as it lands so the router can decide
@@ -595,7 +588,7 @@ export const useAppStore = create<AppState>()(
         if (match) {
           const user = { id: match.id, name: match.name, email: match.email, plan: match.plan };
           set({ currentUser: user, syncError: null, authReady: true, workspaceHydrating: true });
-          await attachBackendAfterAuth(match.id, get, set);
+          void attachBackendAfterAuth(match.id, get, set);
           return { success: true };
         }
 
@@ -628,7 +621,7 @@ export const useAppStore = create<AppState>()(
           plan: "Free",
         };
         set({ currentUser: user, syncError: null, authReady: true, workspaceHydrating: true });
-        await attachBackendAfterAuth(u.id, get, set);
+        void attachBackendAfterAuth(u.id, get, set);
         return { success: true };
       },
 
@@ -663,7 +656,7 @@ export const useAppStore = create<AppState>()(
             authReady: true,
             workspaceHydrating: true,
           });
-          await attachBackendAfterAuth(newUser.id, get, set);
+          void attachBackendAfterAuth(newUser.id, get, set);
           return { success: true };
         }
 
@@ -728,7 +721,7 @@ export const useAppStore = create<AppState>()(
           authReady: true,
           workspaceHydrating: true,
         });
-        await attachBackendAfterAuth(u.id, get, set);
+        void attachBackendAfterAuth(u.id, get, set);
         return { success: true };
       },
 
@@ -825,7 +818,7 @@ export const useAppStore = create<AppState>()(
           set({ currentUser: authUser, syncError: null, authReady: true, workspaceHydrating: true });
         }
 
-        await attachBackendAfterAuth(u.id, get, set);
+        void attachBackendAfterAuth(u.id, get, set);
         return { success: true };
       },
 

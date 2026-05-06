@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAppStore, LOCAL_TEST_SIGNIN_HINTS } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { OtpCodeInput } from "@/components/OtpCodeInput";
-import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
+import { isAuthLocalOnly, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -32,6 +32,8 @@ export default function AuthPage() {
     sendPasswordReset,
     onboardingComplete,
     authReady,
+    backendReady,
+    syncError,
     workspaceHydrating,
   } = useAppStore(
     useShallow((state) => ({
@@ -43,6 +45,8 @@ export default function AuthPage() {
       sendPasswordReset: state.sendPasswordReset,
       onboardingComplete: state.onboardingComplete,
       authReady: state.authReady,
+      backendReady: state.backendReady,
+      syncError: state.syncError,
       workspaceHydrating: state.workspaceHydrating,
     })),
   );
@@ -60,13 +64,13 @@ export default function AuthPage() {
   const [resendIn, setResendIn] = useState(0);
 
   useEffect(() => {
-    if (!authReady || workspaceHydrating || !currentUser) {
+    if (!authReady || workspaceHydrating || !currentUser || !backendReady) {
       return;
     }
     if (currentUser) {
       router.replace(onboardingComplete ? "/dashboard" : "/onboarding");
     }
-  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, router]);
+  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -74,10 +78,16 @@ export default function AuthPage() {
     return () => clearInterval(t);
   }, [resendIn]);
 
-  if (!authReady || workspaceHydrating) {
+  const handoffError = currentUser && !workspaceHydrating && !backendReady ? syncError : "";
+  const handingOffToWorkspace = Boolean(currentUser) && (workspaceHydrating || (!backendReady && !handoffError));
+  const activeError = error || handoffError;
+
+  if (!authReady || handingOffToWorkspace) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
-        <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>Loading…</p>
+        <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>
+          {currentUser ? "Opening your workspace…" : "Loading…"}
+        </p>
       </div>
     );
   }
@@ -655,7 +665,7 @@ export default function AuthPage() {
                 </div>
               )}
 
-              {error && (
+              {activeError && (
                 <div
                   className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
                   style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.2)" }}
@@ -664,7 +674,7 @@ export default function AuthPage() {
                     error
                   </span>
                   <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>
-                    {error}
+                    {activeError}
                   </p>
                 </div>
               )}
