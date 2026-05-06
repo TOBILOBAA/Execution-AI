@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, use, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GoalsHierarchyNav } from "@/components/goals/GoalsHierarchyNav";
 import { GoalsInfoTooltip } from "@/components/goals/GoalsInfoTooltip";
@@ -15,7 +15,7 @@ import {
   listDaysForYearThroughDate,
 } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
-import type { DailyPriority } from "@/lib/types";
+import type { DailyPriority, ModalType } from "@/lib/types";
 
 const STATUS_GUIDE_DETAIL = [
   "Completed: daily priorities already finished.",
@@ -74,8 +74,6 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     ready,
     hasCachedData,
     error,
-    currentMonth,
-    currentWeekNumber,
     today,
     yearDailyPriorities,
   } = useGoalsHierarchy(year);
@@ -118,6 +116,16 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     if (activeModal !== null || !selectedDayIsCurrent || !selectedDay) return;
     void refreshSelectedDayDetail();
   }, [activeModal, refreshSelectedDayDetail, selectedDay, selectedDayIsCurrent]);
+
+  const pageSize = 14;
+
+  useEffect(() => {
+    if (!selectedDay) return;
+    const dayIndex = daySlots.findIndex((day) => day === selectedDay);
+    if (dayIndex === -1) return;
+    const orderedIndex = sortOrder === "desc" ? daySlots.length - 1 - dayIndex : dayIndex;
+    setPage(Math.floor(orderedIndex / pageSize) + 1);
+  }, [daySlots, pageSize, selectedDay, sortOrder]);
 
   if (Number.isNaN(year)) {
     return (
@@ -164,7 +172,6 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   const sortedRows = [...rows].sort((a, b) =>
     sortOrder === "desc" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date),
   );
-  const pageSize = 14;
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const paginatedRows = sortedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -180,7 +187,16 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   async function prepareCurrentDayEditing() {
     if (!selectedDay) return;
     setActiveDashboardDate(selectedDay);
-    await loadDashboard(selectedDay);
+    try {
+      await loadDashboard(selectedDay);
+    } catch {
+      // Open the modal anyway so a dashboard refresh hiccup does not block editing.
+    }
+  }
+
+  async function openCurrentDayModal(modal: ModalType, payload?: unknown) {
+    await prepareCurrentDayEditing();
+    openModal(modal, payload);
   }
 
   async function toggleTask(task: ApiDailyPriority) {
@@ -195,6 +211,331 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     await habitsApi.toggle(sessionId, habitId, !completedToday, selectedDay);
     await refreshSelectedDayDetail();
     await loadDashboard(selectedDay);
+  }
+
+  function renderSelectedDayDetail() {
+    if (!selectedDay) return null;
+
+    return (
+      <div
+        className="rounded-[24px] p-5"
+        style={{ background: "#f9fbfa", border: "1px solid rgba(0,0,0,0.06)" }}
+      >
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
+              Selected day detail
+            </p>
+            <h2 className="font-headline font-bold text-2xl mt-2" style={{ color: "#1a1f1e" }}>
+              {formatGoalDay(selectedDay)}
+            </h2>
+            <p className="text-sm mt-2 max-w-2xl leading-relaxed" style={{ color: "#6b7c75" }}>
+              See the actual priorities, supporting tasks, and habits for this date. Only the current day can be edited.
+            </p>
+          </div>
+
+          {selectedDayIsCurrent ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  void openCurrentDayModal("add-daily-priority");
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow-[0_12px_28px_rgba(0,108,74,0.16)]"
+                style={{ background: "#006c4a", color: "#fff" }}
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                Add main priority
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void openCurrentDayModal("add-secondary-task");
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+                style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
+              >
+                <span className="material-symbols-outlined text-[16px]">playlist_add</span>
+                Add supporting task
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void openCurrentDayModal("manage-habits");
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+                style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
+              >
+                <span className="material-symbols-outlined text-[16px]">settings</span>
+                Manage habits
+              </button>
+            </div>
+          ) : (
+            <span
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+              style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
+            >
+              <span className="material-symbols-outlined text-[16px]">lock</span>
+              Read only
+            </span>
+          )}
+        </div>
+
+        {selectedDayLoading ? (
+          <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}>
+            Loading this day&apos;s priorities, tasks, and habits…
+          </div>
+        ) : selectedDayError ? (
+          <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.12)", color: "#8a5b12" }}>
+            {selectedDayError}
+          </div>
+        ) : selectedDayDetail ? (
+          <div className="mt-5 space-y-6">
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#006c4a" }}>
+                  Main priorities
+                </p>
+                <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
+                  {selectedDayDetail.daily_priorities.length} priority{selectedDayDetail.daily_priorities.length === 1 ? "" : "ies"}
+                </p>
+              </div>
+              {selectedDayDetail.daily_priorities.length === 0 ? (
+                <p className="text-sm" style={{ color: "#8a9e97" }}>
+                  No main priorities were saved for this day.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {selectedDayDetail.daily_priorities.map((priority) => {
+                    const storePriority = mapApiPriorityToStoreShape(priority);
+                    return (
+                      <div
+                        key={priority.id}
+                        className="bg-white rounded-2xl p-5 flex flex-col gap-4"
+                        style={{
+                          border: priority.completed ? "1px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.07)",
+                          opacity: priority.completed ? 0.72 : 1,
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                            style={{
+                              background: priority.completed ? "rgba(0,108,74,0.10)" : "rgba(0,0,0,0.05)",
+                              color: priority.completed ? "#006c4a" : "#6b7c75",
+                            }}
+                          >
+                            {priority.completed ? "Done" : "Open"}
+                          </span>
+                          {selectedDayIsCurrent ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void openCurrentDayModal("edit-daily-priority", storePriority);
+                              }}
+                              className="w-9 h-9 rounded-xl flex items-center justify-center"
+                              style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
+                            >
+                              <span className="material-symbols-outlined text-[16px]">edit</span>
+                            </button>
+                          ) : null}
+                        </div>
+
+                        <p
+                          className="text-sm font-semibold leading-snug"
+                          style={{
+                            color: priority.completed ? "#8a9e97" : "#1a1f1e",
+                            textDecoration: priority.completed ? "line-through" : "none",
+                          }}
+                        >
+                          {priority.title}
+                        </p>
+
+                        {selectedDayIsCurrent ? (
+                          <button
+                            type="button"
+                            onClick={() => void toggleTask(priority)}
+                            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold"
+                            style={{
+                              background: priority.completed ? "rgba(0,108,74,0.09)" : "#f7faf8",
+                              border: priority.completed ? "1px solid rgba(0,108,74,0.16)" : "1px solid rgba(0,0,0,0.08)",
+                              color: priority.completed ? "#006c4a" : "#4b635b",
+                            }}
+                          >
+                            <span className="material-symbols-outlined text-[15px]">
+                              {priority.completed ? "task_alt" : "check_circle"}
+                            </span>
+                            {priority.completed ? "Completed" : "Mark complete"}
+                          </button>
+                        ) : (
+                          <p className="text-xs font-semibold" style={{ color: priority.completed ? "#006c4a" : "#8a9e97" }}>
+                            {priority.completed ? "Completed on this day" : "Left incomplete on this day"}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                  Supporting tasks
+                </p>
+                <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
+                  {selectedDayDetail.secondary_tasks.length} task{selectedDayDetail.secondary_tasks.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              {selectedDayDetail.secondary_tasks.length === 0 ? (
+                <p className="text-sm" style={{ color: "#8a9e97" }}>
+                  No supporting tasks were saved for this day.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {selectedDayDetail.secondary_tasks.map((task) => {
+                    const storeTask = mapApiPriorityToStoreShape(task);
+                    return (
+                      <div
+                        key={task.id}
+                        className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
+                        style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)" }}
+                      >
+                        <div className="min-w-0">
+                          <p
+                            className="text-sm font-semibold"
+                            style={{
+                              color: task.completed ? "#8a9e97" : "#1a1f1e",
+                              textDecoration: task.completed ? "line-through" : "none",
+                            }}
+                          >
+                            {task.title}
+                          </p>
+                          <p className="text-xs mt-1" style={{ color: "#6b7c75" }}>
+                            {task.tag || "Supporting task"}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {selectedDayIsCurrent ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void toggleTask(task)}
+                                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
+                                style={{
+                                  background: task.completed ? "rgba(0,108,74,0.09)" : "#f7faf8",
+                                  border: task.completed ? "1px solid rgba(0,108,74,0.16)" : "1px solid rgba(0,0,0,0.08)",
+                                  color: task.completed ? "#006c4a" : "#4b635b",
+                                }}
+                              >
+                                <span className="material-symbols-outlined text-[14px]">
+                                  {task.completed ? "task_alt" : "check_circle"}
+                                </span>
+                                {task.completed ? "Done" : "Complete"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void openCurrentDayModal("edit-secondary-task", storeTask);
+                                }}
+                                className="w-9 h-9 rounded-xl flex items-center justify-center"
+                                style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
+                              >
+                                <span className="material-symbols-outlined text-[16px]">edit</span>
+                              </button>
+                            </>
+                          ) : (
+                            <p className="text-xs font-semibold" style={{ color: task.completed ? "#006c4a" : "#8a9e97" }}>
+                              {task.completed ? "Completed on this day" : "Left incomplete on this day"}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                  Habit status
+                </p>
+                <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
+                  {selectedDayDetail.habits.filter((habit) => habit.active).length} active habit{selectedDayDetail.habits.filter((habit) => habit.active).length === 1 ? "" : "s"}
+                </p>
+              </div>
+              {selectedDayDetail.habits.filter((habit) => habit.active).length === 0 ? (
+                <p className="text-sm" style={{ color: "#8a9e97" }}>
+                  No active habits were available for this day.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {selectedDayDetail.habits.filter((habit) => habit.active).map((habit) => (
+                    <div
+                      key={habit.id}
+                      className="rounded-2xl p-4"
+                      style={{
+                        background: "#fff",
+                        border: habit.completed_today ? "1px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.05)",
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[18px]" style={{ color: habit.completed_today ? "#006c4a" : "#8a9e97" }}>
+                              {habit.icon}
+                            </span>
+                            <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                              {habit.name}
+                            </p>
+                          </div>
+                          <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
+                            {habit.frequency.replace("_", " ")}
+                          </p>
+                        </div>
+                        {selectedDayIsCurrent ? (
+                          <button
+                            type="button"
+                            onClick={() => void toggleHabit(habit.id, habit.completed_today)}
+                            className="w-7 h-7 rounded-full flex items-center justify-center"
+                            style={{
+                              background: habit.completed_today ? "#006c4a" : "#f7faf8",
+                              border: habit.completed_today ? "none" : "1px solid rgba(0,0,0,0.08)",
+                              color: habit.completed_today ? "#fff" : "#6b7c75",
+                            }}
+                          >
+                            <span className="material-symbols-outlined text-[14px]">
+                              {habit.completed_today ? "check" : "add"}
+                            </span>
+                          </button>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                            style={{
+                              background: habit.completed_today ? "rgba(0,108,74,0.08)" : "rgba(0,0,0,0.05)",
+                              color: habit.completed_today ? "#006c4a" : "#8a9e97",
+                            }}
+                          >
+                            {habit.completed_today ? "Done" : "Not done"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        ) : (
+          <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}>
+            Choose a day from the table to inspect the exact priorities, tasks, and habits for that date.
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -235,12 +576,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           </div>
         </div>
 
-        <GoalsHierarchyNav
-          year={year}
-          active="daily"
-          currentMonth={currentMonth}
-          currentWeekNumber={currentWeekNumber}
-        />
+        <GoalsHierarchyNav year={year} active="daily" />
       </div>
 
       {error && (
@@ -305,46 +641,54 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 const progressTone = getProgressTone(row.progress);
                 const current = row.date === today && year === liveYear;
                 return (
-                  <tr
-                    key={row.date}
-                    onClick={() => pushDay(row.date)}
-                    className="cursor-pointer transition-colors"
-                    style={{
-                      borderTop: "1px solid rgba(0,0,0,0.06)",
-                      background: current ? "rgba(0,108,74,0.03)" : "transparent",
-                    }}
-                  >
-                    <td className="px-4 py-4">
-                      <p className="text-sm font-semibold" style={{ color: current ? "#006c4a" : "#1a1f1e" }}>
-                        {formatGoalDay(row.date)}
-                      </p>
-                    </td>
-                    <td className="px-4 py-4 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
-                      {row.prioritiesCount}
-                    </td>
-                    <td className="px-4 py-4 text-sm" style={{ color: getGoalStateMeta("completed").text }}>
-                      {row.completed}
-                    </td>
-                    <td className="px-4 py-4 text-sm" style={{ color: getGoalStateMeta("on-track").text }}>
-                      {row.inProgress}
-                    </td>
-                    <td className="px-4 py-4 text-sm" style={{ color: getGoalStateMeta("at-risk").text }}>
-                      {row.atRisk}
-                    </td>
-                    <td className="px-4 py-4 text-sm" style={{ color: getGoalStateMeta("not-started").text }}>
-                      {row.notStarted}
-                    </td>
-                    <td className="px-4 py-4 min-w-[180px]">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-bold min-w-[36px]" style={{ color: progressTone }}>
-                          {row.progress}%
-                        </span>
-                        <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.06)" }}>
-                          <div className="h-full rounded-full" style={{ width: `${row.progress}%`, background: progressTone }} />
+                  <Fragment key={row.date}>
+                    <tr
+                      onClick={() => pushDay(row.date)}
+                      className="cursor-pointer transition-colors"
+                      style={{
+                        borderTop: "1px solid rgba(0,0,0,0.06)",
+                        background: current ? "rgba(0,108,74,0.03)" : "transparent",
+                      }}
+                    >
+                      <td className="px-4 py-4">
+                        <p className="text-sm font-semibold" style={{ color: current ? "#006c4a" : "#1a1f1e" }}>
+                          {formatGoalDay(row.date)}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                        {row.prioritiesCount}
+                      </td>
+                      <td className="px-4 py-4 text-sm" style={{ color: getGoalStateMeta("completed").text }}>
+                        {row.completed}
+                      </td>
+                      <td className="px-4 py-4 text-sm" style={{ color: getGoalStateMeta("on-track").text }}>
+                        {row.inProgress}
+                      </td>
+                      <td className="px-4 py-4 text-sm" style={{ color: getGoalStateMeta("at-risk").text }}>
+                        {row.atRisk}
+                      </td>
+                      <td className="px-4 py-4 text-sm" style={{ color: getGoalStateMeta("not-started").text }}>
+                        {row.notStarted}
+                      </td>
+                      <td className="px-4 py-4 min-w-[180px]">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-bold min-w-[36px]" style={{ color: progressTone }}>
+                            {row.progress}%
+                          </span>
+                          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.06)" }}>
+                            <div className="h-full rounded-full" style={{ width: `${row.progress}%`, background: progressTone }} />
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                    {selectedDay === row.date ? (
+                      <tr style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+                        <td colSpan={7} className="px-3 py-4" style={{ background: "#fcfdfc" }}>
+                          {renderSelectedDayDetail()}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -404,326 +748,6 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           )}
         </div>
 
-        {selectedDay && (
-          <div
-            className="mt-6 rounded-[24px] p-5"
-            style={{ background: "#f9fbfa", border: "1px solid rgba(0,0,0,0.06)" }}
-          >
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
-                  Selected day detail
-                </p>
-                <h2 className="font-headline font-bold text-2xl mt-2" style={{ color: "#1a1f1e" }}>
-                  {formatGoalDay(selectedDay)}
-                </h2>
-                <p className="text-sm mt-2 max-w-2xl leading-relaxed" style={{ color: "#6b7c75" }}>
-                  See the actual priorities, supporting tasks, and habits for this date. Only the current day can be edited.
-                </p>
-              </div>
-
-              {selectedDayIsCurrent ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void prepareCurrentDayEditing().then(() => openModal("add-daily-priority"));
-                    }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
-                    style={{ background: "#006c4a", color: "#fff" }}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">add</span>
-                    Add priority
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void prepareCurrentDayEditing().then(() => openModal("add-secondary-task"));
-                    }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
-                    style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">playlist_add</span>
-                    Add task
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void prepareCurrentDayEditing().then(() => openModal("manage-habits"));
-                    }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
-                    style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">settings</span>
-                    Manage habits
-                  </button>
-                </div>
-              ) : (
-                <span
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
-                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
-                >
-                  <span className="material-symbols-outlined text-[16px]">lock</span>
-                  Read only
-                </span>
-              )}
-            </div>
-
-            {selectedDayLoading ? (
-              <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}>
-                Loading this day&apos;s priorities, tasks, and habits…
-              </div>
-            ) : selectedDayError ? (
-              <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.12)", color: "#8a5b12" }}>
-                {selectedDayError}
-              </div>
-            ) : selectedDayDetail ? (
-              <div className="mt-5 space-y-6">
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#006c4a" }}>
-                      Main priorities
-                    </p>
-                    <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                      {selectedDayDetail.daily_priorities.length} priority{selectedDayDetail.daily_priorities.length === 1 ? "" : "ies"}
-                    </p>
-                  </div>
-                  {selectedDayDetail.daily_priorities.length === 0 ? (
-                    <p className="text-sm" style={{ color: "#8a9e97" }}>
-                      No main priorities were saved for this day.
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      {selectedDayDetail.daily_priorities.map((priority) => {
-                        const storePriority = mapApiPriorityToStoreShape(priority);
-                        return (
-                          <div
-                            key={priority.id}
-                            className="bg-white rounded-2xl p-5 flex flex-col gap-5"
-                            style={{
-                              border: "1.5px solid rgba(0,0,0,0.07)",
-                              opacity: priority.completed ? 0.68 : 1,
-                            }}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <span
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
-                                style={{
-                                  background: priority.completed ? "rgba(0,108,74,0.10)" : "rgba(0,0,0,0.05)",
-                                  color: priority.completed ? "#006c4a" : "#6b7c75",
-                                }}
-                              >
-                                {priority.completed ? "Done" : "Open"}
-                              </span>
-                              {selectedDayIsCurrent ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void prepareCurrentDayEditing().then(() => openModal("edit-daily-priority", storePriority));
-                                  }}
-                                  className="w-8 h-8 rounded-full flex items-center justify-center"
-                                  style={{ background: "#f7faf8", color: "#6b7c75" }}
-                                >
-                                  <span className="material-symbols-outlined text-[16px]">edit</span>
-                                </button>
-                              ) : null}
-                            </div>
-
-                            <p
-                              className="text-sm font-semibold leading-snug"
-                              style={{
-                                color: priority.completed ? "#8a9e97" : "#1a1f1e",
-                                textDecoration: priority.completed ? "line-through" : "none",
-                              }}
-                            >
-                              {priority.title}
-                            </p>
-
-                            {selectedDayIsCurrent ? (
-                              <button
-                                type="button"
-                                onClick={() => void toggleTask(priority)}
-                                className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold"
-                                style={{
-                                  background: priority.completed ? "rgba(0,108,74,0.09)" : "#f7faf8",
-                                  border: priority.completed ? "1px solid rgba(0,108,74,0.16)" : "1px solid rgba(0,0,0,0.08)",
-                                  color: priority.completed ? "#006c4a" : "#4b635b",
-                                }}
-                              >
-                                <span className="material-symbols-outlined text-[15px]">
-                                  {priority.completed ? "task_alt" : "check_circle"}
-                                </span>
-                                {priority.completed ? "Completed" : "Mark complete"}
-                              </button>
-                            ) : (
-                              <p className="text-xs font-semibold" style={{ color: priority.completed ? "#006c4a" : "#8a9e97" }}>
-                                {priority.completed ? "Completed on this day" : "Left incomplete on this day"}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
-
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                      Supporting tasks
-                    </p>
-                    <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                      {selectedDayDetail.secondary_tasks.length} task{selectedDayDetail.secondary_tasks.length === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  {selectedDayDetail.secondary_tasks.length === 0 ? (
-                    <p className="text-sm" style={{ color: "#8a9e97" }}>
-                      No supporting tasks were saved for this day.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedDayDetail.secondary_tasks.map((task) => {
-                        const storeTask = mapApiPriorityToStoreShape(task);
-                        return (
-                          <div
-                            key={task.id}
-                            className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
-                            style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)" }}
-                          >
-                            <div className="min-w-0">
-                              <p
-                                className="text-sm font-semibold"
-                                style={{
-                                  color: task.completed ? "#8a9e97" : "#1a1f1e",
-                                  textDecoration: task.completed ? "line-through" : "none",
-                                }}
-                              >
-                                {task.title}
-                              </p>
-                              <p className="text-xs mt-1" style={{ color: "#6b7c75" }}>
-                                {task.tag || "Supporting task"}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {selectedDayIsCurrent ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => void toggleTask(task)}
-                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
-                                    style={{
-                                      background: task.completed ? "rgba(0,108,74,0.09)" : "#f7faf8",
-                                      border: task.completed ? "1px solid rgba(0,108,74,0.16)" : "1px solid rgba(0,0,0,0.08)",
-                                      color: task.completed ? "#006c4a" : "#4b635b",
-                                    }}
-                                  >
-                                    <span className="material-symbols-outlined text-[14px]">
-                                      {task.completed ? "task_alt" : "check_circle"}
-                                    </span>
-                                    {task.completed ? "Done" : "Complete"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void prepareCurrentDayEditing().then(() => openModal("edit-secondary-task", storeTask));
-                                    }}
-                                    className="w-9 h-9 rounded-xl flex items-center justify-center"
-                                    style={{ background: "#f7faf8", color: "#6b7c75" }}
-                                  >
-                                    <span className="material-symbols-outlined text-[16px]">edit</span>
-                                  </button>
-                                </>
-                              ) : (
-                                <p className="text-xs font-semibold" style={{ color: task.completed ? "#006c4a" : "#8a9e97" }}>
-                                  {task.completed ? "Completed on this day" : "Left incomplete on this day"}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
-
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                      Habit status
-                    </p>
-                    <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                      {selectedDayDetail.habits.filter((habit) => habit.active).length} active habit{selectedDayDetail.habits.filter((habit) => habit.active).length === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  {selectedDayDetail.habits.filter((habit) => habit.active).length === 0 ? (
-                    <p className="text-sm" style={{ color: "#8a9e97" }}>
-                      No active habits were available for this day.
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                      {selectedDayDetail.habits.filter((habit) => habit.active).map((habit) => (
-                        <div
-                          key={habit.id}
-                          className="rounded-2xl p-4"
-                          style={{
-                            background: "#fff",
-                            border: habit.completed_today ? "1px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.05)",
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-[18px]" style={{ color: habit.completed_today ? "#006c4a" : "#8a9e97" }}>
-                                  {habit.icon}
-                                </span>
-                                <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>
-                                  {habit.name}
-                                </p>
-                              </div>
-                              <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
-                                {habit.frequency.replace("_", " ")}
-                              </p>
-                            </div>
-                            {selectedDayIsCurrent ? (
-                              <button
-                                type="button"
-                                onClick={() => void toggleHabit(habit.id, habit.completed_today)}
-                                className="w-7 h-7 rounded-full flex items-center justify-center"
-                                style={{
-                                  background: habit.completed_today ? "#006c4a" : "#f7faf8",
-                                  border: habit.completed_today ? "none" : "1px solid rgba(0,0,0,0.08)",
-                                  color: habit.completed_today ? "#fff" : "#6b7c75",
-                                }}
-                              >
-                                <span className="material-symbols-outlined text-[14px]">
-                                  {habit.completed_today ? "check" : "add"}
-                                </span>
-                              </button>
-                            ) : (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
-                                style={{
-                                  background: habit.completed_today ? "rgba(0,108,74,0.08)" : "rgba(0,0,0,0.05)",
-                                  color: habit.completed_today ? "#006c4a" : "#8a9e97",
-                                }}
-                              >
-                                {habit.completed_today ? "Done" : "Not done"}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              </div>
-            ) : (
-              <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}>
-                Choose a day from the table to inspect the exact priorities, tasks, and habits for that date.
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

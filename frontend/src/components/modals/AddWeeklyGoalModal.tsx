@@ -82,7 +82,7 @@ export function AddWeeklyGoalModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} size="md">
+    <Modal open={open} onClose={onClose} size="lg">
       <ModalHeader
         title={isEdit ? "Edit Weekly Goal" : "Add Weekly Goal"}
         subtitle={`Week ${effectiveWeek} Sprint`}
@@ -90,15 +90,34 @@ export function AddWeeklyGoalModal({
         onClose={onClose}
       />
       <ModalBody className="space-y-5">
+        <div
+          className="rounded-2xl p-4"
+          style={{ background: "linear-gradient(135deg, rgba(0,108,74,0.08), rgba(255,255,255,0.96))", border: "1px solid rgba(0,108,74,0.12)" }}
+        >
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#006c4a" }}>
+            Sprint window
+          </p>
+          <h3 className="mt-2 text-base font-bold" style={{ color: "#1a1f1e" }}>
+            Week {effectiveWeek} · {effectiveYear}
+          </h3>
+          <p className="mt-1 text-sm leading-relaxed" style={{ color: "#5d6d67" }}>
+            Tie this sprint goal to the monthly goal it supports, then decide whether it is the main commitment or a supporting target for the week.
+          </p>
+        </div>
+
         <div className="space-y-1.5">
           <label className="block text-[10px] font-bold uppercase tracking-widest text-[--color-on-surface-variant]">
             Monthly Goal
           </label>
-          <div className="relative">
+          <div
+            className="relative rounded-2xl p-1"
+            style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)" }}
+          >
             <select
               value={monthlyGoalId}
+              disabled={availableMonthlyGoals.length === 0}
               onChange={(e) => { setMonthlyGoalId(e.target.value); setError(""); }}
-              className="w-full bg-[--color-surface-container-low] rounded-lg px-4 py-3 text-sm text-[--color-on-surface] border border-transparent focus:outline-none focus:ring-2 focus:ring-[--color-primary]/20 focus:bg-white transition-all duration-150"
+              className="w-full appearance-none bg-transparent rounded-[14px] px-4 py-3 text-sm text-[--color-on-surface] outline-none transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {availableMonthlyGoals.length === 0 ? (
                 <option value="">Add a monthly goal first</option>
@@ -111,25 +130,38 @@ export function AddWeeklyGoalModal({
                 </>
               )}
             </select>
+            <span
+              className="material-symbols-outlined pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[18px]"
+              style={{ color: "#8a9e97" }}
+            >
+              expand_more
+            </span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[--color-on-surface-variant]">
+            Goal role
+          </p>
+          <div className="flex gap-2">
           {[
-            { value: true, label: "Main Goal" },
-            { value: false, label: "Secondary Goal" },
+            { value: true, label: "Main Goal", desc: "This week’s core objective" },
+            { value: false, label: "Supporting Goal", desc: "Support work around the main sprint" },
           ].map((opt) => (
             <button
+              type="button"
               key={String(opt.value)}
               onClick={() => setIsMain(opt.value)}
-              className={`flex-1 py-2.5 px-4 rounded-lg border text-xs font-bold transition-all duration-150 ${
+              className={`flex-1 p-3 rounded-xl border text-left transition-all duration-150 ${
                 isMain === opt.value
-                  ? "border-[--color-primary] bg-emerald-50 text-[--color-primary]"
+                  ? "border-[--color-primary] bg-emerald-50 text-[--color-primary] shadow-[0_10px_24px_rgba(0,108,74,0.10)]"
                   : "border-[--color-outline-variant]/20 bg-[--color-surface-container-low] text-[--color-on-surface-variant] hover:border-[--color-primary]/30"
               }`}
             >
-              {opt.label}
+              <p className="text-xs font-bold">{opt.label}</p>
+              <p className="text-[10px] mt-0.5 opacity-70">{opt.desc}</p>
             </button>
           ))}
+        </div>
         </div>
         <Input
           label="Goal Title"
@@ -144,11 +176,16 @@ export function AddWeeklyGoalModal({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
+        {error ? (
+          <p className="text-sm font-medium" style={{ color: "#b42318" }}>
+            {error}
+          </p>
+        ) : null}
       </ModalBody>
       <ModalFooter>
         <Button variant="ghost" size="md" onClick={onClose}>Cancel</Button>
         <Button variant="primary" size="md" onClick={handleSave} disabled={!monthlyGoalId}>
-          {isEdit ? "Save Changes" : "Add Goal"}
+          {isEdit ? "Save Weekly Goal" : "Create Weekly Goal"}
         </Button>
       </ModalFooter>
     </Modal>
