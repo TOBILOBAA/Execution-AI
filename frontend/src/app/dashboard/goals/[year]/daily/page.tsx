@@ -181,7 +181,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   function pushDay(day: string) {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     params.set("day", day);
-    router.push(`/dashboard/goals/${year}/daily?${params.toString()}`);
+    router.push(`/dashboard/goals/${year}/daily?${params.toString()}`, { scroll: false });
   }
 
   async function prepareCurrentDayEditing() {
@@ -311,7 +311,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                     return (
                       <div
                         key={priority.id}
-                        className="bg-white rounded-2xl p-5 flex flex-col gap-4"
+                        className="bg-white rounded-2xl p-5 flex h-full min-h-[220px] flex-col gap-4"
                         style={{
                           border: priority.completed ? "1px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.07)",
                           opacity: priority.completed ? 0.72 : 1,
@@ -341,37 +341,39 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                           ) : null}
                         </div>
 
-                        <p
-                          className="text-sm font-semibold leading-snug"
-                          style={{
-                            color: priority.completed ? "#8a9e97" : "#1a1f1e",
-                            textDecoration: priority.completed ? "line-through" : "none",
-                          }}
-                        >
-                          {priority.title}
-                        </p>
-
-                        {selectedDayIsCurrent ? (
-                          <button
-                            type="button"
-                            onClick={() => void toggleTask(priority)}
-                            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold"
+                        <div className="flex flex-1 flex-col justify-between gap-4">
+                          <p
+                            className="text-sm font-semibold leading-snug"
                             style={{
-                              background: priority.completed ? "rgba(0,108,74,0.09)" : "#f7faf8",
-                              border: priority.completed ? "1px solid rgba(0,108,74,0.16)" : "1px solid rgba(0,0,0,0.08)",
-                              color: priority.completed ? "#006c4a" : "#4b635b",
+                              color: priority.completed ? "#8a9e97" : "#1a1f1e",
+                              textDecoration: priority.completed ? "line-through" : "none",
                             }}
                           >
-                            <span className="material-symbols-outlined text-[15px]">
-                              {priority.completed ? "task_alt" : "check_circle"}
-                            </span>
-                            {priority.completed ? "Completed" : "Mark complete"}
-                          </button>
-                        ) : (
-                          <p className="text-xs font-semibold" style={{ color: priority.completed ? "#006c4a" : "#8a9e97" }}>
-                            {priority.completed ? "Completed on this day" : "Left incomplete on this day"}
+                            {priority.title}
                           </p>
-                        )}
+
+                          {selectedDayIsCurrent ? (
+                            <button
+                              type="button"
+                              onClick={() => void toggleTask(priority)}
+                              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold"
+                              style={{
+                                background: priority.completed ? "rgba(0,108,74,0.09)" : "#f7faf8",
+                                border: priority.completed ? "1px solid rgba(0,108,74,0.16)" : "1px solid rgba(0,0,0,0.08)",
+                                color: priority.completed ? "#006c4a" : "#4b635b",
+                              }}
+                            >
+                              <span className="material-symbols-outlined text-[15px]">
+                                {priority.completed ? "task_alt" : "check_circle"}
+                              </span>
+                              {priority.completed ? "Completed" : "Mark complete"}
+                            </button>
+                          ) : (
+                            <p className="text-xs font-semibold" style={{ color: priority.completed ? "#006c4a" : "#8a9e97" }}>
+                              {priority.completed ? "Completed on this day" : "Left incomplete on this day"}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

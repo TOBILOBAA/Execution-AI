@@ -152,7 +152,7 @@ export default function GoalsOverviewPage() {
           <button
             type="button"
             onClick={() => router.push(`/dashboard/goals/${currentYear}`)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+            className="interactive-card inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow-[0_12px_28px_rgba(0,108,74,0.16)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[--color-primary]/15"
             style={{ background: "#006c4a", color: "#fff" }}
           >
             <span className="material-symbols-outlined text-[16px]">calendar_month</span>

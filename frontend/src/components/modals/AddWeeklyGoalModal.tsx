@@ -1,9 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
-import { Input, Textarea } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
 import { useAppStore } from "@/lib/store";
 import type { WeeklyGoal } from "@/lib/types";
 import { getWeekNumber } from "@/lib/goalsView";
@@ -33,6 +30,7 @@ export function AddWeeklyGoalModal({
   const sessionWeekStartsOn = useAppStore((state) => state.sessionWeekStartsOn);
   const activeDashboardDate = useAppStore((state) => state.activeDashboardDate);
   const isEdit = !!initialData;
+  const titleId = isEdit ? "weekly-goal-edit-title" : "weekly-goal-add-title";
 
   const [title, setTitle] = useState(initialData?.title ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
@@ -60,9 +58,31 @@ export function AddWeeklyGoalModal({
     setError("");
   }, [availableMonthlyGoals, defaultIsMain, initialData, open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
   const handleSave = () => {
-    if (!title.trim()) { setError("Goal title is required"); return; }
-    if (!monthlyGoalId) { setError("Pick a monthly goal first"); return; }
+    if (!title.trim()) {
+      setError("Goal title is required");
+      return;
+    }
+    if (!monthlyGoalId) {
+      setError("Pick a monthly goal first");
+      return;
+    }
     if (isEdit && initialData) {
       updateWeeklyGoal(initialData.id, { title: title.trim(), description, isMain, monthlyGoalId });
     } else {
@@ -82,112 +102,208 @@ export function AddWeeklyGoalModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} size="lg">
-      <ModalHeader
-        title={isEdit ? "Edit Weekly Goal" : "Add Weekly Goal"}
-        subtitle={`Week ${effectiveWeek} Sprint`}
-        icon="view_week"
-        onClose={onClose}
-      />
-      <ModalBody className="space-y-5">
-        <div
-          className="rounded-2xl p-4"
-          style={{ background: "linear-gradient(135deg, rgba(0,108,74,0.08), rgba(255,255,255,0.96))", border: "1px solid rgba(0,108,74,0.12)" }}
-        >
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#006c4a" }}>
-            Sprint window
-          </p>
-          <h3 className="mt-2 text-base font-bold" style={{ color: "#1a1f1e" }}>
-            Week {effectiveWeek} · {effectiveYear}
-          </h3>
-          <p className="mt-1 text-sm leading-relaxed" style={{ color: "#5d6d67" }}>
-            Tie this sprint goal to the monthly goal it supports, then decide whether it is the main commitment or a supporting target for the week.
-          </p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.25)", backdropFilter: "blur(5px)" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+    >
+      <div
+        className="bg-white w-full max-w-[620px] max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+        style={{ border: "1px solid rgba(0,0,0,0.07)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-8 pt-8 pb-5 flex items-start justify-between" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#006c4a" }}>
+              Weekly planning
+            </p>
+            <h2 id={titleId} className="font-headline font-extrabold text-xl mt-2" style={{ color: "#1a1f1e" }}>
+              {isEdit ? "Edit Weekly Goal" : "Add Weekly Goal"}
+            </h2>
+            <p className="text-sm mt-1 max-w-[420px]" style={{ color: "#8a9e97" }}>
+              Give this week one unmistakable main objective, plus any supporting goals that help it move.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-colors flex-shrink-0"
+            style={{ color: "#8a9e97" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#f4f6f4")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            aria-label="Close"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
         </div>
 
-        <div className="space-y-1.5">
-          <label className="block text-[10px] font-bold uppercase tracking-widest text-[--color-on-surface-variant]">
-            Monthly Goal
-          </label>
+        <div className="px-8 py-7 space-y-6 overflow-y-auto">
           <div
-            className="relative rounded-2xl p-1"
-            style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)" }}
+            className="rounded-2xl p-5"
+            style={{ background: "linear-gradient(135deg, rgba(0,108,74,0.08), rgba(255,255,255,0.98))", border: "1px solid rgba(0,108,74,0.12)" }}
           >
-            <select
-              value={monthlyGoalId}
-              disabled={availableMonthlyGoals.length === 0}
-              onChange={(e) => { setMonthlyGoalId(e.target.value); setError(""); }}
-              className="w-full appearance-none bg-transparent rounded-[14px] px-4 py-3 text-sm text-[--color-on-surface] outline-none transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {availableMonthlyGoals.length === 0 ? (
-                <option value="">Add a monthly goal first</option>
-              ) : (
-                <>
-                  <option value="">Select a monthly goal</option>
-                  {availableMonthlyGoals.map((goal) => (
-                    <option key={goal.id} value={goal.id}>{goal.title}</option>
-                  ))}
-                </>
-              )}
-            </select>
-            <span
-              className="material-symbols-outlined pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[18px]"
-              style={{ color: "#8a9e97" }}
-            >
-              expand_more
-            </span>
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#006c4a" }}>
+              Sprint window
+            </p>
+            <h3 className="mt-2 text-base font-bold" style={{ color: "#1a1f1e" }}>
+              Week {effectiveWeek} · {effectiveYear}
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: "#5d6d67" }}>
+              Tie the week to the monthly goal it supports, then define whether this is the sprint’s main commitment or a supporting target.
+            </p>
           </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+              Monthly Goal
+            </label>
+            <div className="relative">
+              <select
+                value={monthlyGoalId}
+                disabled={availableMonthlyGoals.length === 0}
+                onChange={(e) => { setMonthlyGoalId(e.target.value); setError(""); }}
+                className="w-full rounded-xl px-4 pr-10 py-3 text-sm outline-none transition-all appearance-none disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  background: "#f7f9f8",
+                  border: error && !monthlyGoalId ? "1.5px solid #ef4444" : "1.5px solid rgba(0,0,0,0.07)",
+                  color: "#1a1f1e",
+                }}
+                onFocus={(e) => (e.currentTarget.style.border = "1.5px solid #006c4a")}
+                onBlur={(e) => (e.currentTarget.style.border = error && !monthlyGoalId ? "1.5px solid #ef4444" : "1.5px solid rgba(0,0,0,0.07)")}
+              >
+                {availableMonthlyGoals.length === 0 ? (
+                  <option value="">Add a monthly goal first</option>
+                ) : (
+                  <>
+                    <option value="">Select a monthly goal</option>
+                    {availableMonthlyGoals.map((goal) => (
+                      <option key={goal.id} value={goal.id}>{goal.title}</option>
+                    ))}
+                  </>
+                )}
+              </select>
+              <span
+                className="material-symbols-outlined text-[18px] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: "#a8b5af" }}
+              >
+                expand_more
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+              Goal Role
+            </label>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {[
+                { value: true, label: "Main Goal", desc: "The sprint’s primary objective" },
+                { value: false, label: "Supporting Goal", desc: "Support work around the weekly focus" },
+              ].map((option) => {
+                const active = isMain === option.value;
+                return (
+                  <button
+                    key={String(option.value)}
+                    type="button"
+                    onClick={() => setIsMain(option.value)}
+                    className="rounded-2xl p-4 text-left transition-all duration-150"
+                    style={{
+                      background: active ? "rgba(0,108,74,0.08)" : "#f7f9f8",
+                      border: active ? "1.5px solid rgba(0,108,74,0.28)" : "1.5px solid rgba(0,0,0,0.07)",
+                      color: active ? "#006c4a" : "#5d6d67",
+                      boxShadow: active ? "0 10px 24px rgba(0,108,74,0.10)" : "none",
+                    }}
+                  >
+                    <p className="text-sm font-bold" style={{ color: active ? "#006c4a" : "#1a1f1e" }}>
+                      {option.label}
+                    </p>
+                    <p className="text-xs mt-1 leading-relaxed" style={{ color: active ? "#2f6d58" : "#7f8d88" }}>
+                      {option.desc}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+              Goal Title
+            </label>
+            <input
+              type="text"
+              value={title}
+              autoFocus
+              onChange={(e) => { setTitle(e.target.value); setError(""); }}
+              placeholder="e.g., Finish the goals dashboard polish pass"
+              className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all"
+              style={{
+                background: "#f7f9f8",
+                border: error && !title.trim() ? "1.5px solid #ef4444" : "1.5px solid rgba(0,0,0,0.07)",
+                color: "#1a1f1e",
+              }}
+              onFocus={(e) => (e.currentTarget.style.border = "1.5px solid #006c4a")}
+              onBlur={(e) => (e.currentTarget.style.border = error && !title.trim() ? "1.5px solid #ef4444" : "1.5px solid rgba(0,0,0,0.07)")}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What does success look like for this week?"
+              className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all resize-y min-h-[110px]"
+              style={{
+                background: "#f7f9f8",
+                border: "1.5px solid rgba(0,0,0,0.07)",
+                color: "#1a1f1e",
+              }}
+              onFocus={(e) => (e.currentTarget.style.border = "1.5px solid #006c4a")}
+              onBlur={(e) => (e.currentTarget.style.border = "1.5px solid rgba(0,0,0,0.07)")}
+            />
+          </div>
+
+          {error ? (
+            <p className="text-sm font-medium" style={{ color: "#ef4444" }}>
+              {error}
+            </p>
+          ) : null}
         </div>
-        <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[--color-on-surface-variant]">
-            Goal role
-          </p>
-          <div className="flex gap-2">
-          {[
-            { value: true, label: "Main Goal", desc: "This week’s core objective" },
-            { value: false, label: "Supporting Goal", desc: "Support work around the main sprint" },
-          ].map((opt) => (
-            <button
-              type="button"
-              key={String(opt.value)}
-              onClick={() => setIsMain(opt.value)}
-              className={`flex-1 p-3 rounded-xl border text-left transition-all duration-150 ${
-                isMain === opt.value
-                  ? "border-[--color-primary] bg-emerald-50 text-[--color-primary] shadow-[0_10px_24px_rgba(0,108,74,0.10)]"
-                  : "border-[--color-outline-variant]/20 bg-[--color-surface-container-low] text-[--color-on-surface-variant] hover:border-[--color-primary]/30"
-              }`}
-            >
-              <p className="text-xs font-bold">{opt.label}</p>
-              <p className="text-[10px] mt-0.5 opacity-70">{opt.desc}</p>
-            </button>
-          ))}
+
+        <div
+          className="px-8 py-5 flex items-center justify-between"
+          style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
+        >
+          <button
+            onClick={onClose}
+            className="text-sm font-semibold transition-opacity hover:opacity-60"
+            style={{ color: "#8a9e97" }}
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={handleSave}
+            disabled={!monthlyGoalId}
+            className="px-7 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: "#006c4a", boxShadow: "0 2px 10px rgba(0,108,74,0.20)" }}
+            onMouseEnter={(e) => {
+              if (!monthlyGoalId) return;
+              e.currentTarget.style.background = "#004d38";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#006c4a";
+            }}
+          >
+            {isEdit ? "Save Changes" : "Create Weekly Goal"}
+          </button>
         </div>
-        </div>
-        <Input
-          label="Goal Title"
-          placeholder="e.g., Complete Goals tab UI implementation"
-          value={title}
-          onChange={(e) => { setTitle(e.target.value); setError(""); }}
-          error={error}
-        />
-        <Textarea
-          label="Description (optional)"
-          placeholder="What does achieving this goal look like?"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-        {error ? (
-          <p className="text-sm font-medium" style={{ color: "#b42318" }}>
-            {error}
-          </p>
-        ) : null}
-      </ModalBody>
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" size="md" onClick={handleSave} disabled={!monthlyGoalId}>
-          {isEdit ? "Save Weekly Goal" : "Create Weekly Goal"}
-        </Button>
-      </ModalFooter>
-    </Modal>
+      </div>
+    </div>
   );
 }
