@@ -53,7 +53,6 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
     error,
     today,
     currentMonth,
-    currentWeekNumber,
     monthlyGoals,
   } = useGoalsHierarchy(year);
 
@@ -171,12 +170,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
           </div>
         </div>
 
-        <GoalsHierarchyNav
-          year={year}
-          active="monthly"
-          currentMonth={currentMonth}
-          currentWeekNumber={currentWeekNumber}
-        />
+        <GoalsHierarchyNav year={year} active="monthly" />
       </div>
 
       {error && (
@@ -473,10 +467,11 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
                                   <button
                                     type="button"
                                     onClick={() => openModal("edit-monthly-goal", goal)}
-                                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                                    style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+                                    className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold flex-shrink-0"
+                                    style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
                                   >
-                                    <span className="material-symbols-outlined text-[16px]" style={{ color: "#6b7c75" }}>edit</span>
+                                    <span className="material-symbols-outlined text-[16px]">edit</span>
+                                    Edit
                                   </button>
                                 </>
                               ) : (
@@ -541,10 +536,11 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
                                 <button
                                   type="button"
                                   onClick={() => openModal("edit-monthly-goal", goal)}
-                                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+                                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold flex-shrink-0"
+                                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
                                 >
-                                  <span className="material-symbols-outlined text-[16px]" style={{ color: "#6b7c75" }}>edit</span>
+                                  <span className="material-symbols-outlined text-[15px]">edit</span>
+                                  Edit
                                 </button>
                               </>
                             ) : (

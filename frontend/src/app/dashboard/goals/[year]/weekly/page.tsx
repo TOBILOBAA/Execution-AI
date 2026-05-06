@@ -52,7 +52,6 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
     hasCachedData,
     error,
     today,
-    currentMonth,
     currentWeekNumber,
     weeklyGoals,
   } = useGoalsHierarchy(year);
@@ -64,17 +63,22 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
     () => listWeeksForYearThroughWeek(year, throughWeek, sessionWeekStartsOn),
     [sessionWeekStartsOn, throughWeek, year],
   );
-  const monthQuery = searchParams?.get("month");
   const weekQuery = searchParams?.get("week");
-  const selectedMonth =
-    monthQuery === "all" || !monthQuery
-      ? "all"
-      : Math.max(1, Math.min(12, parseInt(monthQuery, 10) || currentMonth));
   const selectedWeek = weekQuery ? Math.max(1, parseInt(weekQuery, 10) || currentWeekNumber) : null;
 
   useEffect(() => {
     setPage(1);
-  }, [selectedMonth, sortOrder]);
+  }, [sortOrder]);
+
+  const pageSize = 12;
+
+  useEffect(() => {
+    if (selectedWeek === null) return;
+    const weekIndex = weekSlots.findIndex((slot) => slot.weekNumber === selectedWeek);
+    if (weekIndex === -1) return;
+    const orderedIndex = sortOrder === "desc" ? weekSlots.length - 1 - weekIndex : weekIndex;
+    setPage(Math.floor(orderedIndex / pageSize) + 1);
+  }, [pageSize, selectedWeek, sortOrder, weekSlots]);
 
   if (Number.isNaN(year)) {
     return (
@@ -118,14 +122,9 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
     };
   });
 
-  const filteredRows = selectedMonth === "all"
-    ? rows
-    : rows.filter((row) => row.month === selectedMonth);
-
-  const sortedRows = [...filteredRows].sort((a, b) =>
+  const sortedRows = [...rows].sort((a, b) =>
     sortOrder === "desc" ? b.weekNumber - a.weekNumber : a.weekNumber - b.weekNumber,
   );
-  const pageSize = 12;
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const paginatedRows = sortedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -139,13 +138,11 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
   const selectedWeekSlot = selectedWeek === null
     ? null
     : weekSlots.find((slot) => slot.weekNumber === selectedWeek) ?? null;
+  const selectedWeekIsCurrent = selectedWeek !== null && selectedWeek === currentWeekNumber && year === liveYear;
 
   function pushWeek(weekNumber: number) {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     params.set("week", String(weekNumber));
-    if (selectedMonth !== "all" && !params.has("month")) {
-      params.set("month", String(selectedMonth));
-    }
     router.push(`/dashboard/goals/${year}/weekly?${params.toString()}`);
   }
 
@@ -187,12 +184,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
           </div>
         </div>
 
-        <GoalsHierarchyNav
-          year={year}
-          active="weekly"
-          currentMonth={currentMonth}
-          currentWeekNumber={currentWeekNumber}
-        />
+        <GoalsHierarchyNav year={year} active="weekly" />
       </div>
 
       {error && (
@@ -382,20 +374,11 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => router.push(`/dashboard/goals/${year}/w/${selectedWeek}`)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
-                  style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
-                >
-                  <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                  Open week board
-                </button>
-                {selectedWeek === currentWeekNumber && year === liveYear ? (
+                {selectedWeekIsCurrent ? (
                   <button
                     type="button"
                     onClick={() => openModal("add-weekly-goal", { yearOverride: year, weekOverride: selectedWeek, defaultIsMain: selectedWeekMainGoals.length === 0 })}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow-[0_12px_28px_rgba(0,108,74,0.16)]"
                     style={{ background: "#006c4a", color: "#fff" }}
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
@@ -418,7 +401,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
                 className="mt-5 rounded-2xl p-5 text-sm leading-relaxed"
                 style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}
               >
-                {selectedWeek === currentWeekNumber && year === liveYear
+                {selectedWeekIsCurrent
                   ? "No weekly goals are saved for this week yet. Add the main and supporting goals you want this week to carry."
                   : "No weekly goals were saved for this week."}
               </div>
@@ -480,10 +463,11 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
                                   <button
                                     type="button"
                                     onClick={() => openModal("edit-weekly-goal", goal)}
-                                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                                    style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+                                    className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold flex-shrink-0"
+                                    style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
                                   >
-                                    <span className="material-symbols-outlined text-[16px]" style={{ color: "#6b7c75" }}>edit</span>
+                                    <span className="material-symbols-outlined text-[16px]">edit</span>
+                                    Edit
                                   </button>
                                 </>
                               ) : (
@@ -548,10 +532,11 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
                                 <button
                                   type="button"
                                   onClick={() => openModal("edit-weekly-goal", goal)}
-                                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+                                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold flex-shrink-0"
+                                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
                                 >
-                                  <span className="material-symbols-outlined text-[16px]" style={{ color: "#6b7c75" }}>edit</span>
+                                  <span className="material-symbols-outlined text-[15px]">edit</span>
+                                  Edit
                                 </button>
                               </>
                             ) : (
