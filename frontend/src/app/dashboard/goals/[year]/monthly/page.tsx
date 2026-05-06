@@ -129,7 +129,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
   function pushMonth(month: number | "all") {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     params.set("month", String(month));
-    router.push(`/dashboard/goals/${year}/monthly?${params.toString()}`);
+    router.push(`/dashboard/goals/${year}/monthly?${params.toString()}`, { scroll: false });
   }
 
   return (
