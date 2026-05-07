@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import type { WeeklyGoal } from "@/lib/types";
 import { getWeekNumber } from "@/lib/goalsView";
@@ -47,7 +47,10 @@ export function AddWeeklyGoalModal({
   const effectiveWeek = initialData?.weekNumber ?? weekOverride ?? activeDashboardWeek;
   const effectiveMonth = initialData?.month ?? monthOverride ?? activeDashboardMonth;
   const effectiveYear = initialData?.year ?? yearOverride ?? activeDashboardYear;
-  const availableMonthlyGoals = monthlyGoals.filter((goal) => goal.year === effectiveYear && goal.month === effectiveMonth);
+  const availableMonthlyGoals = useMemo(
+    () => monthlyGoals.filter((goal) => goal.year === effectiveYear && goal.month === effectiveMonth),
+    [effectiveMonth, effectiveYear, monthlyGoals],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -124,7 +127,7 @@ export function AddWeeklyGoalModal({
               {isEdit ? "Edit Weekly Goal" : "Add Weekly Goal"}
             </h2>
             <p className="text-sm mt-1 max-w-[420px]" style={{ color: "#8a9e97" }}>
-              Give this week one unmistakable main objective, plus any supporting goals that help it move.
+              Set what matters most this week, then add anything else that still deserves attention.
             </p>
           </div>
           <button
@@ -145,13 +148,13 @@ export function AddWeeklyGoalModal({
             style={{ background: "linear-gradient(135deg, rgba(0,108,74,0.08), rgba(255,255,255,0.98))", border: "1px solid rgba(0,108,74,0.12)" }}
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#006c4a" }}>
-              Sprint window
+              This week
             </p>
             <h3 className="mt-2 text-base font-bold" style={{ color: "#1a1f1e" }}>
               Week {effectiveWeek} · {effectiveYear}
             </h3>
             <p className="mt-2 text-sm leading-relaxed" style={{ color: "#5d6d67" }}>
-              Tie the week to the monthly goal it supports, then define whether this is the sprint’s main commitment or a supporting target.
+              Choose what matters most this week. Set the main goal first, then add any secondary goals you still want to make progress on.
             </p>
           </div>
 
@@ -199,8 +202,8 @@ export function AddWeeklyGoalModal({
             </label>
             <div className="grid sm:grid-cols-2 gap-3">
               {[
-                { value: true, label: "Main Goal", desc: "The sprint’s primary objective" },
-                { value: false, label: "Supporting Goal", desc: "Support work around the weekly focus" },
+                { value: true, label: "Main Goal", desc: "The most important goal this week" },
+                { value: false, label: "Secondary Goal", desc: "Still important, just not the main focus" },
               ].map((option) => {
                 const active = isMain === option.value;
                 return (
@@ -256,7 +259,7 @@ export function AddWeeklyGoalModal({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does success look like for this week?"
+              placeholder="What needs to happen this week?"
               className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all resize-y min-h-[110px]"
               style={{
                 background: "#f7f9f8",
