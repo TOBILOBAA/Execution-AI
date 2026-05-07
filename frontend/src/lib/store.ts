@@ -224,6 +224,10 @@ function getReferenceDate(isoDate: string): Date {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
+function isCurrentYearlyGoal(goal: Pick<YearlyGoal, "year">, activeDashboardDate: string): boolean {
+  return goal.year === getReferenceDate(activeDashboardDate).getFullYear();
+}
+
 function isCurrentMonthlyGoal(goal: Pick<MonthlyGoal, "year" | "month">, activeDashboardDate: string): boolean {
   const referenceDate = getReferenceDate(activeDashboardDate);
   return goal.year === referenceDate.getFullYear() && goal.month === referenceDate.getMonth() + 1;
@@ -1077,8 +1081,17 @@ export const useAppStore = create<AppState>()(
       // ── Yearly goals ────────────────────────────────────────────────────────
       addYearlyGoal: (goal) => {
         const localId = genId("yg");
-        set((s) => ({ yearlyGoals: [...s.yearlyGoals, { ...goal, id: localId }] }));
-        const { sessionId } = get();
+        const { sessionId, activeDashboardDate } = get();
+        set((s) => ({
+          yearlyGoals: [
+            ...s.yearlyGoals,
+            {
+              ...goal,
+              id: localId,
+              editable: isCurrentYearlyGoal(goal, activeDashboardDate),
+            },
+          ],
+        }));
         if (sessionId) {
           const request = yearlyGoalsApi
             .create(sessionId, {
@@ -1091,7 +1104,14 @@ export const useAppStore = create<AppState>()(
             .then((created) => {
               set((s) => ({
                 yearlyGoals: s.yearlyGoals.map((g) =>
-                  g.id === localId ? { ...g, id: created.id, categoryId: created.category_id ?? g.categoryId } : g
+                  g.id === localId
+                    ? {
+                        ...g,
+                        id: created.id,
+                        categoryId: created.category_id ?? g.categoryId,
+                        editable: created.editable ?? g.editable,
+                      }
+                    : g
                 ),
                 syncError: null,
               }));
@@ -1148,7 +1168,14 @@ export const useAppStore = create<AppState>()(
             });
             set((s) => ({
               yearlyGoals: s.yearlyGoals.map((yg) =>
-                yg.id === g.id ? { ...yg, id: created.id, categoryId: created.category_id ?? yg.categoryId } : yg,
+                yg.id === g.id
+                  ? {
+                      ...yg,
+                      id: created.id,
+                      categoryId: created.category_id ?? yg.categoryId,
+                      editable: created.editable ?? yg.editable,
+                    }
+                  : yg,
               ),
             }));
           } catch (e) {
@@ -1211,7 +1238,14 @@ export const useAppStore = create<AppState>()(
             });
             set((s) => ({
               monthlyGoals: s.monthlyGoals.map((mg) =>
-                mg.id === g.id ? { ...mg, id: created.id, yearlyGoalId: created.yearly_goal_id ?? mg.yearlyGoalId } : mg
+                mg.id === g.id
+                  ? {
+                      ...mg,
+                      id: created.id,
+                      yearlyGoalId: created.yearly_goal_id ?? mg.yearlyGoalId,
+                      editable: created.editable ?? mg.editable,
+                    }
+                  : mg
               ),
               syncError: null,
               syncStatus: "saved",
@@ -1255,7 +1289,14 @@ export const useAppStore = create<AppState>()(
             });
             set((s) => ({
               weeklyGoals: s.weeklyGoals.map((wg) =>
-                wg.id === g.id ? { ...wg, id: created.id, monthlyGoalId: created.monthly_goal_id ?? wg.monthlyGoalId } : wg
+                wg.id === g.id
+                  ? {
+                      ...wg,
+                      id: created.id,
+                      monthlyGoalId: created.monthly_goal_id ?? wg.monthlyGoalId,
+                      editable: created.editable ?? wg.editable,
+                    }
+                  : wg
               ),
               syncError: null,
               syncStatus: "saved",
