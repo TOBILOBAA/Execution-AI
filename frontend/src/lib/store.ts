@@ -1785,8 +1785,25 @@ export const useAppStore = create<AppState>()(
             );
         }
       },
-      removeDailyPriority: (id) =>
-        set((s) => ({ dailyPriorities: s.dailyPriorities.filter((p) => p.id !== id) })),
+      removeDailyPriority: (id) => {
+        const removed = get().dailyPriorities.find((p) => p.id === id);
+        if (!removed) return;
+        set((s) => ({ dailyPriorities: s.dailyPriorities.filter((p) => p.id !== id) }));
+        const { sessionId } = get();
+        if (sessionId && isUuid(id)) {
+          tasksApi
+            .delete(sessionId, id)
+            .then(() => set({ syncError: null }))
+            .catch((e) =>
+              set((s) => ({
+                dailyPriorities: [...s.dailyPriorities, removed].sort((a, b) =>
+                  a.date.localeCompare(b.date) || (a.isMain === b.isMain ? a.title.localeCompare(b.title) : a.isMain ? -1 : 1),
+                ),
+                syncError: formatApiError("Delete daily priority", e),
+              }))
+            );
+        }
+      },
 
       // ── Secondary tasks ───────────────────────────────────────────────────────
       addSecondaryTask: (task) => {
@@ -1873,8 +1890,25 @@ export const useAppStore = create<AppState>()(
             );
         }
       },
-      removeSecondaryTask: (id) =>
-        set((s) => ({ secondaryTasks: s.secondaryTasks.filter((t) => t.id !== id) })),
+      removeSecondaryTask: (id) => {
+        const removed = get().secondaryTasks.find((t) => t.id === id);
+        if (!removed) return;
+        set((s) => ({ secondaryTasks: s.secondaryTasks.filter((t) => t.id !== id) }));
+        const { sessionId } = get();
+        if (sessionId && isUuid(id)) {
+          tasksApi
+            .delete(sessionId, id)
+            .then(() => set({ syncError: null }))
+            .catch((e) =>
+              set((s) => ({
+                secondaryTasks: [...s.secondaryTasks, removed].sort((a, b) =>
+                  a.date.localeCompare(b.date) || a.title.localeCompare(b.title),
+                ),
+                syncError: formatApiError("Delete secondary task", e),
+              }))
+            );
+        }
+      },
 
       // ── Habits ───────────────────────────────────────────────────────────────
       toggleHabit: (id) => {

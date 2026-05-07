@@ -361,3 +361,13 @@ def update_daily_priority(db: Client, priority_id: UUID, session_id: UUID, updat
 
 def delete_daily_priorities_for_plan(db: Client, daily_plan_id: UUID) -> None:
     db.table("daily_priorities").delete().eq("daily_plan_id", str(daily_plan_id)).execute()
+
+
+def delete_daily_priority(db: Client, priority_id: UUID, session_id: UUID) -> None:
+    (
+        db.table("daily_priorities")
+        .delete()
+        .eq("id", str(priority_id))
+        .eq("session_id", str(session_id))
+        .execute()
+    )

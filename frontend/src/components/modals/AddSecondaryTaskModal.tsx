@@ -19,10 +19,11 @@ interface Props {
 }
 
 export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
-  const { addSecondaryTask, updateSecondaryTask, categories, weeklyGoals, sessionWeekStartsOn, activeDashboardDate } = useAppStore(
+  const { addSecondaryTask, updateSecondaryTask, removeSecondaryTask, categories, weeklyGoals, sessionWeekStartsOn, activeDashboardDate } = useAppStore(
     useShallow((state) => ({
       addSecondaryTask: state.addSecondaryTask,
       updateSecondaryTask: state.updateSecondaryTask,
+      removeSecondaryTask: state.removeSecondaryTask,
       categories: state.categories,
       weeklyGoals: state.weeklyGoals,
       sessionWeekStartsOn: state.sessionWeekStartsOn,
@@ -99,6 +100,13 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
         priority: "medium",
       });
     }
+    onClose();
+  };
+
+  const handleDelete = () => {
+    if (!initialData) return;
+    if (!window.confirm("Delete this secondary task? This cannot be undone.")) return;
+    removeSecondaryTask(initialData.id);
     onClose();
   };
 
@@ -268,24 +276,48 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
           className="px-8 py-5 flex items-center justify-between"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
-          <button
-            onClick={onClose}
-            className="text-sm font-semibold uppercase tracking-wide transition-opacity hover:opacity-60"
-            style={{ color: "#8a9e97" }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!weeklyGoalId}
-            className="flex items-center gap-2 px-7 py-3 rounded-xl text-sm font-bold text-white transition-all"
-            style={{ background: "#003d2b", boxShadow: "0 2px 10px rgba(0,108,74,0.22)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
-          >
-            {isEdit ? "Save Changes" : "Add to Today"}
-            <span className="material-symbols-outlined text-[16px]">{isEdit ? "check" : "bolt"}</span>
-          </button>
+          <div>
+            {isEdit ? (
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-70"
+                style={{ color: "#ef4444" }}
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+                Delete Task
+              </button>
+            ) : (
+              <button
+                onClick={onClose}
+                className="text-sm font-semibold uppercase tracking-wide transition-opacity hover:opacity-60"
+                style={{ color: "#8a9e97" }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {isEdit && (
+              <button
+                onClick={onClose}
+                className="text-sm font-semibold uppercase tracking-wide transition-opacity hover:opacity-60"
+                style={{ color: "#8a9e97" }}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={!weeklyGoalId}
+              className="flex items-center gap-2 px-7 py-3 rounded-xl text-sm font-bold text-white transition-all"
+              style={{ background: "#003d2b", boxShadow: "0 2px 10px rgba(0,108,74,0.22)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
+            >
+              {isEdit ? "Save Changes" : "Add to Today"}
+              <span className="material-symbols-outlined text-[16px]">{isEdit ? "check" : "bolt"}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

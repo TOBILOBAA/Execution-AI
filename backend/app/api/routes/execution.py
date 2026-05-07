@@ -109,6 +109,20 @@ def create_task(
     return plans_db.create_daily_priority(db, data)
 
 
+@router.delete("/tasks/{task_id}", status_code=204)
+def delete_task(
+    task_id: UUID,
+    session_id: UUID,
+    db: Client = Depends(get_db),
+):
+    """Delete a task (daily priority or secondary task) from the current day."""
+    item = plans_db.get_daily_priority(db, task_id, session_id)
+    if item:
+        assert_period_current_daily(session_id, date.fromisoformat(item["date"]), db)
+        plans_db.delete_daily_priority(db, task_id, session_id)
+    return None
+
+
 # ─── Goals progress ───────────────────────────────────────────────────────────
 
 @router.patch("/goals/{goal_type}/{goal_id}/progress")

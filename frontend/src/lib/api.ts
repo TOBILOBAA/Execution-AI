@@ -488,6 +488,9 @@ export const tasksApi = {
   toggleStatus: (sessionId: string, taskId: string, completed: boolean) =>
     patch<ApiDailyPriority>(`/tasks/${taskId}/status?session_id=${sessionId}&completed=${completed}`),
 
+  delete: (sessionId: string, taskId: string) =>
+    del<void>(`/tasks/${taskId}?session_id=${sessionId}`),
+
   update: (sessionId: string, taskId: string, data: Partial<{
     title: string;
     description: string;
