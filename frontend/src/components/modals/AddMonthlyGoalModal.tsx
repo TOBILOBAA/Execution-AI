@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import type { MonthlyGoal } from "@/lib/types";
 import { MONTH_NAMES } from "@/lib/mockData";
@@ -39,7 +39,10 @@ export function AddMonthlyGoalModal({
   const activeDashboardMonth = Number(activeDashboardDate.slice(5, 7)) || new Date().getMonth() + 1;
   const effectiveMonth = initialData?.month ?? monthOverride ?? activeDashboardMonth;
   const effectiveYear = initialData?.year ?? yearOverride ?? activeDashboardYear;
-  const availableYearlyGoals = yearlyGoals.filter((goal) => goal.year === effectiveYear);
+  const availableYearlyGoals = useMemo(
+    () => yearlyGoals.filter((goal) => goal.year === effectiveYear),
+    [effectiveYear, yearlyGoals],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -118,7 +121,7 @@ export function AddMonthlyGoalModal({
               {isEdit ? "Edit Monthly Goal" : "Add Monthly Goal"}
             </h2>
             <p className="text-sm mt-1 max-w-[420px]" style={{ color: "#8a9e97" }}>
-              Shape {MONTH_NAMES[effectiveMonth - 1]} {effectiveYear} with one clear main focus and any supporting goals that help it land.
+              Set what matters most this month, then add anything else that still deserves attention.
             </p>
           </div>
           <button
@@ -145,7 +148,7 @@ export function AddMonthlyGoalModal({
               {MONTH_NAMES[effectiveMonth - 1]} {effectiveYear}
             </h3>
             <p className="mt-2 text-sm leading-relaxed" style={{ color: "#5d6d67" }}>
-              Pick the yearly goal this month should move. Then set the main goal and any secondary goals that support it.
+              Choose what matters most this month. Set the main goal first, then add any secondary goals you still want to make progress on.
             </p>
           </div>
 
@@ -193,8 +196,8 @@ export function AddMonthlyGoalModal({
             </label>
             <div className="grid sm:grid-cols-2 gap-3">
               {[
-                { value: true, label: "Main Goal", desc: "The one goal this month needs to carry" },
-                { value: false, label: "Secondary Goal", desc: "Work that helps the main goal move" },
+                { value: true, label: "Main Goal", desc: "The most important goal this month" },
+                { value: false, label: "Secondary Goal", desc: "Still important, just not the main focus" },
               ].map((option) => {
                 const active = isMain === option.value;
                 return (
@@ -250,7 +253,7 @@ export function AddMonthlyGoalModal({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What needs to be true by the end of the month?"
+              placeholder="What needs to happen this month?"
               className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all resize-y min-h-[110px]"
               style={{
                 background: "#f7f9f8",
