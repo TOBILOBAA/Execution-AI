@@ -43,6 +43,8 @@ interface PeriodPlanGoalPayload extends DraftGoal {
   is_main: boolean;
 }
 
+const MAX_PERIOD_MAIN_GOALS = 3;
+
 type GoalEditorState =
   | null
   | { type: "weekly"; goal?: WeeklyGoal; defaultIsMain?: boolean }
@@ -283,9 +285,20 @@ function buildDraftRowKeys(draft: PeriodPlanDraft) {
   return next;
 }
 
+function normalizePlanDraft(draft: PeriodPlanDraft): PeriodPlanDraft {
+  return {
+    ...draft,
+    main_goals: (draft.main_goals ?? []).slice(0, MAX_PERIOD_MAIN_GOALS),
+    secondary_goals: draft.secondary_goals ?? [],
+  };
+}
+
+function reviewQueueSignature(entries: ReviewCandidate[]) {
+  return entries.map((entry) => entry.key).join("|");
+}
 function normalizePlanGoals(draft: PeriodPlanDraft, selectedKeys: Set<string>): PeriodPlanGoalPayload[] {
   const goals: PeriodPlanGoalPayload[] = [];
-  draft.main_goals?.forEach((goal, index) => {
+  (draft.main_goals ?? []).slice(0, MAX_PERIOD_MAIN_GOALS).forEach((goal, index) => {
     if (!selectedKeys.has(`m:${index}`)) return;
     goals.push({
       title: goal.title,
@@ -338,11 +351,11 @@ function planButtonLabel(type: ReviewType) {
   return "Prepare next year";
 }
 
-function openBoardLabel(type: ReviewType) {
-  if (type === "weekly") return "Open next week board";
-  if (type === "monthly") return "Open next month board";
-  if (type === "quarterly") return "Open next quarter board";
-  return "Open next year board";
+function returnHomeLabel(type: ReviewType) {
+  if (type === "weekly") return "Return home for next week";
+  if (type === "monthly") return "Return home for next month";
+  if (type === "quarterly") return "Return home for next quarter";
+  return "Return home for next year";
 }
 
 function aiButtonLabel(type: ReviewType) {
@@ -361,6 +374,31 @@ function supportCopy(type: ReviewType) {
     return "Use the next quarter handoff to check whether the upcoming months already have a clear backbone.";
   }
   return "Use the next year handoff to check whether the yearly outcomes are defined clearly enough to break down.";
+}
+
+function startOfNextWeekIso(entry: DashboardRecapEntry, weekStartsOn: "sunday" | "monday") {
+  const reviewWeek = entry.periodWeek ?? 1;
+  const weekOneStart = startOfLocalWeek(new Date(entry.periodYear, 0, 1), weekStartsOn);
+  const nextWeekStart = new Date(weekOneStart);
+  nextWeekStart.setDate(nextWeekStart.getDate() + reviewWeek * 7);
+  return `${nextWeekStart.getFullYear()}-${String(nextWeekStart.getMonth() + 1).padStart(2, "0")}-${String(nextWeekStart.getDate()).padStart(2, "0")}`;
+}
+
+function firstDayOfNextMonthIso(entry: DashboardRecapEntry) {
+  const reviewMonth = entry.periodMonth ?? 1;
+  const nextMonthDate = new Date(entry.periodYear, reviewMonth, 1);
+  return `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function firstDayOfNextQuarterIso(entry: DashboardRecapEntry) {
+  const reviewQuarter = entry.periodQuarter ?? 1;
+  const nextQuarterStartMonth = reviewQuarter === 4 ? 1 : (reviewQuarter * 3) + 1;
+  const nextQuarterYear = reviewQuarter === 4 ? entry.periodYear + 1 : entry.periodYear;
+  return `${nextQuarterYear}-${String(nextQuarterStartMonth).padStart(2, "0")}-01`;
+}
+
+function firstDayOfNextYearIso(entry: DashboardRecapEntry) {
+  return `${entry.periodYear + 1}-01-01`;
 }
 
 function cardPalette(tone: "default" | "soft" | "accent") {
@@ -671,6 +709,8 @@ export function DashboardPeriodReviewPrompts() {
     generateMonthlyPlan,
     approveWeeklyPlan,
     approveMonthlyPlan,
+    setActiveDashboardDate,
+    loadDashboard,
   } = useAppStore(
     useShallow((state) => ({
       sessionId: state.sessionId,
@@ -700,6 +740,8 @@ export function DashboardPeriodReviewPrompts() {
       generateMonthlyPlan: state.generateMonthlyPlan,
       approveWeeklyPlan: state.approveWeeklyPlan,
       approveMonthlyPlan: state.approveMonthlyPlan,
+      setActiveDashboardDate: state.setActiveDashboardDate,
+      loadDashboard: state.loadDashboard,
     })),
   );
 
@@ -975,6 +1017,8 @@ export function DashboardPeriodReviewPrompts() {
         }))
       : [];
 
+  const mainGoalCapReached = existingMainGoals.length >= MAX_PERIOD_MAIN_GOALS;
+
   const nextQuarterCards = nextQuarterMonths.map((month) => {
     const goals = nextQuarterGoals.filter((goal) => goal.month === month);
     const mainGoal = goals.find((goal) => goal.isMain) ?? goals[0] ?? null;
@@ -994,14 +1038,14 @@ export function DashboardPeriodReviewPrompts() {
     monthlyByYearly.set(goal.yearlyGoalId, list);
   }
 
-  const nextBoardPath =
-    activeCandidate.type === "weekly" && activeWeekContext
-      ? `/dashboard/goals/${activeWeekContext.nextYear}/weekly`
-      : activeCandidate.type === "monthly" && activeMonthContext
-      ? `/dashboard/goals/${activeMonthContext.nextYear}/monthly`
-      : activeCandidate.type === "quarterly" && activeQuarterContext
-      ? `/dashboard/goals/${activeQuarterContext.nextYear}/q/q${activeQuarterContext.nextQuarter}`
-      : `/dashboard/goals/${activeYearContext?.nextYear ?? yearContext.nextYear}`;
+  const nextHomeDate =
+    activeCandidate.type === "weekly"
+      ? startOfNextWeekIso(activeCandidate.entry, sessionWeekStartsOn)
+      : activeCandidate.type === "monthly"
+      ? firstDayOfNextMonthIso(activeCandidate.entry)
+      : activeCandidate.type === "quarterly"
+      ? firstDayOfNextQuarterIso(activeCandidate.entry)
+      : firstDayOfNextYearIso(activeCandidate.entry);
 
   function acknowledgePrompt(closedCandidate: ReviewCandidate) {
     if (!sessionId) return;
@@ -1064,6 +1108,11 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function openMainGoalEditor() {
+    setPlanSectionUnlocked(true);
+    if (mainGoalCapReached) {
+      setSavedNotice("Main goals are capped at 3 for each period.");
+      return;
+    }
     if (activeCandidate.type === "weekly") {
       setGoalEditor({ type: "weekly", defaultIsMain: true });
       return;
@@ -1224,7 +1273,7 @@ export function DashboardPeriodReviewPrompts() {
                     : apiDetail ?? "We couldn’t generate the next week yet.";
           throw new Error(msg);
         }
-        const draft = generated.draft as PeriodPlanDraft;
+        const draft = normalizePlanDraft(generated.draft as PeriodPlanDraft);
         setPlanDraft(draft);
         setDraftKeys(buildDraftRowKeys(draft));
         setPlanSectionUnlocked(true);
@@ -1251,7 +1300,7 @@ export function DashboardPeriodReviewPrompts() {
       if (!generated.ok) {
         throw new Error("We couldn’t generate the next month yet.");
       }
-      const draft = generated.draft as PeriodPlanDraft;
+      const draft = normalizePlanDraft(generated.draft as PeriodPlanDraft);
       setPlanDraft(draft);
       setDraftKeys(buildDraftRowKeys(draft));
       setPlanSectionUnlocked(true);
@@ -1298,10 +1347,12 @@ export function DashboardPeriodReviewPrompts() {
     }
   }
 
-  function handleOpenBoard() {
+  function handleReturnHome() {
     closePrompt();
+    setActiveDashboardDate(nextHomeDate);
+    void loadDashboard(nextHomeDate);
     startTransition(() => {
-      router.push(nextBoardPath);
+      router.push("/dashboard");
     });
   }
 
@@ -1416,27 +1467,75 @@ export function DashboardPeriodReviewPrompts() {
           }
           tone="soft"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {planSectionUnlocked ? (
-              <div className="flex min-w-0 flex-wrap gap-2">
-                <InfoPill>{existingMainGoals.length} main</InfoPill>
-                <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
-              </div>
-            ) : (
-              <p className="min-w-0 flex-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
-                Your draft will show up here as soon as generation finishes.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={handleGenerateDraft}
-              disabled={planLoading}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
-              style={{ background: "#006c4a" }}
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {planSectionUnlocked ? (
+                <div className="flex min-w-0 flex-wrap gap-2">
+                  <InfoPill>{existingMainGoals.length} main</InfoPill>
+                  <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
+                  <InfoPill>{activeHabits.length} habit{activeHabits.length === 1 ? "" : "s"}</InfoPill>
+                </div>
+              ) : (
+                <p className="min-w-0 flex-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
+                  Your AI draft appears here if you generate one. Manual adds also open the saved plan below.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleGenerateDraft}
+                disabled={planLoading}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+                style={{ background: "#006c4a" }}
+              >
+                {planLoading ? "Generating..." : aiButtonLabel(activeCandidate.type)}
+                <span className="material-symbols-outlined text-[15px]">auto_awesome</span>
+              </button>
+            </div>
+
+            <div
+              className="rounded-2xl p-4"
+              style={{ background: "white", border: "1px solid rgba(0,0,0,0.07)" }}
             >
-              {planLoading ? "Generating..." : aiButtonLabel(activeCandidate.type)}
-              <span className="material-symbols-outlined text-[15px]">auto_awesome</span>
-            </button>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                Start manually
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={openMainGoalEditor}
+                  disabled={mainGoalCapReached}
+                  className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                  style={{
+                    background: mainGoalCapReached ? "rgba(0,0,0,0.04)" : "rgba(0,108,74,0.08)",
+                    color: mainGoalCapReached ? "#9ca9a4" : "#006c4a",
+                  }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Add main goal
+                </button>
+                <button
+                  type="button"
+                  onClick={openSupportingGoalEditor}
+                  className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                  style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Add supporting
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlanSectionUnlocked(true);
+                    setHabitEditor({});
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                  style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Add habit
+                </button>
+              </div>
+            </div>
           </div>
         </SectionCard>
       )}
@@ -1523,8 +1622,12 @@ export function DashboardPeriodReviewPrompts() {
                 <button
                   type="button"
                   onClick={openMainGoalEditor}
+                  disabled={mainGoalCapReached}
                   className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
-                  style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                  style={{
+                    background: mainGoalCapReached ? "rgba(0,0,0,0.04)" : "rgba(0,108,74,0.08)",
+                    color: mainGoalCapReached ? "#9ca9a4" : "#006c4a",
+                  }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
                   Add main goal
@@ -1924,11 +2027,11 @@ export function DashboardPeriodReviewPrompts() {
             ) : (
               <button
                 type="button"
-                onClick={handleOpenBoard}
+                onClick={handleReturnHome}
                 className="flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white"
                 style={{ background: "#003d2b", boxShadow: "0 2px 12px rgba(0,108,74,0.25)" }}
               >
-                {openBoardLabel(activeCandidate.type)}
+                {returnHomeLabel(activeCandidate.type)}
                 <span className="material-symbols-outlined text-[18px]">east</span>
               </button>
             )}

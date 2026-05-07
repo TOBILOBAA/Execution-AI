@@ -594,6 +594,7 @@ function mapDashboardToStore(
 
   const metrics: DashboardMetrics = {
     executionStreak: data.metrics.execution_streak ?? 0,
+    bestExecutionStreak: data.metrics.best_execution_streak ?? 0,
     yesterdayCompletion: data.metrics.yesterday_completion ?? 0,
     weeklyConsistency: padWeeklyConsistency(data.metrics.weekly_consistency),
     weeklyObjective:
