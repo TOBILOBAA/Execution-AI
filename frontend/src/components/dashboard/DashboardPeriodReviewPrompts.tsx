@@ -277,6 +277,10 @@ function buildDraftRowKeys(draft: PeriodPlanDraft) {
   return next;
 }
 
+function reviewQueueSignature(entries: ReviewCandidate[]) {
+  return entries.map((entry) => entry.key).join("|");
+}
+
 function normalizePlanGoals(draft: PeriodPlanDraft, selectedKeys: Set<string>): PeriodPlanGoalPayload[] {
   const goals: PeriodPlanGoalPayload[] = [];
   draft.main_goals?.forEach((goal, index) => {
@@ -712,6 +716,8 @@ export function DashboardPeriodReviewPrompts() {
   const modalAiEpochRef = useRef(0);
   /** Mirrors sessionStorage seen-keys so dismiss survives races before storage commits. */
   const dismissedReviewKeysRef = useRef<Set<string>>(new Set());
+  const [queuedCandidates, setQueuedCandidates] = useState<ReviewCandidate[]>([]);
+  const [pausedQueueSignature, setPausedQueueSignature] = useState<string | null>(null);
   /** Review-queue effect: advance often enough for eligibility windows (~10m) without firing every minute. */
   const recapSlotBucket = useMemo(() => Math.floor(now.getTime() / (10 * 60 * 1000)), [now]);
   const forcedReview = parseForcedReview(searchParams?.get("review_test") ?? null);
@@ -965,6 +971,13 @@ export function DashboardPeriodReviewPrompts() {
       }
     }
 
+    setQueuedCandidates(nextCandidates);
+    const queueSignature = reviewQueueSignature(nextCandidates);
+
+    if (!forcedReview && pausedQueueSignature && pausedQueueSignature === queueSignature) {
+      return;
+    }
+
     if (!nextCandidates.length) return;
     const chosen = nextCandidates[0];
     const epoch = modalAiEpochRef.current;
@@ -993,6 +1006,7 @@ export function DashboardPeriodReviewPrompts() {
     generateWeeklyReport,
     generateYearlyReport,
     kickoffPending,
+    now,
     monthContext.reviewMonth,
     monthContext.reviewYear,
     recapSlotBucket,
@@ -1002,6 +1016,7 @@ export function DashboardPeriodReviewPrompts() {
     quarterContext.ready,
     quarterContext.reviewQuarter,
     quarterContext.reviewYear,
+    pausedQueueSignature,
     sessionId,
     sessionWeekStartsOn,
     weekContext.reviewWeek,
@@ -1023,6 +1038,11 @@ export function DashboardPeriodReviewPrompts() {
 
   if (!candidate) return null;
   const activeCandidate = candidate;
+  const remainingCandidates = queuedCandidates.filter((entry) => entry.key !== activeCandidate.key);
+  const remainingReviewCount = remainingCandidates.length;
+  const nextQueuedCandidate = remainingCandidates[0] ?? null;
+  const remainingQueueSignature = reviewQueueSignature(remainingCandidates);
+  const visibleQueuedLabels = remainingCandidates.slice(0, 3).map((entry) => entry.periodLabel);
 
   const narrative = report ?? {
     summary: "Your execution report is ready.",
@@ -1105,13 +1125,7 @@ export function DashboardPeriodReviewPrompts() {
       ? `/dashboard/goals/${quarterContext.nextYear}/q/q${quarterContext.nextQuarter}`
       : `/dashboard/goals/${yearContext.nextYear}`;
 
-  function closePrompt() {
-    modalAiEpochRef.current += 1;
-    if (candidate) {
-      dismissedReviewKeysRef.current.add(candidate.key);
-      markShown(candidate.key);
-      if (report) writeCachedNarrative(candidate.key, report);
-    }
+  function resetPromptState() {
     setCandidate(null);
     setReport(null);
     setError(null);
@@ -1125,6 +1139,23 @@ export function DashboardPeriodReviewPrompts() {
     setLoading(false);
     setPlanLoading(false);
     setPlanSaving(false);
+  }
+
+  function completePrompt({ pauseRemainingQueue = false }: { pauseRemainingQueue?: boolean } = {}) {
+    modalAiEpochRef.current += 1;
+    if (candidate) {
+      dismissedReviewKeysRef.current.add(candidate.key);
+      markShown(candidate.key);
+      if (report) writeCachedNarrative(candidate.key, report);
+    }
+    setPausedQueueSignature(pauseRemainingQueue ? remainingQueueSignature || null : null);
+    resetPromptState();
+  }
+
+  function closePromptForNow() {
+    modalAiEpochRef.current += 1;
+    setPausedQueueSignature(remainingQueueSignature || null);
+    resetPromptState();
   }
 
   function toggleDraftRow(key: string) {
@@ -1341,7 +1372,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function handleOpenBoard() {
-    closePrompt();
+    completePrompt({ pauseRemainingQueue: true });
     startTransition(() => {
       router.push(nextBoardPath);
     });
@@ -1781,7 +1812,7 @@ export function DashboardPeriodReviewPrompts() {
       className="fixed inset-0 z-[90] flex items-end justify-center p-2 sm:items-center sm:p-4"
       style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}
       role="presentation"
-      onClick={closePrompt}
+      onClick={closePromptForNow}
     >
       <div
         className="flex max-h-[calc(100dvh-1rem)] w-full max-w-[760px] flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
@@ -1835,7 +1866,7 @@ export function DashboardPeriodReviewPrompts() {
 
             <button
               type="button"
-              onClick={closePrompt}
+              onClick={closePromptForNow}
               className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
               style={{ color: "#8a9e97" }}
               aria-label="Close review prompt"
@@ -1870,6 +1901,36 @@ export function DashboardPeriodReviewPrompts() {
             {screen === "review" ? reviewBody : planningBody}
           </div>
 
+          {remainingReviewCount > 0 && (
+            <div
+              className="mt-4 rounded-2xl px-4 py-4"
+              style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)" }}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                    More Reviews Waiting
+                  </p>
+                  <p className="mt-1 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                    {remainingReviewCount} more review{remainingReviewCount === 1 ? "" : "s"} are queued after this one.
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
+                    We move through overlapping report boundaries one at a time so the handoff stays clean.
+                    {nextQueuedCandidate ? ` Up next: ${nextQueuedCandidate.periodLabel}.` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {visibleQueuedLabels.map((label) => (
+                    <InfoPill key={label}>{label}</InfoPill>
+                  ))}
+                  {remainingReviewCount > visibleQueuedLabels.length && (
+                    <InfoPill>{`+${remainingReviewCount - visibleQueuedLabels.length} more`}</InfoPill>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {(error || savedNotice) && (
             <div className="mt-4 space-y-3">
               {error && (
@@ -1899,12 +1960,24 @@ export function DashboardPeriodReviewPrompts() {
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={closePrompt}
+              onClick={closePromptForNow}
               className="rounded-xl px-5 py-3 text-sm font-semibold"
               style={{ border: "1.5px solid #e2e8e4", color: "#5a6b65", background: "white" }}
             >
               Close for now
             </button>
+
+            {screen === "review" && remainingReviewCount > 0 && (
+              <button
+                type="button"
+                onClick={() => completePrompt()}
+                disabled={loading}
+                className="rounded-xl px-5 py-3 text-sm font-semibold disabled:opacity-60"
+                style={{ border: "1.5px solid rgba(0,108,74,0.16)", color: "#006c4a", background: "#f7faf8" }}
+              >
+                Continue to next review
+              </button>
+            )}
 
             {screen === "review" ? (
               <button
