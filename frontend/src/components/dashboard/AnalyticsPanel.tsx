@@ -24,37 +24,12 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
   const hasWeeklyData = metrics.weeklyConsistency.some((value) => value > 0);
   const hasWeeklyObjective = Boolean(metrics.weeklyObjective?.trim());
 
-  const todayTaskSummary =
-    metrics.tasksTotalToday && metrics.tasksTotalToday > 0
-      ? `${metrics.tasksCompletedToday ?? 0}/${metrics.tasksTotalToday}`
-      : "No plan";
-  const todayHabitSummary =
-    metrics.habitsTotalToday && metrics.habitsTotalToday > 0
-      ? `${metrics.habitsCompletedToday ?? 0}/${metrics.habitsTotalToday}`
-      : "No habits";
-
   return (
     <div
       className="text-white rounded-2xl p-5 sm:p-6 space-y-6 sm:space-y-7"
       style={{ background: "#1a1f1e", boxShadow: "0 4px 24px rgba(0,0,0,0.18)" }}
     >
-      <div className="grid grid-cols-2 gap-3 md:hidden">
-        <div className="rounded-2xl px-4 py-3" style={{ background: "rgba(255,255,255,0.05)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>
-            Today&apos;s Tasks
-          </p>
-          <p className="text-2xl font-headline font-extrabold text-white">{todayTaskSummary}</p>
-        </div>
-        <div className="rounded-2xl px-4 py-3" style={{ background: "rgba(255,255,255,0.05)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>
-            Habits
-          </p>
-          <p className="text-2xl font-headline font-extrabold text-white">{todayHabitSummary}</p>
-        </div>
-      </div>
-
-      {/* Streak */}
-      <div className="hidden md:block">
+      <div>
         <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>
           Execution Streak
         </p>

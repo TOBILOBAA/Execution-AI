@@ -2,6 +2,7 @@
 from pydantic import BaseModel
 from .goals import DailyPriorityResponse, WeeklyGoalResponse, MonthlyGoalResponse
 from .habits import HabitResponse
+from .session import RecapQueueEntry
 
 
 class DashboardMetrics(BaseModel):
@@ -33,6 +34,7 @@ class DashboardResponse(BaseModel):
     monthly_context: list[MonthlyGoalResponse]
     habits: list[HabitResponse]
     metrics: DashboardMetrics
+    pending_recaps: list[RecapQueueEntry] = []
     # AI insight (optional, pulled from latest report or generated ad-hoc)
     ai_insight: str | None = None
     weekly_objective: str | None = None

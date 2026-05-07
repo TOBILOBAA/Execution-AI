@@ -33,7 +33,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
   const updateWeeklyGoal = useAppStore((state) => state.updateWeeklyGoal);
   const {
     ready,
-    loading,
+    hasCachedData,
     error,
     lastSyncedAt,
     currentWeekNumber,
@@ -62,7 +62,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
     );
   }
 
-  if (!ready || loading) {
+  if (!ready && !hasCachedData) {
     return (
       <GoalsLoadingShell
         eyebrow={`Week ${focusWeek}`}

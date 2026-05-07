@@ -426,14 +426,30 @@ export function StepWeekly({ onNext, onBack }: Props) {
     setAiError(null);
     setAiDraft(null);
     const result = await generateWeeklyPlan(getCurrentYear(), getCurrentWeek());
-    if (result?.draft) {
+    if (!result.ok) {
+      const banner = useAppStore.getState().syncError;
+      const apiDetail =
+        result.code === "api_error" &&
+        banner &&
+        banner.includes("Weekly plan (AI generate)")
+          ? banner
+          : null;
+      const msg =
+        result.code === "no_monthly_on_server"
+          ? "Save monthly goals for this week’s month on the board first (or use AI on the monthly step and accept), click Next so they save, then try again."
+          : result.code === "monthly_sync_failed"
+            ? "Monthly goals are still syncing. Fix any sync banner above, then try again."
+            : result.code === "invalid_week"
+              ? "This week isn’t available for AI planning yet."
+              : result.code === "no_session"
+                ? "Sign in or refresh your session, then try again."
+                : apiDetail ??
+                  "AI generation failed. Add monthly goals (or use AI on the previous step and accept), click Next so they save, then try again.";
+      setAiError(msg);
+    } else {
       const draft = result.draft as WeeklyAIDraft;
       setAiDraft(draft);
       setAiRowKeys(buildAiRowKeys(draft));
-    } else {
-      setAiError(
-        "AI generation failed. Add monthly goals (or use AI on the previous step and accept), click Next so they save, then try again."
-      );
     }
     setAiLoading(false);
   };

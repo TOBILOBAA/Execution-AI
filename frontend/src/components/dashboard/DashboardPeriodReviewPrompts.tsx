@@ -4,31 +4,26 @@ import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
-import { reportsApi, type ApiReport } from "@/lib/api";
-import { buildQuarterReviewNarrative, listQuarterSnapshots } from "@/lib/reportSnapshots";
+import { sessionsApi, type ApiReport } from "@/lib/api";
+import { AddYearlyGoalModal } from "@/components/modals/AddYearlyGoalModal";
 import { AddMonthlyGoalModal as PlanningMonthlyGoalModal } from "@/components/onboarding/AddMonthlyGoalModal";
 import { AddWeeklyGoalModal as PlanningWeeklyGoalModal } from "@/components/onboarding/AddWeeklyGoalModal";
 import { AddHabitModal } from "@/components/onboarding/AddHabitModal";
 import {
   startOfLocalWeek,
-  isWeekRecapPeriodComplete,
 } from "@/lib/reportAvailability";
+import { getWeekNumber } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
-import type { FoundationalHabit, MonthlyGoal, WeeklyGoal, YearlyGoal } from "@/lib/types";
+import type { DashboardRecapEntry, FoundationalHabit, MonthlyGoal, WeeklyGoal, YearlyGoal } from "@/lib/types";
 
 type ReviewType = "weekly" | "monthly" | "quarterly" | "yearly";
-
-interface ReviewNarrative {
-  summary: string;
-  reflection: string;
-  nextFocus: string | null;
-}
 
 interface ReviewCandidate {
   type: ReviewType;
   key: string;
   periodLabel: string;
-  generate: () => Promise<ReviewNarrative | null>;
+  entry: DashboardRecapEntry;
+  generate: () => Promise<ApiReport | null>;
 }
 
 interface DraftGoal {
@@ -56,10 +51,6 @@ type GoalEditorState =
 
 type HabitEditorState = null | { habit?: FoundationalHabit };
 
-const STORAGE_PREFIX = "execution_ai_review_prompt_seen";
-/** Cached review copy so we never re-call generate report APIs for the same recap key in this browser profile. */
-const NARRATIVE_CACHE_PREFIX = "execution_ai_review_text";
-
 function parseForcedReview(value: string | null): ReviewType | null {
   if (value === "weekly" || value === "monthly" || value === "quarterly" || value === "yearly") {
     return value;
@@ -83,9 +74,9 @@ function formatTargetDate(value?: string) {
 }
 
 function weekNumberForDate(ref: Date, weekStartsOn: "sunday" | "monday") {
-  const weekOneStart = startOfLocalWeek(new Date(ref.getFullYear(), 0, 1), weekStartsOn);
-  const weekStart = startOfLocalWeek(ref, weekStartsOn);
-  return Math.floor((weekStart.getTime() - weekOneStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  // Use the UTC-safe shared helper so DST boundaries do not shift week numbers
+  // inside the review modal flow.
+  return getWeekNumber(ref, weekStartsOn);
 }
 
 function getWeekContext(now: Date, weekStartsOn: "sunday" | "monday") {
@@ -189,70 +180,6 @@ function getYearContext(now: Date) {
     : { reviewYear: now.getFullYear() - 1, nextYear: now.getFullYear() };
 }
 
-function wasShown(key: string) {
-  if (typeof window === "undefined") return false;
-  try {
-    return sessionStorage.getItem(`${STORAGE_PREFIX}:${key}`) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function markShown(key: string) {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(`${STORAGE_PREFIX}:${key}`, "1");
-  } catch {
-    /* ignore */
-  }
-}
-
-function clearShownReviewPrompts() {
-  if (typeof window === "undefined") return;
-  try {
-    const keysToRemove: string[] = [];
-    for (let index = 0; index < sessionStorage.length; index += 1) {
-      const key = sessionStorage.key(index);
-      if (
-        key?.startsWith(`${STORAGE_PREFIX}:`) ||
-        key?.startsWith(`${NARRATIVE_CACHE_PREFIX}:`)
-      ) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach((key) => sessionStorage.removeItem(key));
-  } catch {
-    /* ignore */
-  }
-}
-
-function readCachedNarrative(key: string): ReviewNarrative | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(`${NARRATIVE_CACHE_PREFIX}:${key}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as ReviewNarrative;
-    if (typeof parsed.summary !== "string") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeCachedNarrative(key: string, narrative: ReviewNarrative | null) {
-  if (!narrative || typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(`${NARRATIVE_CACHE_PREFIX}:${key}`, JSON.stringify(narrative));
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Treat storage + in-session dismiss ref as authoritative so closing cannot race before sessionStorage writes. */
-function isReviewDismissed(key: string, dismissedKeys: ReadonlySet<string>): boolean {
-  return wasShown(key) || dismissedKeys.has(key);
-}
-
 function extractNarrative(report: ApiReport | null) {
   const narrative = (report?.ai_narrative ?? {}) as Record<string, unknown>;
   return {
@@ -267,6 +194,86 @@ function extractNarrative(report: ApiReport | null) {
       (typeof narrative.next_month_focus === "string" && narrative.next_month_focus) ||
       (typeof narrative.next_year_focus === "string" && narrative.next_year_focus) ||
       null,
+  };
+}
+
+function extractTailoredInsight(report: ApiReport | null) {
+  const narrative = (report?.ai_narrative ?? {}) as Record<string, unknown>;
+  const tailoredPattern =
+    report?.tailored_pattern
+    ?? (typeof narrative.tailored_pattern === "string" ? narrative.tailored_pattern : null);
+  const tailoredAction =
+    report?.tailored_action
+    ?? (typeof narrative.tailored_action === "string" ? narrative.tailored_action : null);
+  return { tailoredPattern, tailoredAction };
+}
+
+function recapKey(entry: {
+  type: ReviewType;
+  periodYear: number;
+  periodWeek?: number;
+  periodMonth?: number;
+  periodQuarter?: number;
+}) {
+  return [
+    entry.type,
+    entry.periodYear,
+    entry.periodQuarter ?? "",
+    entry.periodMonth ?? "",
+    entry.periodWeek ?? "",
+  ].join(":");
+}
+
+function buildRecapLabel(entry: DashboardRecapEntry) {
+  if (entry.type === "weekly") return `Week ${entry.periodWeek} Review`;
+  if (entry.type === "monthly") return `${monthLabel(entry.periodYear, entry.periodMonth ?? 1)} Review`;
+  if (entry.type === "quarterly") return `Q${entry.periodQuarter} ${entry.periodYear} Review`;
+  return `${entry.periodYear} Review`;
+}
+
+function weekContextFromEntry(entry: DashboardRecapEntry, weekStartsOn: "sunday" | "monday") {
+  const reviewWeek = entry.periodWeek ?? 1;
+  const weekOneStart = startOfLocalWeek(new Date(entry.periodYear, 0, 1), weekStartsOn);
+  const reviewWeekStart = new Date(weekOneStart);
+  reviewWeekStart.setDate(reviewWeekStart.getDate() + (reviewWeek - 1) * 7);
+  const nextWeekStart = new Date(reviewWeekStart);
+  nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+  return {
+    reviewYear: entry.periodYear,
+    reviewWeek,
+    nextYear: nextWeekStart.getFullYear(),
+    nextWeek: weekNumberForDate(nextWeekStart, weekStartsOn),
+    nextMonth: nextWeekStart.getMonth() + 1,
+  };
+}
+
+function monthContextFromEntry(entry: DashboardRecapEntry) {
+  const reviewMonth = entry.periodMonth ?? 1;
+  const nextMonthDate = new Date(entry.periodYear, reviewMonth, 1);
+  return {
+    reviewYear: entry.periodYear,
+    reviewMonth,
+    nextYear: nextMonthDate.getFullYear(),
+    nextMonth: nextMonthDate.getMonth() + 1,
+  };
+}
+
+function quarterContextFromEntry(entry: DashboardRecapEntry) {
+  const reviewQuarter = entry.periodQuarter ?? 1;
+  const nextQuarter = reviewQuarter === 4 ? 1 : (reviewQuarter + 1) as 1 | 2 | 3 | 4;
+  const nextYear = reviewQuarter === 4 ? entry.periodYear + 1 : entry.periodYear;
+  return {
+    reviewYear: entry.periodYear,
+    reviewQuarter,
+    nextYear,
+    nextQuarter,
+  };
+}
+
+function yearContextFromEntry(entry: DashboardRecapEntry) {
+  return {
+    reviewYear: entry.periodYear,
+    nextYear: entry.periodYear + 1,
   };
 }
 
@@ -641,6 +648,7 @@ export function DashboardPeriodReviewPrompts() {
     sessionId,
     onboardingComplete,
     kickoffPending,
+    pendingRecaps,
     sessionWeekStartsOn,
     yearlyGoals,
     weeklyGoals,
@@ -658,6 +666,7 @@ export function DashboardPeriodReviewPrompts() {
     removeMonthlyGoal,
     generateWeeklyReport,
     generateMonthlyReport,
+    generateQuarterlyReport,
     generateYearlyReport,
     generateWeeklyPlan,
     generateMonthlyPlan,
@@ -668,6 +677,7 @@ export function DashboardPeriodReviewPrompts() {
       sessionId: state.sessionId,
       onboardingComplete: state.onboardingComplete,
       kickoffPending: state.kickoffPending,
+      pendingRecaps: state.pendingRecaps,
       sessionWeekStartsOn: state.sessionWeekStartsOn,
       yearlyGoals: state.yearlyGoals,
       weeklyGoals: state.weeklyGoals,
@@ -685,6 +695,7 @@ export function DashboardPeriodReviewPrompts() {
       removeMonthlyGoal: state.removeMonthlyGoal,
       generateWeeklyReport: state.generateWeeklyReport,
       generateMonthlyReport: state.generateMonthlyReport,
+      generateQuarterlyReport: state.generateQuarterlyReport,
       generateYearlyReport: state.generateYearlyReport,
       generateWeeklyPlan: state.generateWeeklyPlan,
       generateMonthlyPlan: state.generateMonthlyPlan,
@@ -694,7 +705,7 @@ export function DashboardPeriodReviewPrompts() {
   );
 
   const [candidate, setCandidate] = useState<ReviewCandidate | null>(null);
-  const [report, setReport] = useState<ReviewNarrative | null>(null);
+  const [report, setReport] = useState<ApiReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [screen, setScreen] = useState<"review" | "plan">("review");
@@ -705,41 +716,17 @@ export function DashboardPeriodReviewPrompts() {
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [goalEditor, setGoalEditor] = useState<GoalEditorState>(null);
   const [habitEditor, setHabitEditor] = useState<HabitEditorState>(null);
+  const [yearGoalModalOpen, setYearGoalModalOpen] = useState(false);
   /** Weekly/monthly: saved-plan tooling appears only after AI generate/save or adding a goal from the editor. */
   const [planSectionUnlocked, setPlanSectionUnlocked] = useState(false);
   const [now, setNow] = useState(() => new Date());
   /** Bumps when the modal closes so in-flight AI/report calls cannot mutate state afterward. */
   const modalAiEpochRef = useRef(0);
-  /** Mirrors sessionStorage seen-keys so dismiss survives races before storage commits. */
-  const dismissedReviewKeysRef = useRef<Set<string>>(new Set());
-  /** Review-queue effect: advance often enough for eligibility windows (~10m) without firing every minute. */
-  const recapSlotBucket = useMemo(() => Math.floor(now.getTime() / (10 * 60 * 1000)), [now]);
   const forcedReview = parseForcedReview(searchParams?.get("review_test") ?? null);
-  const resetReviewSeen = searchParams?.get("review_reset") === "1";
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!resetReviewSeen) return;
-    clearShownReviewPrompts();
-    dismissedReviewKeysRef.current = new Set();
-  }, [resetReviewSeen]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const prefix = `${STORAGE_PREFIX}:`;
-      for (let index = 0; index < sessionStorage.length; index += 1) {
-        const storageKey = sessionStorage.key(index);
-        if (!storageKey?.startsWith(prefix)) continue;
-        dismissedReviewKeysRef.current.add(storageKey.slice(prefix.length));
-      }
-    } catch {
-      /* ignore */
-    }
   }, []);
 
   useEffect(() => {
@@ -749,6 +736,7 @@ export function DashboardPeriodReviewPrompts() {
     setSavedNotice(null);
     setGoalEditor(null);
     setHabitEditor(null);
+    setYearGoalModalOpen(false);
     setPlanSectionUnlocked(false);
   }, [candidate?.key]);
 
@@ -756,221 +744,129 @@ export function DashboardPeriodReviewPrompts() {
   const monthContext = useMemo(() => getMonthContext(now), [now]);
   const quarterContext = useMemo(() => getQuarterContext(now), [now]);
   const yearContext = useMemo(() => getYearContext(now), [now]);
+  const activeHabits = useMemo(() => habits.filter((habit) => habit.active), [habits]);
+  const activeWeekContext = useMemo(
+    () => (candidate?.type === "weekly" ? weekContextFromEntry(candidate.entry, sessionWeekStartsOn) : null),
+    [candidate, sessionWeekStartsOn],
+  );
+  const activeMonthContext = useMemo(
+    () => (candidate?.type === "monthly" ? monthContextFromEntry(candidate.entry) : null),
+    [candidate],
+  );
+  const activeQuarterContext = useMemo(
+    () => (candidate?.type === "quarterly" ? quarterContextFromEntry(candidate.entry) : null),
+    [candidate],
+  );
+  const activeYearContext = useMemo(
+    () => (candidate?.type === "yearly" ? yearContextFromEntry(candidate.entry) : null),
+    [candidate],
+  );
   const nextQuarterMonths = useMemo(
-    () => quarterMonths(quarterContext.nextQuarter),
-    [quarterContext.nextQuarter],
+    () => (activeQuarterContext ? quarterMonths(activeQuarterContext.nextQuarter) : []),
+    [activeQuarterContext],
   );
-
   const nextWeekGoals = useMemo(
-    () => weeklyGoals.filter((goal) => goal.year === weekContext.nextYear && goal.weekNumber === weekContext.nextWeek),
-    [weeklyGoals, weekContext.nextWeek, weekContext.nextYear],
+    () =>
+      activeWeekContext
+        ? weeklyGoals.filter(
+            (goal) => goal.year === activeWeekContext.nextYear && goal.weekNumber === activeWeekContext.nextWeek,
+          )
+        : [],
+    [activeWeekContext, weeklyGoals],
   );
+  const nextWeekMonth = useMemo(() => activeWeekContext?.nextMonth ?? monthContext.nextMonth, [activeWeekContext, monthContext.nextMonth]);
   const nextMonthGoals = useMemo(
-    () => monthlyGoals.filter((goal) => goal.year === monthContext.nextYear && goal.month === monthContext.nextMonth),
-    [monthlyGoals, monthContext.nextMonth, monthContext.nextYear],
+    () =>
+      activeMonthContext
+        ? monthlyGoals.filter(
+            (goal) => goal.year === activeMonthContext.nextYear && goal.month === activeMonthContext.nextMonth,
+          )
+        : [],
+    [activeMonthContext, monthlyGoals],
   );
   const nextQuarterGoals = useMemo(
     () =>
-      monthlyGoals.filter(
-        (goal) => goal.year === quarterContext.nextYear && nextQuarterMonths.includes(goal.month),
-      ),
-    [monthlyGoals, nextQuarterMonths, quarterContext.nextYear],
+      activeQuarterContext
+        ? monthlyGoals.filter(
+            (goal) => goal.year === activeQuarterContext.nextYear && nextQuarterMonths.includes(goal.month),
+          )
+        : [],
+    [activeQuarterContext, monthlyGoals, nextQuarterMonths],
   );
   const nextYearGoals = useMemo(
-    () => yearlyGoals.filter((goal) => goal.year === yearContext.nextYear),
-    [yearContext.nextYear, yearlyGoals],
+    () =>
+      activeYearContext
+        ? yearlyGoals.filter((goal) => goal.year === activeYearContext.nextYear)
+        : [],
+    [activeYearContext, yearlyGoals],
   );
-  const activeHabits = useMemo(() => habits.filter((habit) => habit.active), [habits]);
-  const nextWeekMonth = useMemo(() => {
-    const nextWeekStart = new Date(startOfLocalWeek(new Date(now.getFullYear(), now.getMonth(), now.getDate()), sessionWeekStartsOn));
-    nextWeekStart.setDate(nextWeekStart.getDate() + 7);
-    return nextWeekStart.getMonth() + 1;
-  }, [now, sessionWeekStartsOn]);
   const candidateMonthlyGoalsForWeekly = useMemo(
     () =>
       monthlyGoals.filter(
         (goal) =>
-          goal.year === weekContext.nextYear &&
+          goal.year === (activeWeekContext?.nextYear ?? weekContext.nextYear) &&
           goal.month === (nextWeekGoals[0]?.month ?? nextWeekMonth),
       ),
-    [monthlyGoals, nextWeekGoals, nextWeekMonth, weekContext.nextYear],
+    [activeWeekContext, monthlyGoals, nextWeekGoals, nextWeekMonth, weekContext.nextYear],
   );
 
   useEffect(() => {
     if (!sessionId || !onboardingComplete || kickoffPending || candidate) return;
+    const forcedEntry =
+      forcedReview === "weekly"
+        ? {
+            type: "weekly" as const,
+            periodYear: weekContext.reviewYear,
+            periodWeek: weekContext.reviewWeek,
+            firedAt: new Date().toISOString(),
+          }
+        : forcedReview === "monthly"
+          ? {
+              type: "monthly" as const,
+              periodYear: monthContext.reviewYear,
+              periodMonth: monthContext.reviewMonth,
+              firedAt: new Date().toISOString(),
+            }
+          : forcedReview === "quarterly"
+            ? {
+                type: "quarterly" as const,
+                periodYear: quarterContext.reviewYear,
+                periodQuarter: quarterContext.reviewQuarter,
+                firedAt: new Date().toISOString(),
+              }
+            : forcedReview === "yearly"
+              ? {
+                  type: "yearly" as const,
+                  periodYear: yearContext.reviewYear,
+                  firedAt: new Date().toISOString(),
+                }
+              : null;
+    const nextEntry = forcedEntry ?? pendingRecaps[0];
+    if (!nextEntry) return;
 
-    const nextCandidates: ReviewCandidate[] = [];
-
-    const dismissed = dismissedReviewKeysRef.current;
-
-    if (forcedReview === "weekly") {
-      const key = `forced-weekly:${weekContext.reviewYear}:${weekContext.reviewWeek}`;
-      if (!isReviewDismissed(key, dismissed)) {
-        nextCandidates.push({
-          type: "weekly",
-          key,
-          periodLabel: `Week ${weekContext.reviewWeek} Review`,
-          generate: async () => {
-            const cached = readCachedNarrative(key);
-            if (cached) return cached;
-            const extracted = extractNarrative(await generateWeeklyReport(weekContext.reviewYear, weekContext.reviewWeek));
-            writeCachedNarrative(key, extracted);
-            return extracted;
-          },
-        });
-      }
-    }
-
-    if (!forcedReview && isWeekRecapPeriodComplete(now, sessionWeekStartsOn)) {
-      const key = `weekly:${weekContext.reviewYear}:${weekContext.reviewWeek}`;
-      if (!isReviewDismissed(key, dismissed)) {
-        nextCandidates.push({
-          type: "weekly",
-          key,
-          periodLabel: `Week ${weekContext.reviewWeek} Review`,
-          generate: async () => {
-            const cached = readCachedNarrative(key);
-            if (cached) return cached;
-            const extracted = extractNarrative(await generateWeeklyReport(weekContext.reviewYear, weekContext.reviewWeek));
-            writeCachedNarrative(key, extracted);
-            return extracted;
-          },
-        });
-      }
-    }
-
-    const monthRecapReady =
-      (now.getDate() === 1 && now.getHours() >= 0) ||
-      (now.getDate() === new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() && now.getHours() >= 18);
-    if (forcedReview === "monthly") {
-      const key = `forced-monthly:${monthContext.reviewYear}:${monthContext.reviewMonth}`;
-      if (!isReviewDismissed(key, dismissed)) {
-        nextCandidates.push({
-          type: "monthly",
-          key,
-          periodLabel: `${monthLabel(monthContext.reviewYear, monthContext.reviewMonth)} Review`,
-          generate: async () => {
-            const cached = readCachedNarrative(key);
-            if (cached) return cached;
-            const extracted = extractNarrative(await generateMonthlyReport(monthContext.reviewYear, monthContext.reviewMonth));
-            writeCachedNarrative(key, extracted);
-            return extracted;
-          },
-        });
-      }
-    } else if (monthRecapReady) {
-      const key = `monthly:${monthContext.reviewYear}:${monthContext.reviewMonth}`;
-      if (!isReviewDismissed(key, dismissed)) {
-        nextCandidates.push({
-          type: "monthly",
-          key,
-          periodLabel: `${monthLabel(monthContext.reviewYear, monthContext.reviewMonth)} Review`,
-          generate: async () => {
-            const cached = readCachedNarrative(key);
-            if (cached) return cached;
-            const extracted = extractNarrative(await generateMonthlyReport(monthContext.reviewYear, monthContext.reviewMonth));
-            writeCachedNarrative(key, extracted);
-            return extracted;
-          },
-        });
-      }
-    }
-
-    if (forcedReview === "quarterly") {
-      const key = `forced-quarterly:${quarterContext.reviewYear}:q${quarterContext.reviewQuarter}`;
-      if (!isReviewDismissed(key, dismissed)) {
-        nextCandidates.push({
-          type: "quarterly",
-          key,
-          periodLabel: `${quarterLabel(quarterContext.reviewQuarter)} ${quarterContext.reviewYear} Review`,
-          generate: async () => {
-            const cached = readCachedNarrative(key);
-            if (cached) return cached;
-            const reports = await reportsApi.list(sessionId);
-            const snapshot = listQuarterSnapshots(reports, quarterContext.reviewYear).find(
-              (item) => item.quarter === quarterContext.reviewQuarter,
-            );
-            const built = buildQuarterReviewNarrative(snapshot, {
-              year: quarterContext.reviewYear,
-              quarter: quarterContext.reviewQuarter,
-              nextQuarter: quarterContext.nextQuarter,
-              nextYear: quarterContext.nextYear,
-            });
-            if (built) writeCachedNarrative(key, built as ReviewNarrative);
-            return built as ReviewNarrative | null;
-          },
-        });
-      }
-    } else if (quarterContext.ready) {
-      const key = `quarterly:${quarterContext.reviewYear}:q${quarterContext.reviewQuarter}`;
-      if (!isReviewDismissed(key, dismissed)) {
-        nextCandidates.push({
-          type: "quarterly",
-          key,
-          periodLabel: `${quarterLabel(quarterContext.reviewQuarter)} ${quarterContext.reviewYear} Review`,
-          generate: async () => {
-            const cached = readCachedNarrative(key);
-            if (cached) return cached;
-            const reports = await reportsApi.list(sessionId);
-            const snapshot = listQuarterSnapshots(reports, quarterContext.reviewYear).find(
-              (item) => item.quarter === quarterContext.reviewQuarter,
-            );
-            const built = buildQuarterReviewNarrative(snapshot, {
-              year: quarterContext.reviewYear,
-              quarter: quarterContext.reviewQuarter,
-              nextQuarter: quarterContext.nextQuarter,
-              nextYear: quarterContext.nextYear,
-            });
-            if (built) writeCachedNarrative(key, built as ReviewNarrative);
-            return built as ReviewNarrative | null;
-          },
-        });
-      }
-    }
-
-    const yearRecapReady =
-      (now.getMonth() === 0 && now.getDate() === 1) ||
-      (now.getMonth() === 11 && now.getDate() === 31 && now.getHours() >= 18);
-    if (forcedReview === "yearly") {
-      const key = `forced-yearly:${yearContext.reviewYear}`;
-      if (!isReviewDismissed(key, dismissed)) {
-        nextCandidates.push({
-          type: "yearly",
-          key,
-          periodLabel: `${yearContext.reviewYear} Review`,
-          generate: async () => {
-            const cached = readCachedNarrative(key);
-            if (cached) return cached;
-            const extracted = extractNarrative(await generateYearlyReport(yearContext.reviewYear));
-            writeCachedNarrative(key, extracted);
-            return extracted;
-          },
-        });
-      }
-    } else if (yearRecapReady) {
-      const key = `yearly:${yearContext.reviewYear}`;
-      if (!isReviewDismissed(key, dismissed)) {
-        nextCandidates.push({
-          type: "yearly",
-          key,
-          periodLabel: `${yearContext.reviewYear} Review`,
-          generate: async () => {
-            const cached = readCachedNarrative(key);
-            if (cached) return cached;
-            const extracted = extractNarrative(await generateYearlyReport(yearContext.reviewYear));
-            writeCachedNarrative(key, extracted);
-            return extracted;
-          },
-        });
-      }
-    }
-
-    if (!nextCandidates.length) return;
-    const chosen = nextCandidates[0];
+    const chosen: ReviewCandidate = {
+      type: nextEntry.type,
+      key: recapKey(nextEntry),
+      periodLabel: buildRecapLabel(nextEntry),
+      entry: nextEntry,
+      generate: async () => {
+        if (nextEntry.type === "weekly" && nextEntry.periodWeek) {
+          return generateWeeklyReport(nextEntry.periodYear, nextEntry.periodWeek);
+        }
+        if (nextEntry.type === "monthly" && nextEntry.periodMonth) {
+          return generateMonthlyReport(nextEntry.periodYear, nextEntry.periodMonth);
+        }
+        if (nextEntry.type === "quarterly" && nextEntry.periodQuarter) {
+          return generateQuarterlyReport(nextEntry.periodYear, nextEntry.periodQuarter);
+        }
+        if (nextEntry.type === "yearly") {
+          return generateYearlyReport(nextEntry.periodYear);
+        }
+        return null;
+      },
+    };
     const epoch = modalAiEpochRef.current;
     setCandidate(chosen);
-    /** Same-frame stamp so closing/navigating before async generate resolves cannot re-queue the same recap. */
-    markShown(chosen.key);
     setLoading(true);
     setError(null);
     chosen
@@ -979,7 +875,16 @@ export function DashboardPeriodReviewPrompts() {
         if (epoch !== modalAiEpochRef.current) return;
         setReport(generated);
         if (!generated) {
-          setError("We couldn’t generate this report yet. You can try again once more data is available.");
+          const banner = useAppStore.getState().syncError;
+          const detail =
+            banner &&
+            (banner.includes("Weekly report") ||
+              banner.includes("Monthly report") ||
+              banner.includes("Quarterly report") ||
+              banner.includes("Yearly report"))
+              ? banner
+              : "We couldn’t generate this report yet. You can try again once more data is available.";
+          setError(detail);
         }
       })
       .finally(() => {
@@ -990,22 +895,19 @@ export function DashboardPeriodReviewPrompts() {
     candidate,
     forcedReview,
     generateMonthlyReport,
+    generateQuarterlyReport,
     generateWeeklyReport,
     generateYearlyReport,
     kickoffPending,
-    monthContext.reviewMonth,
-    monthContext.reviewYear,
-    recapSlotBucket,
     onboardingComplete,
-    quarterContext.nextQuarter,
-    quarterContext.nextYear,
-    quarterContext.ready,
-    quarterContext.reviewQuarter,
-    quarterContext.reviewYear,
+    pendingRecaps,
     sessionId,
-    sessionWeekStartsOn,
     weekContext.reviewWeek,
     weekContext.reviewYear,
+    monthContext.reviewMonth,
+    monthContext.reviewYear,
+    quarterContext.reviewQuarter,
+    quarterContext.reviewYear,
     yearContext.reviewYear,
   ]);
 
@@ -1024,20 +926,17 @@ export function DashboardPeriodReviewPrompts() {
   if (!candidate) return null;
   const activeCandidate = candidate;
 
-  const narrative = report ?? {
-    summary: "Your execution report is ready.",
-    reflection: "The system has captured the main patterns from this period.",
-    nextFocus: null,
-  };
+  const narrative = extractNarrative(report);
+  const { tailoredPattern, tailoredAction } = extractTailoredInsight(report);
 
   const nextPeriodLabel =
-    activeCandidate.type === "weekly"
-      ? `Week ${weekContext.nextWeek}`
-      : activeCandidate.type === "monthly"
-      ? monthLabel(monthContext.nextYear, monthContext.nextMonth)
-      : activeCandidate.type === "quarterly"
-      ? `${quarterLabel(quarterContext.nextQuarter)} ${quarterContext.nextYear}`
-      : `${yearContext.nextYear}`;
+    activeCandidate.type === "weekly" && activeWeekContext
+      ? `Week ${activeWeekContext.nextWeek}`
+      : activeCandidate.type === "monthly" && activeMonthContext
+      ? monthLabel(activeMonthContext.nextYear, activeMonthContext.nextMonth)
+      : activeCandidate.type === "quarterly" && activeQuarterContext
+      ? `${quarterLabel(activeQuarterContext.nextQuarter)} ${activeQuarterContext.nextYear}`
+      : `${activeYearContext?.nextYear ?? yearContext.nextYear}`;
 
   const existingMainGoals =
     activeCandidate.type === "weekly"
@@ -1082,7 +981,7 @@ export function DashboardPeriodReviewPrompts() {
     const mainGoal = goals.find((goal) => goal.isMain) ?? goals[0] ?? null;
     return {
       month,
-      label: monthLabel(quarterContext.nextYear, month).split(" ")[0],
+      label: monthLabel(activeQuarterContext?.nextYear ?? quarterContext.nextYear, month).split(" ")[0],
       mainGoal,
       supportCount: goals.filter((goal) => !mainGoal || goal.id !== mainGoal.id).length,
     };
@@ -1097,21 +996,49 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   const nextBoardPath =
-    activeCandidate.type === "weekly"
-      ? `/dashboard/goals/${weekContext.nextYear}/weekly`
-      : activeCandidate.type === "monthly"
-      ? `/dashboard/goals/${monthContext.nextYear}/monthly`
-      : activeCandidate.type === "quarterly"
-      ? `/dashboard/goals/${quarterContext.nextYear}/q/q${quarterContext.nextQuarter}`
-      : `/dashboard/goals/${yearContext.nextYear}`;
+    activeCandidate.type === "weekly" && activeWeekContext
+      ? `/dashboard/goals/${activeWeekContext.nextYear}/weekly`
+      : activeCandidate.type === "monthly" && activeMonthContext
+      ? `/dashboard/goals/${activeMonthContext.nextYear}/monthly`
+      : activeCandidate.type === "quarterly" && activeQuarterContext
+      ? `/dashboard/goals/${activeQuarterContext.nextYear}/q/q${activeQuarterContext.nextQuarter}`
+      : `/dashboard/goals/${activeYearContext?.nextYear ?? yearContext.nextYear}`;
+
+  function acknowledgePrompt(closedCandidate: ReviewCandidate) {
+    if (!sessionId) return;
+    const nextPending = useAppStore
+      .getState()
+      .pendingRecaps
+      .filter((entry) => recapKey(entry) !== recapKey(closedCandidate.entry));
+    useAppStore.setState({ pendingRecaps: nextPending });
+    void sessionsApi
+      .get(sessionId)
+      .then((session) => {
+        const backendPending = (session.pending_recaps ?? []).filter((entry) => {
+          const mapped: DashboardRecapEntry = {
+            type: entry.type,
+            periodYear: entry.period_year,
+            periodWeek: entry.period_week,
+            periodMonth: entry.period_month,
+            periodQuarter: entry.period_quarter,
+            firedAt: entry.fired_at,
+          };
+          return recapKey(mapped) !== recapKey(closedCandidate.entry);
+        });
+        const handled = Array.from(new Set([...(session.handled_recaps ?? []), recapKey(closedCandidate.entry)]));
+        return sessionsApi.update(sessionId, {
+          pending_recaps: backendPending.length ? backendPending : [],
+          handled_recaps: handled,
+        });
+      })
+      .catch(() => {
+        /* best effort; the local queue has already advanced */
+      });
+  }
 
   function closePrompt() {
     modalAiEpochRef.current += 1;
-    if (candidate) {
-      dismissedReviewKeysRef.current.add(candidate.key);
-      markShown(candidate.key);
-      if (report) writeCachedNarrative(candidate.key, report);
-    }
+    if (candidate) acknowledgePrompt(candidate);
     setCandidate(null);
     setReport(null);
     setError(null);
@@ -1121,6 +1048,7 @@ export function DashboardPeriodReviewPrompts() {
     setSavedNotice(null);
     setGoalEditor(null);
     setHabitEditor(null);
+    setYearGoalModalOpen(false);
     setPlanSectionUnlocked(false);
     setLoading(false);
     setPlanLoading(false);
@@ -1137,6 +1065,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function openMainGoalEditor() {
+    setPlanSectionUnlocked(true);
     if (activeCandidate.type === "weekly") {
       setGoalEditor({ type: "weekly", defaultIsMain: true });
       return;
@@ -1147,6 +1076,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function openSupportingGoalEditor() {
+    setPlanSectionUnlocked(true);
     if (activeCandidate.type === "weekly") {
       setGoalEditor({ type: "weekly", defaultIsMain: false });
       return;
@@ -1157,6 +1087,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function openExistingGoalEditor(goal: WeeklyGoal | MonthlyGoal) {
+    setPlanSectionUnlocked(true);
     if (activeCandidate.type === "weekly") {
       setGoalEditor({ type: "weekly", goal: goal as WeeklyGoal });
       return;
@@ -1173,7 +1104,7 @@ export function DashboardPeriodReviewPrompts() {
     description: string;
     workload: string;
   }) {
-    if (goalEditor?.type !== "weekly") return;
+    if (goalEditor?.type !== "weekly" || !activeWeekContext) return;
     const payload = {
       title: data.title,
       monthlyGoalId: data.monthlyGoalId || undefined,
@@ -1189,9 +1120,9 @@ export function DashboardPeriodReviewPrompts() {
     } else {
       addWeeklyGoal({
         ...payload,
-        weekNumber: weekContext.nextWeek,
+        weekNumber: activeWeekContext.nextWeek,
         month: nextWeekGoals[0]?.month ?? nextWeekMonth,
-        year: weekContext.nextYear,
+        year: activeWeekContext.nextYear,
         status: "active",
         progress: 0,
       });
@@ -1209,7 +1140,7 @@ export function DashboardPeriodReviewPrompts() {
     description: string,
     workload: string,
   ) {
-    if (goalEditor?.type !== "monthly") return;
+    if (goalEditor?.type !== "monthly" || !activeMonthContext) return;
     const payload = {
       title,
       categoryId: categoryId || undefined,
@@ -1227,8 +1158,8 @@ export function DashboardPeriodReviewPrompts() {
     } else {
       addMonthlyGoal({
         ...payload,
-        month: monthContext.nextMonth,
-        year: monthContext.nextYear,
+        month: activeMonthContext.nextMonth,
+        year: activeMonthContext.nextYear,
         status: "active",
         progress: 0,
       });
@@ -1239,6 +1170,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function handleHabitSubmit(name: string, icon: string, categoryId: string, frequency: FoundationalHabit["frequency"]) {
+    setPlanSectionUnlocked(true);
     if (habitEditor?.habit) {
       updateHabit(habitEditor.habit.id, { name, icon, categoryId: categoryId || undefined, frequency, active: true });
       setSavedNotice("Foundational habit updated.");
@@ -1274,9 +1206,29 @@ export function DashboardPeriodReviewPrompts() {
     setSavedNotice(null);
     try {
       if (activeCandidate.type === "weekly") {
-        const generated = await generateWeeklyPlan(weekContext.nextYear, weekContext.nextWeek);
+        if (!activeWeekContext) throw new Error("Missing next-week context.");
+        const generated = await generateWeeklyPlan(activeWeekContext.nextYear, activeWeekContext.nextWeek);
         if (epoch !== modalAiEpochRef.current) return;
-        if (!generated?.draft) throw new Error("We couldn’t generate the next week yet.");
+        if (!generated.ok) {
+          const banner = useAppStore.getState().syncError;
+          const apiDetail =
+            generated.code === "api_error" &&
+            banner &&
+            banner.includes("Weekly plan (AI generate)")
+              ? banner
+              : null;
+          const msg =
+            generated.code === "no_session"
+              ? "Sign in or refresh so your session is active, then try again."
+              : generated.code === "invalid_week"
+                ? "That week isn’t valid for planning."
+                : generated.code === "monthly_sync_failed"
+                  ? "Monthly goals have not finished syncing yet, so the weekly AI draft cannot be generated cleanly."
+                  : generated.code === "no_monthly_on_server"
+                    ? "Save monthly goals for this week’s month on the board first, then try AI again."
+                    : apiDetail ?? "We couldn’t generate the next week yet.";
+          throw new Error(msg);
+        }
         const draft = generated.draft as PeriodPlanDraft;
         setPlanDraft(draft);
         setDraftKeys(buildDraftRowKeys(draft));
@@ -1284,13 +1236,22 @@ export function DashboardPeriodReviewPrompts() {
         return;
       }
 
-      const generated = await generateMonthlyPlan(monthContext.nextYear, monthContext.nextMonth);
+      if (!activeMonthContext) throw new Error("Missing next-month context.");
+      const generated = await generateMonthlyPlan(activeMonthContext.nextYear, activeMonthContext.nextMonth);
       if (epoch !== modalAiEpochRef.current) return;
       if (!generated.ok && generated.code === "no_yearly_on_server") {
         throw new Error("The next month needs yearly goals saved first before AI can turn them into a monthly draft.");
       }
       if (!generated.ok && generated.code === "yearly_sync_failed") {
         throw new Error("Yearly goals have not finished syncing yet, so the monthly AI draft cannot be generated cleanly.");
+      }
+      if (!generated.ok && generated.code === "api_error") {
+        const banner = useAppStore.getState().syncError;
+        throw new Error(
+          banner && banner.includes("Monthly plan (AI generate)")
+            ? banner
+            : "We couldn’t generate the next month yet.",
+        );
       }
       if (!generated.ok) {
         throw new Error("We couldn’t generate the next month yet.");
@@ -1317,12 +1278,14 @@ export function DashboardPeriodReviewPrompts() {
     try {
       const goals = normalizePlanGoals(planDraft, draftKeys);
       if (activeCandidate.type === "weekly") {
-        const ok = await approveWeeklyPlan(weekContext.nextYear, weekContext.nextWeek, goals);
+        if (!activeWeekContext) throw new Error("Missing next-week context.");
+        const ok = await approveWeeklyPlan(activeWeekContext.nextYear, activeWeekContext.nextWeek, goals);
         if (!ok) throw new Error("Could not save the next weekly plan.");
         if (epoch !== modalAiEpochRef.current) return;
         setSavedNotice("Next week is now saved on the board.");
       } else if (activeCandidate.type === "monthly") {
-        const ok = await approveMonthlyPlan(monthContext.nextYear, monthContext.nextMonth, goals);
+        if (!activeMonthContext) throw new Error("Missing next-month context.");
+        const ok = await approveMonthlyPlan(activeMonthContext.nextYear, activeMonthContext.nextMonth, goals);
         if (!ok) throw new Error("Could not save the next monthly plan.");
         if (epoch !== modalAiEpochRef.current) return;
         setSavedNotice("Next month is now saved on the board.");
@@ -1361,9 +1324,31 @@ export function DashboardPeriodReviewPrompts() {
           </p>
         ) : (
           <div className="space-y-3">
+            <p className="text-sm font-semibold leading-relaxed" style={{ color: "#1a1f1e" }}>
+              {narrative.summary}
+            </p>
             <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
               {narrative.reflection}
             </p>
+            {tailoredPattern && tailoredAction && (
+              <div
+                className="rounded-2xl px-4 py-4"
+                style={{ background: "#003d2b", color: "white", boxShadow: "0 10px 24px rgba(0,61,43,0.18)" }}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "rgba(255,255,255,0.72)" }}>
+                  Pattern to address
+                </p>
+                <p className="mt-2 text-sm font-semibold leading-relaxed">
+                  {tailoredPattern}
+                </p>
+                <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "rgba(255,255,255,0.72)" }}>
+                  Action to carry forward
+                </p>
+                <p className="mt-2 text-sm leading-relaxed">
+                  {tailoredAction}
+                </p>
+              </div>
+            )}
             {narrative.nextFocus && (
               <div
                 className="rounded-2xl px-4 py-3"
@@ -1404,7 +1389,11 @@ export function DashboardPeriodReviewPrompts() {
         tone="accent"
       >
         <div className="space-y-3">
-          {narrative.nextFocus ? (
+          {tailoredAction ? (
+            <p className="text-sm font-semibold leading-relaxed" style={{ color: "#1a1f1e" }}>
+              {tailoredAction}
+            </p>
+          ) : narrative.nextFocus ? (
             <p className="text-sm font-semibold leading-relaxed" style={{ color: "#1a1f1e" }}>
               {narrative.nextFocus}
             </p>
@@ -1415,7 +1404,7 @@ export function DashboardPeriodReviewPrompts() {
           )}
           <p className="text-xs leading-relaxed" style={{ color: "#6f817a" }}>
             {activeCandidate.type === "weekly" || activeCandidate.type === "monthly"
-              ? "Generate an AI draft first—the result appears directly under the button. After that you’ll see board goals and foundational habits so AI stays clearly separate."
+              ? "Start however you want: generate a draft or build the period manually. Either way, the saved board stays separate from the AI draft."
               : "This handoff stays light on purpose: check whether the structure already exists, then open the full board for deeper shaping."}
           </p>
         </div>
@@ -1424,35 +1413,79 @@ export function DashboardPeriodReviewPrompts() {
       {(activeCandidate.type === "weekly" || activeCandidate.type === "monthly") && (
         <SectionCard
           eyebrow="AI support"
-          title={planSectionUnlocked ? "Generate another draft anytime" : "Start with AI"}
+          title={planSectionUnlocked ? "AI support and manual start" : "Choose how to start"}
           description={
             planSectionUnlocked && existingMainGoals.length + existingSecondaryGoals.length > 0
               ? "Saving selected AI items will replace the current saved plan for this period."
-              : "Generate a draft for main and supporting goals. Nothing else opens until then."
+              : "Generate a draft or start adding goals manually right here."
           }
           tone="soft"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {planSectionUnlocked ? (
-              <div className="flex min-w-0 flex-wrap gap-2">
-                <InfoPill>{existingMainGoals.length} main</InfoPill>
-                <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
-              </div>
-            ) : (
-              <p className="min-w-0 flex-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
-                Your draft will show up here as soon as generation finishes.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={handleGenerateDraft}
-              disabled={planLoading}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
-              style={{ background: "#006c4a" }}
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {planSectionUnlocked ? (
+                <div className="flex min-w-0 flex-wrap gap-2">
+                  <InfoPill>{existingMainGoals.length} main</InfoPill>
+                  <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
+                  <InfoPill>{activeHabits.length} habit{activeHabits.length === 1 ? "" : "s"}</InfoPill>
+                </div>
+              ) : (
+                <p className="min-w-0 flex-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
+                  Your AI draft appears here if you generate one. Manual adds also open the saved plan below.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleGenerateDraft}
+                disabled={planLoading}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+                style={{ background: "#006c4a" }}
+              >
+                {planLoading ? "Generating..." : aiButtonLabel(activeCandidate.type)}
+                <span className="material-symbols-outlined text-[15px]">auto_awesome</span>
+              </button>
+            </div>
+
+            <div
+              className="rounded-2xl p-4"
+              style={{ background: "white", border: "1px solid rgba(0,0,0,0.07)" }}
             >
-              {planLoading ? "Generating..." : aiButtonLabel(activeCandidate.type)}
-              <span className="material-symbols-outlined text-[15px]">auto_awesome</span>
-            </button>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                Start manually
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={openMainGoalEditor}
+                  className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                  style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Add main goal
+                </button>
+                <button
+                  type="button"
+                  onClick={openSupportingGoalEditor}
+                  className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                  style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Add supporting
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlanSectionUnlocked(true);
+                    setHabitEditor({});
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                  style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Add habit
+                </button>
+              </div>
+            </div>
           </div>
         </SectionCard>
       )}
@@ -1730,6 +1763,29 @@ export function DashboardPeriodReviewPrompts() {
       {activeCandidate.type === "yearly" && (
         <>
           <SectionCard
+            eyebrow="Start manually"
+            title="Shape next year directly"
+            description="You should be able to start the next year immediately without hunting for the add action."
+            tone="soft"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                <InfoPill>{activeYearContext?.nextYear ?? yearContext.nextYear}</InfoPill>
+                <InfoPill>{nextYearGoals.length} saved goal{nextYearGoals.length === 1 ? "" : "s"}</InfoPill>
+              </div>
+              <button
+                type="button"
+                onClick={() => setYearGoalModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+              >
+                <span className="material-symbols-outlined text-[15px]">add</span>
+                Add yearly goal
+              </button>
+            </div>
+          </SectionCard>
+
+          <SectionCard
             eyebrow="Board preview"
             title="Check the next year backbone"
             description="The yearly view should feel clear before it gets broken into months."
@@ -1753,7 +1809,7 @@ export function DashboardPeriodReviewPrompts() {
           <SectionCard
             eyebrow="Top outcomes"
             title="What is already defined"
-            description="A short list is enough here. The full board can hold the rest."
+            description="Add the next-year outcomes here first; the goals board can carry the deeper breakdown afterward."
             tone="default"
           >
             {nextYearGoals.length === 0 ? (
@@ -1953,9 +2009,9 @@ export function DashboardPeriodReviewPrompts() {
           <PlanningMonthlyGoalModal
             mode={(goalEditor.goal?.isMain ?? goalEditor.defaultIsMain ?? true) ? "main" : "secondary"}
             categories={categories}
-            yearlyGoals={yearlyGoals.filter((goal) => goal.year === monthContext.nextYear)}
-            monthOverride={monthContext.nextMonth}
-            yearOverride={monthContext.nextYear}
+            yearlyGoals={yearlyGoals.filter((goal) => goal.year === (activeMonthContext?.nextYear ?? monthContext.nextYear))}
+            monthOverride={activeMonthContext?.nextMonth ?? monthContext.nextMonth}
+            yearOverride={activeMonthContext?.nextYear ?? monthContext.nextYear}
             initialTitle={goalEditor.goal?.title}
             initialCategoryId={goalEditor.goal?.categoryId}
             initialYearlyGoalId={goalEditor.goal?.yearlyGoalId}
@@ -1976,6 +2032,14 @@ export function DashboardPeriodReviewPrompts() {
             initialFrequency={habitEditor.habit?.frequency}
             onSubmit={handleHabitSubmit}
             onClose={() => setHabitEditor(null)}
+          />
+        )}
+
+        {activeCandidate.type === "yearly" && activeYearContext && (
+          <AddYearlyGoalModal
+            open={yearGoalModalOpen}
+            yearOverride={activeYearContext.nextYear}
+            onClose={() => setYearGoalModalOpen(false)}
           />
         )}
       </div>

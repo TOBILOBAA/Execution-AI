@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAppStore, LOCAL_TEST_SIGNIN_HINTS } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { OtpCodeInput } from "@/components/OtpCodeInput";
-import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
+import { isAuthLocalOnly, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -74,10 +74,14 @@ export default function AuthPage() {
     return () => clearInterval(t);
   }, [resendIn]);
 
-  if (!authReady || workspaceHydrating) {
+  const handingOffToWorkspace = Boolean(currentUser);
+
+  if (!authReady || workspaceHydrating || handingOffToWorkspace) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
-        <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>Loading…</p>
+        <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>
+          {handingOffToWorkspace ? "Opening your workspace…" : "Loading…"}
+        </p>
       </div>
     );
   }

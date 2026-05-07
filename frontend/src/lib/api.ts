@@ -91,6 +91,17 @@ export interface Session {
   week_starts_on: "sunday" | "monday";
   created_at: string;
   auth_user_id?: string;
+  pending_recaps?: ApiRecapQueueEntry[];
+  handled_recaps?: string[];
+}
+
+export interface ApiRecapQueueEntry {
+  type: "weekly" | "monthly" | "quarterly" | "yearly";
+  period_year: number;
+  period_week?: number;
+  period_month?: number;
+  period_quarter?: number;
+  fired_at: string;
 }
 
 export interface ApiCategory {
@@ -217,6 +228,7 @@ export interface ApiDashboard {
   /** Present on current API; omitted on older backends. */
   yearly_goals?: ApiYearlyGoal[];
   habits: ApiHabit[];
+  pending_recaps?: ApiRecapQueueEntry[];
   metrics: {
     execution_streak: number;
     yesterday_completion: number;
@@ -296,9 +308,13 @@ export interface ApiReport {
   period_date?: string;
   period_week?: number;
   period_month?: number;
+  period_quarter?: number;
   period_year: number;
   metrics: Record<string, unknown>;
   ai_narrative?: Record<string, unknown>;
+  tailored_pattern?: string | null;
+  tailored_action?: string | null;
+  has_execution_data?: boolean;
   ai_generated_at?: string;
   status: string;
   created_at: string;
@@ -332,6 +348,8 @@ export const sessionsApi = {
       auth_user_id?: string;
       timezone?: string;
       week_starts_on?: "sunday" | "monday";
+      pending_recaps?: ApiRecapQueueEntry[];
+      handled_recaps?: string[];
     },
   ) =>
     patch<Session>(`/session/${sessionId}`, updates),
@@ -596,6 +614,9 @@ export const reportsApi = {
 
   generateMonthly: (sessionId: string, year: number, month: number) =>
     post<ApiReport>("/reports/monthly/generate", { session_id: sessionId, year, month }, AI_GENERATE_TIMEOUT_MS),
+
+  generateQuarterly: (sessionId: string, year: number, quarter: number) =>
+    post<ApiReport>("/reports/quarterly/generate", { session_id: sessionId, year, quarter }, AI_GENERATE_TIMEOUT_MS),
 
   generateYearly: (sessionId: string, year: number) =>
     post<ApiReport>("/reports/yearly/generate", { session_id: sessionId, year }, AI_GENERATE_TIMEOUT_MS),

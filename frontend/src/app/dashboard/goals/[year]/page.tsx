@@ -42,7 +42,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
 
   const {
     ready,
-    loading,
+    hasCachedData,
     error,
     today,
     yearlyGoals,
@@ -75,7 +75,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
     );
   }
 
-  if (!ready || loading) {
+  if (!ready && !hasCachedData) {
     return (
       <GoalsLoadingShell
         eyebrow={`${year} yearly goals`}

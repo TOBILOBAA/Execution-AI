@@ -40,7 +40,7 @@ export default function GoalsOverviewPage() {
   const [knownYears, setKnownYears] = useState<number[]>([currentYear]);
   const {
     ready,
-    loading,
+    hasCachedData,
     error,
     currentMonth,
     today,
@@ -72,7 +72,7 @@ export default function GoalsOverviewPage() {
     };
   }, [backendReady, currentYear, sessionId]);
 
-  if (!ready || loading) {
+  if (!ready && !hasCachedData) {
     return (
       <GoalsLoadingShell
         eyebrow="Goals overview"
