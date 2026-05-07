@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { formatWeekPreference, getTodayLabel, getGreeting } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
+import { SyncStatusPill } from "@/components/layout/SyncStatusPill";
 
 const PAGE_TITLES: Record<string, { title: string; label: string }> = {
   "/dashboard": { title: "", label: "Today" },
@@ -78,12 +79,11 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
+        <SyncStatusPill />
         <button
           type="button"
-          className="relative w-9 h-9 flex items-center justify-center rounded-full transition-colors"
+          className="interactive-icon-button relative flex h-9 w-9 items-center justify-center rounded-full"
           style={{ color: "#8a9e97" }}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#f4f6f4")}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
           aria-label="Notifications"
         >
           <span className="material-symbols-outlined text-[22px]">notifications</span>
@@ -97,7 +97,7 @@ export function TopBar() {
           <button
             type="button"
             onClick={() => setMenuOpen((o) => !o)}
-            className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm cursor-pointer transition-opacity hover:opacity-80 outline-none"
+            className="interactive-card w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm cursor-pointer outline-none focus-visible:ring-4 focus-visible:ring-[--color-primary]/15"
             style={{ background: "rgba(0,108,74,0.12)", color: "#006c4a" }}
             title={currentUser?.name ?? "Account"}
             aria-expanded={menuOpen}

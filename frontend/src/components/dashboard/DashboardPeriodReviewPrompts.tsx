@@ -12,6 +12,7 @@ import { AddHabitModal } from "@/components/onboarding/AddHabitModal";
 import {
   startOfLocalWeek,
 } from "@/lib/reportAvailability";
+import { getWeekNumber } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
 import type { DashboardRecapEntry, FoundationalHabit, MonthlyGoal, WeeklyGoal, YearlyGoal } from "@/lib/types";
 
@@ -75,9 +76,9 @@ function formatTargetDate(value?: string) {
 }
 
 function weekNumberForDate(ref: Date, weekStartsOn: "sunday" | "monday") {
-  const weekOneStart = startOfLocalWeek(new Date(ref.getFullYear(), 0, 1), weekStartsOn);
-  const weekStart = startOfLocalWeek(ref, weekStartsOn);
-  return Math.floor((weekStart.getTime() - weekOneStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  // Use the UTC-safe shared helper so DST boundaries do not shift week numbers
+  // inside the review modal flow.
+  return getWeekNumber(ref, weekStartsOn);
 }
 
 function getWeekContext(now: Date, weekStartsOn: "sunday" | "monday") {
@@ -1123,6 +1124,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function openSupportingGoalEditor() {
+    setPlanSectionUnlocked(true);
     if (activeCandidate.type === "weekly") {
       setGoalEditor({ type: "weekly", defaultIsMain: false });
       return;
@@ -1133,6 +1135,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function openExistingGoalEditor(goal: WeeklyGoal | MonthlyGoal) {
+    setPlanSectionUnlocked(true);
     if (activeCandidate.type === "weekly") {
       setGoalEditor({ type: "weekly", goal: goal as WeeklyGoal });
       return;
@@ -1215,6 +1218,7 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function handleHabitSubmit(name: string, icon: string, categoryId: string, frequency: FoundationalHabit["frequency"]) {
+    setPlanSectionUnlocked(true);
     if (habitEditor?.habit) {
       updateHabit(habitEditor.habit.id, { name, icon, categoryId: categoryId || undefined, frequency, active: true });
       setSavedNotice("Foundational habit updated.");
@@ -1450,7 +1454,7 @@ export function DashboardPeriodReviewPrompts() {
           )}
           <p className="text-xs leading-relaxed" style={{ color: "#6f817a" }}>
             {activeCandidate.type === "weekly" || activeCandidate.type === "monthly"
-              ? "Generate an AI draft first—the result appears directly under the button. After that you’ll see board goals and foundational habits so AI stays clearly separate."
+              ? "Start however you want: generate a draft or build the period manually. Either way, the saved board stays separate from the AI draft."
               : "This handoff stays light on purpose: check whether the structure already exists, then open the full board for deeper shaping."}
           </p>
         </div>
@@ -1459,11 +1463,11 @@ export function DashboardPeriodReviewPrompts() {
       {(activeCandidate.type === "weekly" || activeCandidate.type === "monthly") && (
         <SectionCard
           eyebrow="AI support"
-          title={planSectionUnlocked ? "Generate another draft anytime" : "Start with AI"}
+          title={planSectionUnlocked ? "AI support and manual start" : "Choose how to start"}
           description={
             planSectionUnlocked && existingMainGoals.length + existingSecondaryGoals.length > 0
               ? "Saving selected AI items will replace the current saved plan for this period."
-              : "Generate a draft for main and supporting goals. Nothing else opens until then."
+              : "Generate a draft or start adding goals manually right here."
           }
           tone="soft"
         >
@@ -1817,12 +1821,12 @@ export function DashboardPeriodReviewPrompts() {
       {activeCandidate.type === "yearly" && (
         <>
           <SectionCard
-            eyebrow="Board preview"
-            title="Check the next year backbone"
-            description="The yearly view should feel clear before it gets broken into months."
+            eyebrow="Start manually"
+            title="Shape next year directly"
+            description="You should be able to start the next year immediately without hunting for the add action."
             tone="soft"
           >
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 <InfoPill>{activeYearContext?.nextYear ?? yearContext.nextYear}</InfoPill>
                 <InfoPill>{nextYearGoals.length} saved goal{nextYearGoals.length === 1 ? "" : "s"}</InfoPill>
@@ -1837,7 +1841,14 @@ export function DashboardPeriodReviewPrompts() {
                 Add yearly goal
               </button>
             </div>
+          </SectionCard>
 
+          <SectionCard
+            eyebrow="Board preview"
+            title="Check the next year backbone"
+            description="The yearly view should feel clear before it gets broken into months."
+            tone="soft"
+          >
             <div className="grid gap-3 sm:grid-cols-3">
               <OverviewStat label="Yearly goals" value={String(nextYearGoals.length)} />
               <OverviewStat

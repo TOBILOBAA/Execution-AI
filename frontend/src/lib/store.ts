@@ -46,24 +46,6 @@ import type { User } from "@supabase/supabase-js";
 import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudSupabaseConfigured } from "./authMode";
 import { getWeekNumber, listWeeksForYearThroughWeek } from "./goalsView";
 
-/** Align onboarding UI with the workspace row in Supabase (source of truth when logged in). */
-async function pullOnboardingFromServer(sessionId: string): Promise<{
-  onboarding_step: number;
-  onboarding_done: boolean;
-  week_starts_on: WeekStartsOn;
-} | null> {
-  try {
-    const row = await sessionsApi.get(sessionId);
-    return {
-      onboarding_step: row.onboarding_step,
-      onboarding_done: row.onboarding_done,
-      week_starts_on: row.week_starts_on,
-    };
-  } catch {
-    return null;
-  }
-}
-
 // ── Auth types ─────────────────────────────────────────────────────────────────
 export interface AuthUser { id: string; name: string; email: string; plan: string }
 interface StoredUser { id: string; name: string; email: string; password: string; plan: string }
@@ -118,6 +100,9 @@ interface AppState {
   setWeekStartsOn: (value: WeekStartsOn) => Promise<void>;
   backendReady: boolean;
   workspaceHydrating: boolean;
+  dashboardLoading: boolean;
+  reportsLoading: boolean;
+  reportsHydrated: boolean;
   /** User id that owns the persisted workspace below; changes when a different account signs in. */
   workspaceOwnerId: string | null;
   /** Last server save / sync failure (not persisted). */
@@ -150,7 +135,8 @@ interface AppState {
 
   // ── Backend sync ─────────────────────────────────────────────────────────────
   loadDashboard: (planDate?: string) => Promise<void>;
-  syncReports: () => Promise<void>;
+  loadCurrentDashboard: () => Promise<void>;
+  syncReports: (force?: boolean) => Promise<ApiReport[] | null>;
 
   // ── CRUD operations ─────────────────────────────────────────────────────────
   addCategory: (cat: Omit<Category, "id">) => void;
@@ -249,6 +235,32 @@ interface AppState {
 let idCounter = 1000;
 const genId = (prefix: string) => `${prefix}-${++idCounter}`;
 
+function getReferenceDate(isoDate: string): Date {
+  const parsed = new Date(`${isoDate}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function isCurrentYearlyGoal(goal: Pick<YearlyGoal, "year">, activeDashboardDate: string): boolean {
+  return goal.year === getReferenceDate(activeDashboardDate).getFullYear();
+}
+
+function isCurrentMonthlyGoal(goal: Pick<MonthlyGoal, "year" | "month">, activeDashboardDate: string): boolean {
+  const referenceDate = getReferenceDate(activeDashboardDate);
+  return goal.year === referenceDate.getFullYear() && goal.month === referenceDate.getMonth() + 1;
+}
+
+function isCurrentWeeklyGoal(
+  goal: Pick<WeeklyGoal, "year" | "weekNumber">,
+  activeDashboardDate: string,
+  weekStartsOn: WeekStartsOn,
+): boolean {
+  const referenceDate = getReferenceDate(activeDashboardDate);
+  return (
+    goal.year === referenceDate.getFullYear() &&
+    goal.weekNumber === getWeekNumber(referenceDate, weekStartsOn)
+  );
+}
+
 function requiresServerPersistence(): boolean {
   return isCloudSupabaseConfigured() && !isAuthLocalOnly();
 }
@@ -259,6 +271,18 @@ const pendingWeeklyGoalCreates = new Map<string, Promise<void>>();
 const pendingDailyPriorityCreates = new Map<string, Promise<void>>();
 const pendingSecondaryTaskCreates = new Map<string, Promise<void>>();
 const pendingHabitCreates = new Map<string, Promise<void>>();
+const pendingDashboardLoads = new Map<string, Promise<void>>();
+const pendingCategoryLoads = new Map<string, Promise<void>>();
+const pendingReportsLoads = new Map<string, Promise<ApiReport[] | null>>();
+const loadedCategoriesForSession = new Set<string>();
+
+function upsertReport(reports: ApiReport[], incoming: ApiReport): ApiReport[] {
+  const index = reports.findIndex((report) => report.id === incoming.id);
+  if (index === -1) {
+    return [incoming, ...reports];
+  }
+  return reports.map((report, reportIndex) => (reportIndex === index ? incoming : report));
+}
 
 function trackPendingCreate(
   pendingMap: Map<string, Promise<void>>,
@@ -283,6 +307,94 @@ async function waitForPendingCreates(
   if (pending.length) {
     await Promise.all(pending);
   }
+}
+
+function applyServerCategories(
+  categories: Awaited<ReturnType<typeof categoriesApi.list>>,
+  set: (partial: Partial<AppState>) => void,
+  get: () => AppState,
+) {
+  const state = get();
+  if (categories.length === 0 && !state.onboardingComplete && state.categories.length > 0) {
+    return;
+  }
+  set({
+    categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon, color: c.color })),
+  });
+}
+
+async function loadCategoriesOnce(
+  sessionId: string,
+  set: (partial: Partial<AppState>) => void,
+  get: () => AppState,
+  opts?: { force?: boolean },
+): Promise<void> {
+  const force = opts?.force ?? false;
+  if (!force && loadedCategoriesForSession.has(sessionId)) {
+    return;
+  }
+  const existing = pendingCategoryLoads.get(sessionId);
+  if (existing) {
+    return existing;
+  }
+
+  const request = categoriesApi
+    .list(sessionId)
+    .then((categories) => {
+      applyServerCategories(categories, set, get);
+      loadedCategoriesForSession.add(sessionId);
+    })
+    .catch((e) => {
+      set({ syncError: formatApiError("Load categories", e) });
+    })
+    .finally(() => {
+      if (pendingCategoryLoads.get(sessionId) === request) {
+        pendingCategoryLoads.delete(sessionId);
+      }
+    });
+
+  pendingCategoryLoads.set(sessionId, request);
+  return request;
+}
+
+async function loadDashboardIntoStore(
+  sessionId: string,
+  requestedDate: string | undefined,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+): Promise<void> {
+  const requestKey = `${sessionId}:${requestedDate ?? "__current__"}`;
+  const existing = pendingDashboardLoads.get(requestKey);
+  if (existing) {
+    return existing;
+  }
+
+  set({ dashboardLoading: true });
+  const request = dashboardApi
+    .get(sessionId, requestedDate)
+    .then((data) => {
+      set((s) => ({
+        ...s,
+        ...mapDashboardToStore(data, {
+          yearlyGoals: s.yearlyGoals,
+          monthlyGoals: s.monthlyGoals,
+          weeklyGoals: s.weeklyGoals,
+        }),
+        activeDashboardDate: data.today,
+        syncError: null,
+      }));
+    })
+    .catch((e) => {
+      set({ syncError: formatApiError("Load dashboard from server", e) });
+    })
+    .finally(() => {
+      if (pendingDashboardLoads.get(requestKey) === request) {
+        pendingDashboardLoads.delete(requestKey);
+      }
+      set({ dashboardLoading: pendingDashboardLoads.size > 0 });
+    });
+
+  pendingDashboardLoads.set(requestKey, request);
+  return request;
 }
 
 // Pre-seeded demo user
@@ -369,6 +481,8 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
       habits: [],
       metrics: EMPTY_DASHBOARD_METRICS,
       reports: [],
+      reportsLoading: false,
+      reportsHydrated: false,
       sessionWeekStartsOn: "monday",
     });
   } else if (prevOwner === null) {
@@ -376,21 +490,41 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   }
 
   let sid: string;
+  let onboardingSnapshot: {
+    onboarding_step: number;
+    onboarding_done: boolean;
+    week_starts_on: WeekStartsOn;
+  };
   try {
-    sid = await ensureBackendSession(userId);
+    const session = await ensureBackendSession(userId);
+    sid = session.id;
+    onboardingSnapshot = {
+      onboarding_step: session.onboarding_step,
+      onboarding_done: session.onboarding_done,
+      week_starts_on: session.week_starts_on,
+    };
     set({ sessionId: sid, backendReady: true });
   } catch (e) {
     set({
       backendReady: false,
+      dashboardLoading: false,
+      reportsLoading: false,
       syncError: formatApiError("Start backend session", e),
       workspaceHydrating: false,
     });
     return;
   }
 
-  // Fan out: onboarding metadata + dashboard payload land in parallel.
-  const onboardingPromise = pullOnboardingFromServer(sid);
-  const dashboardPromise = get().loadDashboard();
+  // Fetch categories once per session in the background. They are needed across
+  // onboarding + dashboard, but they should not be attached to every dashboard
+  // hydration request.
+  const categoriesPromise = loadCategoriesOnce(sid, set, get);
+
+  // Fetch onboarding metadata first; only preload dashboard data immediately
+  // when we already know the user is past onboarding.
+  const onboardingPromise = Promise.resolve(onboardingSnapshot);
+  let dashboardPromise: Promise<void> | null =
+    preservedOnboardingDone && !switchingAccount ? get().loadCurrentDashboard() : null;
 
   // Apply onboarding metadata as soon as it lands so the router can decide
   // /dashboard vs /onboarding without waiting for the dashboard payload.
@@ -406,6 +540,9 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
         onboardingStep: step,
         sessionWeekStartsOn: ob.week_starts_on,
       });
+      if (done && !dashboardPromise) {
+        dashboardPromise = get().loadCurrentDashboard();
+      }
       if (done && !ob.onboarding_done) {
         void sessionsApi
           .update(sid, { onboarding_done: true, onboarding_step: 4 })
@@ -421,11 +558,15 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   }
 
   try {
-    await dashboardPromise;
-    if (!get().syncError) set({ syncError: null });
+    if (dashboardPromise) {
+      await dashboardPromise;
+      if (!get().syncError) set({ syncError: null });
+    }
   } catch (e) {
     set({ syncError: formatApiError("Load dashboard from server", e) });
   }
+
+  void categoriesPromise;
 }
 
 // ─── Mapper helpers: API response → frontend types ────────────────────────────
@@ -703,6 +844,8 @@ export const useAppStore = create<AppState>()(
             habits: [],
             metrics: EMPTY_DASHBOARD_METRICS,
             reports: [],
+            reportsLoading: false,
+            reportsHydrated: false,
             pendingRecaps: [],
             syncError: null,
             authReady: true,
@@ -769,6 +912,8 @@ export const useAppStore = create<AppState>()(
           habits: [],
           metrics: EMPTY_DASHBOARD_METRICS,
           reports: [],
+          reportsLoading: false,
+          reportsHydrated: false,
           pendingRecaps: [],
           syncError: null,
           authReady: true,
@@ -863,6 +1008,8 @@ export const useAppStore = create<AppState>()(
             habits: [],
             metrics: EMPTY_DASHBOARD_METRICS,
             reports: [],
+            reportsLoading: false,
+            reportsHydrated: false,
             pendingRecaps: [],
             syncError: null,
             authReady: true,
@@ -888,6 +1035,9 @@ export const useAppStore = create<AppState>()(
           sessionWeekStartsOn: "monday",
           activeDashboardDate: getToday(),
           backendReady: false,
+          dashboardLoading: false,
+          reportsLoading: false,
+          reportsHydrated: false,
           workspaceHydrating: false,
           syncError: null,
           pendingRecaps: [],
@@ -898,7 +1048,13 @@ export const useAppStore = create<AppState>()(
       hydrateAuthFromSupabase: async () => {
         const sb = getSupabaseBrowser();
         if (!sb || isAuthLocalOnly()) {
-          set({ authReady: true, workspaceHydrating: false });
+          set({
+            authReady: true,
+            workspaceHydrating: false,
+            dashboardLoading: false,
+            reportsLoading: false,
+            reportsHydrated: false,
+          });
           return;
         }
         const {
@@ -911,6 +1067,9 @@ export const useAppStore = create<AppState>()(
             sessionWeekStartsOn: "monday",
             activeDashboardDate: getToday(),
             backendReady: false,
+            dashboardLoading: false,
+            reportsLoading: false,
+            reportsHydrated: false,
             workspaceHydrating: false,
             syncError: null,
             authReady: true,
@@ -972,7 +1131,7 @@ export const useAppStore = create<AppState>()(
         try {
           const session = await sessionsApi.update(sessionId, { week_starts_on: value });
           set({ sessionWeekStartsOn: session.week_starts_on, syncError: null });
-          await get().loadDashboard();
+          await get().loadCurrentDashboard();
         } catch (e) {
           set({
             sessionWeekStartsOn,
@@ -1004,6 +1163,7 @@ export const useAppStore = create<AppState>()(
           try {
             await sessionsApi.update(sessionId, { onboarding_done: true, onboarding_step: 4 });
             set({ onboardingComplete: true, kickoffPending: true, onboardingStep: 4, syncError: null });
+            await get().loadCurrentDashboard();
             return true;
           } catch (e) {
             set({ syncError: formatApiError("Complete onboarding on server", e) });
@@ -1018,6 +1178,9 @@ export const useAppStore = create<AppState>()(
         return true;
       },
       dismissKickoff: () => set({ kickoffPending: false }),
+      dashboardLoading: false,
+      reportsLoading: false,
+      reportsHydrated: false,
 
       // ── Initial data (production: empty until user + server populate) ───────
       categories: DEFAULT_CATEGORIES,
@@ -1035,43 +1198,46 @@ export const useAppStore = create<AppState>()(
       loadDashboard: async (planDate) => {
         const { sessionId, activeDashboardDate } = get();
         if (!sessionId) return;
-        const requestedDate = planDate ?? activeDashboardDate;
-        try {
-          const [data, categories] = await Promise.all([
-            dashboardApi.get(sessionId, requestedDate),
-            categoriesApi.list(sessionId).catch(() => null),
-          ]);
-          set((s) => ({
-            ...s,
-            ...(
-              categories
-                ? categories.length > 0 || s.onboardingComplete || s.categories.length === 0
-                  ? { categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon, color: c.color })) }
-                  : {}
-                : {}
-            ),
-            ...mapDashboardToStore(data, {
-              yearlyGoals: s.yearlyGoals,
-              monthlyGoals: s.monthlyGoals,
-              weeklyGoals: s.weeklyGoals,
-            }),
-            activeDashboardDate: data.today,
-            syncError: null,
-          }));
-        } catch (e) {
-          set({ syncError: formatApiError("Load dashboard from server", e) });
-        }
+        return loadDashboardIntoStore(sessionId, planDate ?? activeDashboardDate, set);
       },
 
-      syncReports: async () => {
+      loadCurrentDashboard: async () => {
         const { sessionId } = get();
         if (!sessionId) return;
-        try {
-          const reports = await reportsApi.list(sessionId);
-          set({ reports, syncError: null });
-        } catch (e) {
-          set({ syncError: formatApiError("Load reports list", e) });
+        return loadDashboardIntoStore(sessionId, undefined, set);
+      },
+
+      syncReports: async (force = false) => {
+        const { sessionId, reportsHydrated, reports } = get();
+        if (!sessionId) return null;
+        if (!force && reportsHydrated) {
+          return reports;
         }
+        const existing = pendingReportsLoads.get(sessionId);
+        if (existing) {
+          return existing;
+        }
+
+        set({ reportsLoading: true });
+        const request = reportsApi
+          .list(sessionId)
+          .then((serverReports) => {
+            set({ reports: serverReports, reportsHydrated: true, syncError: null });
+            return serverReports;
+          })
+          .catch((e) => {
+            set({ syncError: formatApiError("Load reports list", e) });
+            return null;
+          })
+          .finally(() => {
+            if (pendingReportsLoads.get(sessionId) === request) {
+              pendingReportsLoads.delete(sessionId);
+            }
+            set({ reportsLoading: pendingReportsLoads.size > 0 });
+          });
+
+        pendingReportsLoads.set(sessionId, request);
+        return request;
       },
 
       // ── Categories ──────────────────────────────────────────────────────────
@@ -1103,8 +1269,17 @@ export const useAppStore = create<AppState>()(
       // ── Yearly goals ────────────────────────────────────────────────────────
       addYearlyGoal: (goal) => {
         const localId = genId("yg");
-        set((s) => ({ yearlyGoals: [...s.yearlyGoals, { ...goal, id: localId }] }));
-        const { sessionId } = get();
+        const { sessionId, activeDashboardDate } = get();
+        set((s) => ({
+          yearlyGoals: [
+            ...s.yearlyGoals,
+            {
+              ...goal,
+              id: localId,
+              editable: isCurrentYearlyGoal(goal, activeDashboardDate),
+            },
+          ],
+        }));
         if (sessionId) {
           const request = yearlyGoalsApi
             .create(sessionId, {
@@ -1117,7 +1292,14 @@ export const useAppStore = create<AppState>()(
             .then((created) => {
               set((s) => ({
                 yearlyGoals: s.yearlyGoals.map((g) =>
-                  g.id === localId ? { ...g, id: created.id, categoryId: created.category_id ?? g.categoryId } : g
+                  g.id === localId
+                    ? {
+                        ...g,
+                        id: created.id,
+                        categoryId: created.category_id ?? g.categoryId,
+                        editable: created.editable ?? g.editable,
+                      }
+                    : g
                 ),
                 syncError: null,
               }));
@@ -1174,7 +1356,14 @@ export const useAppStore = create<AppState>()(
             });
             set((s) => ({
               yearlyGoals: s.yearlyGoals.map((yg) =>
-                yg.id === g.id ? { ...yg, id: created.id, categoryId: created.category_id ?? yg.categoryId } : yg,
+                yg.id === g.id
+                  ? {
+                      ...yg,
+                      id: created.id,
+                      categoryId: created.category_id ?? yg.categoryId,
+                      editable: created.editable ?? yg.editable,
+                    }
+                  : yg,
               ),
             }));
           } catch (e) {
@@ -1237,7 +1426,14 @@ export const useAppStore = create<AppState>()(
             });
             set((s) => ({
               monthlyGoals: s.monthlyGoals.map((mg) =>
-                mg.id === g.id ? { ...mg, id: created.id, yearlyGoalId: created.yearly_goal_id ?? mg.yearlyGoalId } : mg
+                mg.id === g.id
+                  ? {
+                      ...mg,
+                      id: created.id,
+                      yearlyGoalId: created.yearly_goal_id ?? mg.yearlyGoalId,
+                      editable: created.editable ?? mg.editable,
+                    }
+                  : mg
               ),
               syncError: null,
               syncStatus: "saved",
@@ -1281,7 +1477,14 @@ export const useAppStore = create<AppState>()(
             });
             set((s) => ({
               weeklyGoals: s.weeklyGoals.map((wg) =>
-                wg.id === g.id ? { ...wg, id: created.id, monthlyGoalId: created.monthly_goal_id ?? wg.monthlyGoalId } : wg
+                wg.id === g.id
+                  ? {
+                      ...wg,
+                      id: created.id,
+                      monthlyGoalId: created.monthly_goal_id ?? wg.monthlyGoalId,
+                      editable: created.editable ?? wg.editable,
+                    }
+                  : wg
               ),
               syncError: null,
               syncStatus: "saved",
@@ -1309,8 +1512,17 @@ export const useAppStore = create<AppState>()(
       // ── Monthly goals ────────────────────────────────────────────────────────
       addMonthlyGoal: (goal) => {
         const localId = genId("mg");
-        set((s) => ({ monthlyGoals: [...s.monthlyGoals, { ...goal, id: localId }] }));
-        const { sessionId } = get();
+        const { sessionId, activeDashboardDate } = get();
+        set((s) => ({
+          monthlyGoals: [
+            ...s.monthlyGoals,
+            {
+              ...goal,
+              id: localId,
+              editable: isCurrentMonthlyGoal(goal, activeDashboardDate),
+            },
+          ],
+        }));
         if (sessionId) {
           const request = monthlyPlanApi
             .addGoal(sessionId, goal.year, goal.month, {
@@ -1331,6 +1543,7 @@ export const useAppStore = create<AppState>()(
                         ...g,
                         id: created.id,
                         yearlyGoalId: created.yearly_goal_id ?? g.yearlyGoalId,
+                        editable: created.editable ?? g.editable,
                       }
                     : g
                 ),
@@ -1397,8 +1610,17 @@ export const useAppStore = create<AppState>()(
       // ── Weekly goals ─────────────────────────────────────────────────────────
       addWeeklyGoal: (goal) => {
         const localId = genId("wg");
-        set((s) => ({ weeklyGoals: [...s.weeklyGoals, { ...goal, id: localId }] }));
-        const { sessionId } = get();
+        const { sessionId, activeDashboardDate, sessionWeekStartsOn } = get();
+        set((s) => ({
+          weeklyGoals: [
+            ...s.weeklyGoals,
+            {
+              ...goal,
+              id: localId,
+              editable: isCurrentWeeklyGoal(goal, activeDashboardDate, sessionWeekStartsOn),
+            },
+          ],
+        }));
         if (sessionId) {
           const request = weeklyPlanApi
             .addGoal(sessionId, goal.year, goal.weekNumber, {
@@ -1418,6 +1640,7 @@ export const useAppStore = create<AppState>()(
                         ...g,
                         id: created.id,
                         monthlyGoalId: created.monthly_goal_id ?? g.monthlyGoalId,
+                        editable: created.editable ?? g.editable,
                       }
                     : g
                 ),
@@ -1828,6 +2051,7 @@ export const useAppStore = create<AppState>()(
         }
 
         set({ syncError: null });
+        await get().loadDashboard(planDate);
         return true;
       },
 
@@ -2077,7 +2301,7 @@ export const useAppStore = create<AppState>()(
         if (!sessionId) return null;
         try {
           const r = await reportsApi.generateDaily(sessionId, date);
-          set({ syncError: null });
+          set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Daily report (AI generate)", e) });
@@ -2089,7 +2313,7 @@ export const useAppStore = create<AppState>()(
         if (!sessionId) return null;
         try {
           const r = await reportsApi.generateWeekly(sessionId, year, weekNumber);
-          set({ syncError: null });
+          set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Weekly report (AI generate)", e) });
@@ -2101,7 +2325,7 @@ export const useAppStore = create<AppState>()(
         if (!sessionId) return null;
         try {
           const r = await reportsApi.generateMonthly(sessionId, year, month);
-          set({ syncError: null });
+          set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Monthly report (AI generate)", e) });
@@ -2113,7 +2337,7 @@ export const useAppStore = create<AppState>()(
         if (!sessionId) return null;
         try {
           const r = await reportsApi.generateQuarterly(sessionId, year, quarter);
-          set({ syncError: null });
+          set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Quarterly report (AI generate)", e) });
@@ -2125,7 +2349,7 @@ export const useAppStore = create<AppState>()(
         if (!sessionId) return null;
         try {
           const r = await reportsApi.generateYearly(sessionId, year);
-          set({ syncError: null });
+          set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
           set({ syncError: formatApiError("Yearly report (AI generate)", e) });

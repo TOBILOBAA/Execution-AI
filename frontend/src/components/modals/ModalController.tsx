@@ -6,13 +6,233 @@ import { AddCategoryModal } from "./AddCategoryModal";
 import { AddYearlyGoalModal } from "./AddYearlyGoalModal";
 import { AddMonthlyGoalModal } from "./AddMonthlyGoalModal";
 import { AddWeeklyGoalModal } from "./AddWeeklyGoalModal";
-import { AddDailyPriorityModal } from "./AddDailyPriorityModal";
-import { AddSecondaryTaskModal } from "./AddSecondaryTaskModal";
+import { AddDailyPriorityModal as PlanningDailyPriorityModal } from "@/components/onboarding/AddDailyPriorityModal";
+import { AddSecondaryTaskModal as PlanningSecondaryTaskModal } from "@/components/onboarding/AddSecondaryTaskModal";
 import { ManageHabitsModal } from "./ManageHabitsModal";
 import { ReportModal } from "./ReportModal";
+import { getWeekNumber } from "@/lib/goalsView";
+import type { Category, DailyPriority, MonthlyGoal, WeeklyGoal } from "@/lib/types";
+import { DEFAULT_CATEGORIES } from "@/lib/mockData";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function normalizeLookup(value?: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function inferWeeklyGoalId(item: { weeklyGoalId?: string; title?: string; description?: string }, weeklyGoals: WeeklyGoal[]) {
+  if (item.weeklyGoalId && weeklyGoals.some((goal) => goal.id === item.weeklyGoalId)) {
+    return item.weeklyGoalId;
+  }
+
+  const combined = normalizeLookup([item.title, item.description].filter(Boolean).join(" "));
+  if (!combined) return undefined;
+  const byContent = weeklyGoals.find((goal) => {
+    const title = normalizeLookup(goal.title);
+    return title && combined.includes(title);
+  });
+  return byContent?.id;
+}
+
+function inferCategoryId(
+  item: { tag?: string; weeklyGoalId?: string; title?: string; description?: string },
+  categories: Category[],
+  weeklyGoals: WeeklyGoal[],
+  monthlyGoals: MonthlyGoal[],
+) {
+  const tag = normalizeLookup(item.tag);
+  if (tag) {
+    const exact = categories.find((category) => normalizeLookup(category.name) === tag);
+    if (exact) return exact.id;
+    const fuzzy = categories.find((category) => {
+      const name = normalizeLookup(category.name);
+      return name && (name.includes(tag) || tag.includes(name));
+    });
+    if (fuzzy) return fuzzy.id;
+  }
+
+  const linkedWeeklyGoalId = inferWeeklyGoalId(item, weeklyGoals) ?? item.weeklyGoalId;
+  const weeklyGoal = linkedWeeklyGoalId ? weeklyGoals.find((goal) => goal.id === linkedWeeklyGoalId) : undefined;
+  const monthlyGoal = weeklyGoal?.monthlyGoalId
+    ? monthlyGoals.find((goal) => goal.id === weeklyGoal.monthlyGoalId)
+    : undefined;
+  return monthlyGoal?.categoryId;
+}
+
+function ConnectedDailyPriorityModal({
+  onClose,
+  initialData,
+}: {
+  onClose: () => void;
+  initialData?: DailyPriority;
+}) {
+  const {
+    categories,
+    weeklyGoals,
+    monthlyGoals,
+    sessionWeekStartsOn,
+    activeDashboardDate,
+    addDailyPriority,
+    updateDailyPriority,
+  } = useAppStore(
+    useShallow((state) => ({
+      categories: state.categories,
+      weeklyGoals: state.weeklyGoals,
+      monthlyGoals: state.monthlyGoals,
+      sessionWeekStartsOn: state.sessionWeekStartsOn,
+      activeDashboardDate: state.activeDashboardDate,
+      addDailyPriority: state.addDailyPriority,
+      updateDailyPriority: state.updateDailyPriority,
+    })),
+  );
+  const effectiveCategories = categories.length ? categories : DEFAULT_CATEGORIES;
+
+  const referenceDate = initialData?.date ?? activeDashboardDate;
+  const referenceYear = Number(referenceDate.slice(0, 4)) || new Date().getFullYear();
+  const referenceDateSource = new Date(`${referenceDate}T12:00:00`);
+  const referenceWeekNumber = Number.isNaN(referenceDateSource.getTime())
+    ? getWeekNumber(new Date(), sessionWeekStartsOn)
+    : getWeekNumber(referenceDateSource, sessionWeekStartsOn);
+  const scopedWeeklyGoals = weeklyGoals.filter(
+    (goal) => goal.year === referenceYear && goal.weekNumber === referenceWeekNumber,
+  );
+  const linkedWeeklyGoal =
+    initialData?.weeklyGoalId ? weeklyGoals.find((goal) => goal.id === initialData.weeklyGoalId) : undefined;
+  const availableWeeklyGoals =
+    linkedWeeklyGoal && !scopedWeeklyGoals.some((goal) => goal.id === linkedWeeklyGoal.id)
+      ? [...scopedWeeklyGoals, linkedWeeklyGoal]
+      : scopedWeeklyGoals;
+  const relevantMonthlyGoals = monthlyGoals.filter((goal) => goal.year === referenceYear);
+
+  return (
+    <PlanningDailyPriorityModal
+      categories={effectiveCategories}
+      weeklyGoals={availableWeeklyGoals}
+      initialTitle={initialData?.title}
+      initialCategoryId={
+        inferCategoryId(initialData ?? {}, effectiveCategories, availableWeeklyGoals, relevantMonthlyGoals) ??
+        effectiveCategories.find((category) => category.name === initialData?.tag)?.id
+      }
+      initialWeeklyGoalId={inferWeeklyGoalId(initialData ?? {}, availableWeeklyGoals) ?? initialData?.weeklyGoalId}
+      initialAllocation={initialData?.estimatedMinutes ?? 30}
+      initialDescription={initialData?.description ?? ""}
+      onSubmit={({ title, categoryId, estimatedMinutes, tag, weeklyGoalId, description }) => {
+        if (initialData) {
+          updateDailyPriority(initialData.id, {
+            title,
+            description,
+            estimatedMinutes,
+            weeklyGoalId,
+            tag: tag ?? effectiveCategories.find((category) => category.id === categoryId)?.name,
+          });
+        } else {
+          addDailyPriority({
+            title,
+            description,
+            estimatedMinutes,
+            weeklyGoalId,
+            tag: tag ?? effectiveCategories.find((category) => category.id === categoryId)?.name,
+            isMain: true,
+            date: activeDashboardDate,
+            status: "active",
+            completed: false,
+            priority: "high",
+          });
+        }
+        onClose();
+      }}
+      onClose={onClose}
+    />
+  );
+}
+
+function ConnectedSecondaryTaskModal({
+  onClose,
+  initialData,
+}: {
+  onClose: () => void;
+  initialData?: DailyPriority;
+}) {
+  const {
+    categories,
+    weeklyGoals,
+    monthlyGoals,
+    sessionWeekStartsOn,
+    activeDashboardDate,
+    addSecondaryTask,
+    updateSecondaryTask,
+  } = useAppStore(
+    useShallow((state) => ({
+      categories: state.categories,
+      weeklyGoals: state.weeklyGoals,
+      monthlyGoals: state.monthlyGoals,
+      sessionWeekStartsOn: state.sessionWeekStartsOn,
+      activeDashboardDate: state.activeDashboardDate,
+      addSecondaryTask: state.addSecondaryTask,
+      updateSecondaryTask: state.updateSecondaryTask,
+    })),
+  );
+  const effectiveCategories = categories.length ? categories : DEFAULT_CATEGORIES;
+
+  const referenceDate = initialData?.date ?? activeDashboardDate;
+  const referenceYear = Number(referenceDate.slice(0, 4)) || new Date().getFullYear();
+  const referenceDateSource = new Date(`${referenceDate}T12:00:00`);
+  const referenceWeekNumber = Number.isNaN(referenceDateSource.getTime())
+    ? getWeekNumber(new Date(), sessionWeekStartsOn)
+    : getWeekNumber(referenceDateSource, sessionWeekStartsOn);
+  const scopedWeeklyGoals = weeklyGoals.filter(
+    (goal) => goal.year === referenceYear && goal.weekNumber === referenceWeekNumber,
+  );
+  const linkedWeeklyGoal =
+    initialData?.weeklyGoalId ? weeklyGoals.find((goal) => goal.id === initialData.weeklyGoalId) : undefined;
+  const availableWeeklyGoals =
+    linkedWeeklyGoal && !scopedWeeklyGoals.some((goal) => goal.id === linkedWeeklyGoal.id)
+      ? [...scopedWeeklyGoals, linkedWeeklyGoal]
+      : scopedWeeklyGoals;
+  const relevantMonthlyGoals = monthlyGoals.filter((goal) => goal.year === referenceYear);
+
+  return (
+    <PlanningSecondaryTaskModal
+      categories={effectiveCategories}
+      weeklyGoals={availableWeeklyGoals}
+      initialTitle={initialData?.title}
+      initialCategoryId={
+        inferCategoryId(initialData ?? {}, effectiveCategories, availableWeeklyGoals, relevantMonthlyGoals) ??
+        effectiveCategories.find((category) => category.name === initialData?.tag)?.id
+      }
+      initialWeeklyGoalId={inferWeeklyGoalId(initialData ?? {}, availableWeeklyGoals) ?? initialData?.weeklyGoalId}
+      initialAllocation={initialData?.estimatedMinutes ?? 30}
+      initialDescription={initialData?.description ?? ""}
+      onSubmit={({ title, categoryId, estimatedMinutes, tag, weeklyGoalId, description }) => {
+        if (initialData) {
+          updateSecondaryTask(initialData.id, {
+            title,
+            description,
+            estimatedMinutes,
+            weeklyGoalId,
+            tag: tag ?? effectiveCategories.find((category) => category.id === categoryId)?.name,
+          });
+        } else {
+          addSecondaryTask({
+            title,
+            description,
+            estimatedMinutes,
+            weeklyGoalId,
+            tag: tag ?? effectiveCategories.find((category) => category.id === categoryId)?.name,
+            isMain: false,
+            date: activeDashboardDate,
+            status: "active",
+            completed: false,
+            priority: "medium",
+          });
+        }
+        onClose();
+      }}
+      onClose={onClose}
+    />
+  );
 }
 
 export function ModalController() {
@@ -60,13 +280,13 @@ export function ModalController() {
     case "edit-weekly-goal":
       return <AddWeeklyGoalModal {...props} initialData={(payload?.initialData ?? modalData) as never} />;
     case "add-daily-priority":
-      return <AddDailyPriorityModal {...props} mode="add" initialData={(payload?.initialData ?? undefined) as never} />;
+      return <ConnectedDailyPriorityModal onClose={closeModal} initialData={(payload?.initialData ?? undefined) as never} />;
     case "edit-daily-priority":
-      return <AddDailyPriorityModal {...props} mode="edit" initialData={(payload?.initialData ?? modalData) as never} />;
+      return <ConnectedDailyPriorityModal onClose={closeModal} initialData={(payload?.initialData ?? modalData) as never} />;
     case "add-secondary-task":
-      return <AddSecondaryTaskModal {...props} initialData={(payload?.initialData ?? undefined) as never} />;
+      return <ConnectedSecondaryTaskModal onClose={closeModal} initialData={(payload?.initialData ?? undefined) as never} />;
     case "edit-secondary-task":
-      return <AddSecondaryTaskModal {...props} initialData={(payload?.initialData ?? modalData) as never} />;
+      return <ConnectedSecondaryTaskModal onClose={closeModal} initialData={(payload?.initialData ?? modalData) as never} />;
     case "manage-habits":
       return <ManageHabitsModal {...props} />;
     case "daily-report":

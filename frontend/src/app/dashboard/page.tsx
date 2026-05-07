@@ -30,6 +30,7 @@ export default function DashboardHome() {
     metrics,
     habits,
     activeDashboardDate,
+    dashboardLoading,
     openModal,
     toggleDailyPriority,
     toggleSecondaryTask,
@@ -41,6 +42,7 @@ export default function DashboardHome() {
       metrics: state.metrics,
       habits: state.habits,
       activeDashboardDate: state.activeDashboardDate,
+      dashboardLoading: state.dashboardLoading,
       openModal: state.openModal,
       toggleDailyPriority: state.toggleDailyPriority,
       toggleSecondaryTask: state.toggleSecondaryTask,
@@ -54,6 +56,7 @@ export default function DashboardHome() {
   const mainPriorityCapReached = todayRows.length >= 3;
   const isPreviewingAnotherDay = activeDashboardDate !== getToday();
   const displayDateLabel = useMemo(() => formatPlanDateLabel(activeDashboardDate), [activeDashboardDate]);
+  const showDashboardHydratingState = dashboardLoading && todayRows.length === 0 && todayTasks.length === 0;
 
   return (
     <>
@@ -126,37 +129,55 @@ export default function DashboardHome() {
                 </div>
 
                 {todayRows.length === 0 ? (
-                  <div
-                    className="rounded-2xl p-8 text-center"
-                    style={{ background: "#fafcfb", border: "1.5px dashed rgba(0,108,74,0.25)" }}
-                  >
-                    <p className="font-headline font-bold text-base mb-1" style={{ color: "#1a1f1e" }}>
-                      No main priorities saved yet
-                    </p>
-                    <p className="text-sm mb-5 max-w-md mx-auto" style={{ color: "#8a9e97" }}>
-                      {isPreviewingAnotherDay
-                        ? `Nothing is locked in for ${displayDateLabel} yet. Add the main priorities you want the user to execute first.`
-                        : `The home screen shows the main priorities scheduled for ${displayDateLabel}. Add them during onboarding or from here.`}
-                    </p>
-                    <div className="flex flex-wrap items-center justify-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => openModal("add-daily-priority")}
-                        className="px-5 py-2.5 rounded-xl text-sm font-bold text-white"
-                        style={{ background: "#006c4a" }}
-                      >
-                        Add first main priority
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => router.push("/dashboard/goals")}
-                        className="px-5 py-2.5 rounded-xl text-sm font-bold"
-                        style={{ background: "#fff", color: "#006c4a", border: "1.5px solid rgba(0,108,74,0.25)" }}
-                      >
-                        View goals hub
-                      </button>
+                  showDashboardHydratingState ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <div
+                          key={index}
+                          className="rounded-[24px] p-5 animate-pulse"
+                          style={{ background: "#fafcfb", border: "1px solid rgba(0,0,0,0.05)" }}
+                        >
+                          <div className="h-3 w-20 rounded-full" style={{ background: "#e5ece8" }} />
+                          <div className="mt-4 h-6 w-3/4 rounded-full" style={{ background: "#e5ece8" }} />
+                          <div className="mt-3 h-3 w-full rounded-full" style={{ background: "#eef3f0" }} />
+                          <div className="mt-2 h-3 w-5/6 rounded-full" style={{ background: "#eef3f0" }} />
+                          <div className="mt-6 h-9 w-24 rounded-full" style={{ background: "#e5ece8" }} />
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  ) : (
+                    <div
+                      className="rounded-2xl p-8 text-center"
+                      style={{ background: "#fafcfb", border: "1.5px dashed rgba(0,108,74,0.25)" }}
+                    >
+                      <p className="font-headline font-bold text-base mb-1" style={{ color: "#1a1f1e" }}>
+                        No main priorities saved yet
+                      </p>
+                      <p className="text-sm mb-5 max-w-md mx-auto" style={{ color: "#8a9e97" }}>
+                        {isPreviewingAnotherDay
+                          ? `Nothing is locked in for ${displayDateLabel} yet. Add the main priorities you want the user to execute first.`
+                          : `The home screen shows the main priorities scheduled for ${displayDateLabel}. Add them during onboarding or from here.`}
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => openModal("add-daily-priority")}
+                          className="px-5 py-2.5 rounded-xl text-sm font-bold text-white"
+                          style={{ background: "#006c4a" }}
+                        >
+                          Add first main priority
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => router.push("/dashboard/goals")}
+                          className="px-5 py-2.5 rounded-xl text-sm font-bold"
+                          style={{ background: "#fff", color: "#006c4a", border: "1.5px solid rgba(0,108,74,0.25)" }}
+                        >
+                          View goals hub
+                        </button>
+                      </div>
+                    </div>
+                  )
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {todayRows.map((priority, i) => (
@@ -199,12 +220,27 @@ export default function DashboardHome() {
 
               <div className="px-2 pb-3">
                 {todayTasks.length === 0 ? (
-                  <p
-                    className="text-sm text-center py-8"
-                    style={{ color: "#c4d0cb" }}
-                  >
-                    No supporting tasks saved for this day yet
-                  </p>
+                  showDashboardHydratingState ? (
+                    <div className="space-y-3 px-4 py-3">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <div
+                          key={index}
+                          className="rounded-2xl px-4 py-4 animate-pulse"
+                          style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.05)" }}
+                        >
+                          <div className="h-3 w-24 rounded-full" style={{ background: "#e5ece8" }} />
+                          <div className="mt-3 h-4 w-2/3 rounded-full" style={{ background: "#eef3f0" }} />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p
+                      className="text-sm text-center py-8"
+                      style={{ color: "#c4d0cb" }}
+                    >
+                      No supporting tasks saved for this day yet
+                    </p>
+                  )
                 ) : (
                   todayTasks.map((task) => (
                     <SecondaryTaskRow
