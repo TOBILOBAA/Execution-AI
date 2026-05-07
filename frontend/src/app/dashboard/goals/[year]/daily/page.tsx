@@ -203,6 +203,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
       habits: habitsSource.map(mapStoreHabitToApiShape),
       metrics: {
         execution_streak: 0,
+        best_execution_streak: 0,
         yesterday_completion: 0,
         weekly_consistency: [],
         tasks_completed_today: 0,

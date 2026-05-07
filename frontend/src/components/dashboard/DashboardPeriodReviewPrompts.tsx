@@ -293,6 +293,11 @@ function normalizePlanDraft(draft: PeriodPlanDraft): PeriodPlanDraft {
     secondary_goals: draft.secondary_goals ?? [],
   };
 }
+
+function reviewQueueSignature(entries: ReviewCandidate[]) {
+  return entries.map((entry) => entry.key).join("|");
+}
+
 function normalizePlanGoals(draft: PeriodPlanDraft, selectedKeys: Set<string>): PeriodPlanGoalPayload[] {
   const goals: PeriodPlanGoalPayload[] = [];
   (draft.main_goals ?? []).slice(0, MAX_PERIOD_MAIN_GOALS).forEach((goal, index) => {
@@ -1376,11 +1381,9 @@ export function DashboardPeriodReviewPrompts() {
   }
 
   function handleReturnHome() {
-    closePrompt();
+    completePrompt({ pauseRemainingQueue: true });
     setActiveDashboardDate(nextHomeDate);
     void loadDashboard(nextHomeDate);
-  function handleOpenBoard() {
-    completePrompt({ pauseRemainingQueue: true });
     startTransition(() => {
       router.push("/dashboard");
     });
