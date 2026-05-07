@@ -145,13 +145,13 @@ export function AddWeeklyGoalModal({
             style={{ background: "linear-gradient(135deg, rgba(0,108,74,0.08), rgba(255,255,255,0.98))", border: "1px solid rgba(0,108,74,0.12)" }}
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#006c4a" }}>
-              Sprint window
+              This week
             </p>
             <h3 className="mt-2 text-base font-bold" style={{ color: "#1a1f1e" }}>
               Week {effectiveWeek} · {effectiveYear}
             </h3>
             <p className="mt-2 text-sm leading-relaxed" style={{ color: "#5d6d67" }}>
-              Tie the week to the monthly goal it supports, then define whether this is the sprint’s main commitment or a supporting target.
+              Pick the monthly goal this week should move. Then set the main goal and any secondary goals that support it.
             </p>
           </div>
 
@@ -199,8 +199,8 @@ export function AddWeeklyGoalModal({
             </label>
             <div className="grid sm:grid-cols-2 gap-3">
               {[
-                { value: true, label: "Main Goal", desc: "The sprint’s primary objective" },
-                { value: false, label: "Supporting Goal", desc: "Support work around the weekly focus" },
+                { value: true, label: "Main Goal", desc: "The one goal this week needs to carry" },
+                { value: false, label: "Secondary Goal", desc: "Work that helps the main goal move" },
               ].map((option) => {
                 const active = isMain === option.value;
                 return (
@@ -256,7 +256,7 @@ export function AddWeeklyGoalModal({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does success look like for this week?"
+              placeholder="What needs to be true by the end of the week?"
               className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all resize-y min-h-[110px]"
               style={{
                 background: "#f7f9f8",

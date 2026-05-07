@@ -139,13 +139,13 @@ export function AddMonthlyGoalModal({
             style={{ background: "linear-gradient(135deg, rgba(0,108,74,0.08), rgba(255,255,255,0.98))", border: "1px solid rgba(0,108,74,0.12)" }}
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#006c4a" }}>
-              Planning window
+              This month
             </p>
             <h3 className="mt-2 text-base font-bold" style={{ color: "#1a1f1e" }}>
               {MONTH_NAMES[effectiveMonth - 1]} {effectiveYear}
             </h3>
             <p className="mt-2 text-sm leading-relaxed" style={{ color: "#5d6d67" }}>
-              Link the month to the yearly goal it should advance, then define whether this is the month’s primary commitment or a supporting objective.
+              Pick the yearly goal this month should move. Then set the main goal and any secondary goals that support it.
             </p>
           </div>
 
@@ -193,8 +193,8 @@ export function AddMonthlyGoalModal({
             </label>
             <div className="grid sm:grid-cols-2 gap-3">
               {[
-                { value: true, label: "Main Goal", desc: "The month’s defining commitment" },
-                { value: false, label: "Supporting Goal", desc: "Work that supports the main focus" },
+                { value: true, label: "Main Goal", desc: "The one goal this month needs to carry" },
+                { value: false, label: "Secondary Goal", desc: "Work that helps the main goal move" },
               ].map((option) => {
                 const active = isMain === option.value;
                 return (
@@ -250,7 +250,7 @@ export function AddMonthlyGoalModal({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does success look like for this month?"
+              placeholder="What needs to be true by the end of the month?"
               className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all resize-y min-h-[110px]"
               style={{
                 background: "#f7f9f8",

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, use, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GoalsHierarchyNav } from "@/components/goals/GoalsHierarchyNav";
 import { GoalsInfoTooltip } from "@/components/goals/GoalsInfoTooltip";
@@ -64,11 +64,15 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   const loadDashboard = useAppStore((state) => state.loadDashboard);
   const setActiveDashboardDate = useAppStore((state) => state.setActiveDashboardDate);
   const activeModal = useAppStore((state) => state.activeModal);
+  const storeDailyPriorities = useAppStore((state) => state.dailyPriorities);
+  const storeHabits = useAppStore((state) => state.habits);
   const [page, setPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
-  const [selectedDayDetail, setSelectedDayDetail] = useState<ApiDashboard | null>(null);
+  const [selectedDayDetailsByDate, setSelectedDayDetailsByDate] = useState<Record<string, ApiDashboard>>({});
   const [selectedDayLoading, setSelectedDayLoading] = useState(false);
   const [selectedDayError, setSelectedDayError] = useState<string | null>(null);
+  const modalDaySnapshotRef = useRef<string>("");
+  const previousModalRef = useRef<ModalType | null>(null);
 
   const {
     ready,
@@ -79,6 +83,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   } = useGoalsHierarchy(year);
   const dayQuery = searchParams?.get("day");
   const selectedDay = dayQuery && dayQuery.startsWith(`${year}-`) ? dayQuery : null;
+  const selectedDayDetail = selectedDay ? selectedDayDetailsByDate[selectedDay] ?? null : null;
 
   const liveYear = Number(today.slice(0, 4));
   const throughDate =
@@ -87,35 +92,94 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
       : yearDailyPriorities.reduce((latest, item) => (item.date > latest ? item.date : latest), `${year}-12-31`);
   const daySlots = useMemo(() => listDaysForYearThroughDate(year, throughDate), [year, throughDate]);
   const selectedDayIsCurrent = selectedDay === today;
+  const selectedDayStoreSnapshot = useMemo(() => {
+    if (!selectedDay) return "";
 
-  const refreshSelectedDayDetail = useCallback(async () => {
+    const priorities = storeDailyPriorities
+      .filter((item) => item.date === selectedDay)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        weeklyGoalId: item.weeklyGoalId,
+        completed: item.completed,
+        isMain: item.isMain,
+        tag: item.tag ?? "",
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    const habits = storeHabits
+      .map((habit) => ({
+        id: habit.id,
+        name: habit.name,
+        frequency: habit.frequency,
+        active: habit.active,
+        completedToday: habit.completedToday,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    return JSON.stringify({ priorities, habits });
+  }, [selectedDay, storeDailyPriorities, storeHabits]);
+
+  const refreshSelectedDayDetail = useCallback(async (options?: { background?: boolean }) => {
     if (!selectedDay || !sessionId || !backendReady) return;
-    setSelectedDayLoading(true);
+    const hasCachedDetail = Boolean(selectedDayDetailsByDate[selectedDay]);
+    if (!options?.background || !hasCachedDetail) {
+      setSelectedDayLoading(true);
+    }
     setSelectedDayError(null);
     try {
       const detail = await dashboardApi.get(sessionId, selectedDay);
-      setSelectedDayDetail(detail);
+      setSelectedDayDetailsByDate((current) => ({
+        ...current,
+        [selectedDay]: detail,
+      }));
     } catch (error) {
       setSelectedDayError(error instanceof Error ? error.message : "Could not load this day.");
     } finally {
-      setSelectedDayLoading(false);
+      if (!options?.background || !hasCachedDetail) {
+        setSelectedDayLoading(false);
+      }
     }
-  }, [backendReady, selectedDay, sessionId]);
+  }, [backendReady, selectedDay, selectedDayDetailsByDate, sessionId]);
 
   useEffect(() => {
     if (!selectedDay) {
-      setSelectedDayDetail(null);
+      setSelectedDayError(null);
+      setSelectedDayLoading(false);
+      return;
+    }
+    if (selectedDayDetailsByDate[selectedDay]) {
       setSelectedDayError(null);
       setSelectedDayLoading(false);
       return;
     }
     void refreshSelectedDayDetail();
-  }, [refreshSelectedDayDetail, selectedDay]);
+  }, [refreshSelectedDayDetail, selectedDay, selectedDayDetailsByDate]);
 
   useEffect(() => {
-    if (activeModal !== null || !selectedDayIsCurrent || !selectedDay) return;
-    void refreshSelectedDayDetail();
-  }, [activeModal, refreshSelectedDayDetail, selectedDay, selectedDayIsCurrent]);
+    const previousModal = previousModalRef.current;
+    const currentModal = activeModal;
+    const relevantModals: ModalType[] = [
+      "add-daily-priority",
+      "edit-daily-priority",
+      "add-secondary-task",
+      "edit-secondary-task",
+      "manage-habits",
+    ];
+
+    if (
+      previousModal &&
+      relevantModals.includes(previousModal) &&
+      currentModal === null &&
+      selectedDayIsCurrent &&
+      selectedDay &&
+      modalDaySnapshotRef.current !== selectedDayStoreSnapshot
+    ) {
+      void refreshSelectedDayDetail({ background: true });
+    }
+
+    previousModalRef.current = currentModal;
+  }, [activeModal, refreshSelectedDayDetail, selectedDay, selectedDayIsCurrent, selectedDayStoreSnapshot]);
 
   const pageSize = 14;
 
@@ -195,6 +259,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   }
 
   async function openCurrentDayModal(modal: ModalType, payload?: unknown) {
+    modalDaySnapshotRef.current = selectedDayStoreSnapshot;
     await prepareCurrentDayEditing();
     openModal(modal, payload);
   }
@@ -224,13 +289,13 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
-              Selected day detail
+              This day
             </p>
             <h2 className="font-headline font-bold text-2xl mt-2" style={{ color: "#1a1f1e" }}>
               {formatGoalDay(selectedDay)}
             </h2>
             <p className="text-sm mt-2 max-w-2xl leading-relaxed" style={{ color: "#6b7c75" }}>
-              See the actual priorities, supporting tasks, and habits for this date. Only the current day can be edited.
+              See what was planned for this day. If it is today, you can still edit it.
             </p>
           </div>
 
@@ -283,7 +348,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
 
         {selectedDayLoading ? (
           <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}>
-            Loading this day&apos;s priorities, tasks, and habits…
+            Loading this day&apos;s plan…
           </div>
         ) : selectedDayError ? (
           <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.12)", color: "#8a5b12" }}>
