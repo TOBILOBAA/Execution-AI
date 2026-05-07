@@ -19,7 +19,6 @@ import {
   getCurrentYear,
   getToday,
 } from "./mockData";
-import { getWeekNumber } from "./goalsView";
 import { isUuid } from "./uuid";
 import type { DashboardMetrics } from "./types";
 import {
