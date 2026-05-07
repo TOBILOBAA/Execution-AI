@@ -778,11 +778,11 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   ].map((metric) => (
                     <div
                       key={metric.label}
-                      className="bg-white rounded-2xl p-5"
+                      className="flex h-full min-h-[176px] flex-col rounded-2xl bg-white p-5"
                       style={{ border: "1.5px solid rgba(0,0,0,0.07)" }}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="pr-2 text-[10px] font-bold uppercase tracking-widest leading-tight" style={{ color: "#a8b5af" }}>
                           {metric.label}
                         </p>
                         <MetricInfoTooltip label={metric.label} detail={metric.detail} />
@@ -797,11 +797,11 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       >
                         {metric.value}
                       </p>
-                      <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
+                      <p className="mt-3 text-xs leading-relaxed" style={{ color: "#6b7c75" }}>
                         {metric.subvalue}
                       </p>
                       {"helper" in metric && metric.helper && (
-                        <p className="text-xs mt-2" style={{ color: "#006c4a" }}>
+                        <p className="mt-2 text-xs leading-relaxed" style={{ color: "#006c4a" }}>
                           {metric.helper}
                         </p>
                       )}
@@ -876,7 +876,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   ].map((card) => (
                     <div
                       key={card.title}
-                      className="rounded-2xl p-5"
+                      className="flex h-full flex-col rounded-2xl p-5"
                       style={{ background: card.tone, border: `1.5px solid ${card.border}` }}
                     >
                       <p className="font-bold text-sm mb-3" style={{ color: card.color }}>
@@ -1213,15 +1213,6 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 }
 
                 const tone = archiveCardTone(quarter.snapshot.avgCompletion);
-                const nextQuarter = quarter.quarter === 4 ? 1 : (quarter.quarter + 1) as 1 | 2 | 3 | 4;
-                const nextYear = quarter.quarter === 4 ? year + 1 : year;
-                const quarterNarrative = buildQuarterReviewNarrative(quarter.snapshot, {
-                  year,
-                  quarter: quarter.quarter as 1 | 2 | 3 | 4,
-                  nextQuarter,
-                  nextYear,
-                });
-
                 return (
                   <div
                     key={quarter.label}

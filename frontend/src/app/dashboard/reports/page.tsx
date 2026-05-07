@@ -189,11 +189,11 @@ export default function ReportsPage() {
           ].map((metric) => (
             <div
               key={metric.label}
-              className="rounded-2xl p-4"
+              className="flex h-full min-h-[168px] flex-col rounded-2xl p-4"
               style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.05)" }}
             >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+              <div className="flex items-start justify-between gap-2">
+                <p className="pr-2 text-[10px] font-bold uppercase tracking-[0.18em] leading-tight" style={{ color: "#8a9e97" }}>
                   {metric.label}
                 </p>
                 <MetricInfoTooltip label={metric.label} detail={metric.detail} />
@@ -201,11 +201,11 @@ export default function ReportsPage() {
               <p className="font-headline font-extrabold mt-3" style={{ fontSize: "30px", color: "#1a1f1e", lineHeight: 1 }}>
                 {metric.value}
               </p>
-              <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
+              <p className="mt-3 text-xs leading-relaxed" style={{ color: "#6b7c75" }}>
                 {metric.subvalue}
               </p>
               {"helper" in metric && metric.helper && (
-                <p className="text-xs mt-2" style={{ color: "#006c4a" }}>
+                <p className="mt-2 text-xs leading-relaxed" style={{ color: "#006c4a" }}>
                   {metric.helper}
                 </p>
               )}
