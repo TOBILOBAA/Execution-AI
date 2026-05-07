@@ -90,6 +90,16 @@ def _period_window(report: dict, week_starts_on: str) -> tuple[date, date] | Non
     return None
 
 
+def _can_refresh_stale_daily_report(report: dict, today: date, now_utc: datetime, cutoff_hour: int) -> bool:
+    if report.get("report_type") != "daily":
+        return False
+    if report.get("status") != "stale":
+        return False
+    if report.get("period_date") != today.isoformat():
+        return False
+    return now_utc.hour >= cutoff_hour
+
+
 def _has_execution_data_between(db: Client, session_id: UUID, start: date, end: date) -> bool:
     priorities = (
         db.table("daily_priorities")
@@ -505,12 +515,15 @@ def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
 def list_reports(db: Client, session_id: UUID) -> list[dict]:
     existing_reports = reports_db.list_reports(db, session_id)
     today = get_session_today(db, session_id)
+    settings = get_settings()
+    now_utc = datetime.now(timezone.utc)
     refreshed_reports: list[dict] = []
     for report in existing_reports:
-        if (
-            report.get("report_type") == "daily"
-            and report.get("period_date") == today.isoformat()
-            and report.get("status") == "stale"
+        if _can_refresh_stale_daily_report(
+            report,
+            today,
+            now_utc,
+            settings.report_cutoff_hour,
         ):
             refreshed_reports.append(generate_daily_report(db, session_id, today))
         else:
