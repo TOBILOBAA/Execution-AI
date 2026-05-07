@@ -231,6 +231,7 @@ export interface ApiDashboard {
   pending_recaps?: ApiRecapQueueEntry[];
   metrics: {
     execution_streak: number;
+    best_execution_streak: number;
     yesterday_completion: number;
     weekly_consistency: number[];
     tasks_completed_today: number;

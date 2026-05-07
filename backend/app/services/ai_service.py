@@ -275,6 +275,7 @@ def generate_monthly_plan(planning_payload: dict) -> AIMonthlyPlanOutput:
 
 ### Instructions
 Generate ONLY main_goals and secondary_goals for this month. Do NOT suggest foundational habits — users define those separately in the app.
+Never return more than {budget['max_main_goals']} main_goals or more than {budget['max_secondary_goals']} secondary_goals.
 Goals must be achievable within the remaining {ctx['days_remaining']} days.
 Each goal must set yearly_goal_ref to the exact title of a yearly goal above when possible.
 For EVERY goal, set target_date to a realistic deadline as YYYY-MM-DD within {ctx['year']}-{ctx['month']:02d} (use dates on or after today if this is the current month).
@@ -360,6 +361,7 @@ def generate_weekly_plan(planning_payload: dict) -> AIWeeklyPlanOutput:
 
 ### Instructions
 Generate ONLY main_goals and secondary_goals for this week. Do NOT suggest foundational habits — users define those in the app.
+Never return more than {budget['max_main_goals']} main_goals or more than {budget['max_secondary_goals']} secondary_goals.
 Each goal must be completable within {ctx['days_remaining']} days.
 Weekly goals must concretely advance the monthly goals above. Set yearly_goal_ref to the monthly goal title when applicable.
 
@@ -463,6 +465,7 @@ Weekly tasks remaining: {remaining}
 
 ### Instructions
 Generate a daily plan for {ctx['today']}. Priorities must be concretely achievable in one day.
+Never return more than {budget['max_daily_priorities']} top_priorities or more than {budget['max_secondary_tasks']} secondary_tasks.
 Each priority should advance a specific weekly goal. Secondary tasks are quick wins or maintenance.
 Do NOT include foundational_habits in the output — they are tracked separately in the app.
 

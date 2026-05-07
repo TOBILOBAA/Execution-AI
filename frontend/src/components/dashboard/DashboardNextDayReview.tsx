@@ -24,6 +24,8 @@ type PlannerModalState =
   | { type: "task"; item?: EditableReviewItem }
   | { type: "habit"; habit?: FoundationalHabit };
 
+const MAX_MAIN_PRIORITIES = 3;
+
 function makeLocalId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -158,8 +160,19 @@ function addUniqueItem(items: EditableReviewItem[], item: ApiNextDayReviewItem, 
   return [...items, toEditableItem(item, prefix)];
 }
 
+function addUniqueMainItem(items: EditableReviewItem[], item: ApiNextDayReviewItem, prefix: string) {
+  if (items.length >= MAX_MAIN_PRIORITIES) {
+    return items;
+  }
+  return addUniqueItem(items, item, prefix);
+}
+
 function mergeUniqueItems(current: EditableReviewItem[], incoming: ApiNextDayReviewItem[], prefix: string) {
   return incoming.reduce((acc, item) => addUniqueItem(acc, item, prefix), current);
+}
+
+function mergeUniqueMainItems(current: EditableReviewItem[], incoming: ApiNextDayReviewItem[], prefix: string) {
+  return incoming.slice(0, MAX_MAIN_PRIORITIES).reduce((acc, item) => addUniqueMainItem(acc, item, prefix), current);
 }
 
 function findCategoryIdByTag(categories: Category[], tag?: string) {
@@ -338,6 +351,8 @@ function PlannerSection({
   onEdit,
   onRemove,
   onAddSuggestion,
+  addDisabled = false,
+  addDisabledCopy,
 }: {
   eyebrow: string;
   title: string;
@@ -351,6 +366,8 @@ function PlannerSection({
   onEdit: (item: EditableReviewItem) => void;
   onRemove: (localId: string) => void;
   onAddSuggestion: (item: ApiNextDayReviewItem) => void;
+  addDisabled?: boolean;
+  addDisabledCopy?: string;
 }) {
   return (
     <SectionCard eyebrow={eyebrow} title={title} description={description} tone="soft">
@@ -359,11 +376,15 @@ function PlannerSection({
           <button
             type="button"
             onClick={onAdd}
+            disabled={addDisabled}
             className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
-            style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+            style={{
+              background: addDisabled ? "rgba(0,0,0,0.06)" : "rgba(0,108,74,0.08)",
+              color: addDisabled ? "#8a9e97" : "#006c4a",
+            }}
           >
             <span className="material-symbols-outlined text-[15px]">add</span>
-            {addLabel}
+            {addDisabled ? addDisabledCopy ?? addLabel : addLabel}
           </button>
         </div>
 
@@ -413,8 +434,12 @@ function PlannerSection({
                   <button
                     type="button"
                     onClick={() => onAddSuggestion(item)}
+                    disabled={addDisabled}
                     className="shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
-                    style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                    style={{
+                      background: addDisabled ? "rgba(0,0,0,0.06)" : "rgba(0,108,74,0.08)",
+                      color: addDisabled ? "#8a9e97" : "#006c4a",
+                    }}
                   >
                     Add
                   </button>
@@ -605,6 +630,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
   const planningTomorrow = Boolean(planDate && review && review.today === planDate);
   const cleanPriorities = priorities.map(toReviewItem).filter((item) => item.title.length > 0);
   const cleanTasks = tasks.map(toReviewItem).filter((item) => item.title.length > 0);
+  const mainPriorityCapReached = priorities.length >= MAX_MAIN_PRIORITIES;
 
   const availablePrioritySuggestions = useMemo(
     () =>
@@ -692,6 +718,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
       }
       const draft = result.draft as DailyAIDraft;
       const aiPriorities = (draft.top_priorities ?? [])
+        .slice(0, MAX_MAIN_PRIORITIES)
         .filter((item) => item.title?.trim())
         .map<EditableReviewItem>((item) => ({
           localId: makeLocalId("priority"),
@@ -717,7 +744,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
           priority: "medium",
           is_main: false,
         }));
-      setPriorities((current) => mergeUniqueItems(current, aiPriorities, "priority"));
+      setPriorities((current) => mergeUniqueMainItems(current, aiPriorities, "priority"));
       setTasks((current) => mergeUniqueItems(current, aiTasks, "task"));
       setAiNote(
         draft.reasoning?.trim()
@@ -739,8 +766,13 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     weeklyGoalId?: string;
     description: string;
   }) {
+    const editingPriority = plannerModal?.type === "priority" ? plannerModal.item : undefined;
+    if (!editingPriority && mainPriorityCapReached) {
+      setPlannerModal(null);
+      return;
+    }
     const nextItem: EditableReviewItem = {
-      localId: plannerModal?.type === "priority" && plannerModal.item ? plannerModal.item.localId : makeLocalId("priority"),
+      localId: editingPriority ? editingPriority.localId : makeLocalId("priority"),
       title: data.title,
       description: data.description || undefined,
       priority: "high",
@@ -750,9 +782,11 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
       is_main: true,
     };
     setPriorities((current) =>
-      plannerModal?.type === "priority" && plannerModal.item
-        ? current.map((item) => (item.localId === plannerModal.item?.localId ? nextItem : item))
-        : [...current, nextItem],
+      editingPriority
+        ? current.map((item) => (item.localId === editingPriority.localId ? nextItem : item))
+        : current.length >= MAX_MAIN_PRIORITIES
+          ? current
+          : [...current, nextItem],
     );
     setPlannerModal(null);
   }
@@ -962,7 +996,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       onAdd={() => setPlannerModal({ type: "priority" })}
                       onEdit={(item) => setPlannerModal({ type: "priority", item })}
                       onRemove={(localId) => setPriorities((current) => current.filter((item) => item.localId !== localId))}
-                      onAddSuggestion={(item) => setPriorities((current) => addUniqueItem(current, { ...item, is_main: true }, "priority"))}
+                      onAddSuggestion={(item) => setPriorities((current) => addUniqueMainItem(current, { ...item, is_main: true }, "priority"))}
+                      addDisabled={mainPriorityCapReached}
+                      addDisabledCopy="Main priority cap reached"
                     />
 
                     <PlannerSection

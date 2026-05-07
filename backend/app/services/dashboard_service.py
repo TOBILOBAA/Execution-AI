@@ -369,7 +369,7 @@ def get_dashboard(db: Client, session_id: UUID, plan_date: date | None = None) -
     )
 
     # ── Execution streak ──────────────────────────────────────────────────────
-    streak = _compute_execution_streak(db, session_id, today)
+    streak, best_streak = _compute_execution_streaks(db, session_id, today)
 
     # ── Weekly/monthly completion rates ───────────────────────────────────────
     weekly_goals_total = len(weekly_goals)
@@ -406,6 +406,7 @@ def get_dashboard(db: Client, session_id: UUID, plan_date: date | None = None) -
         "pending_recaps": pending_recaps,
         "metrics": {
             "execution_streak": streak,
+            "best_execution_streak": best_streak,
             "yesterday_completion": yesterday_completion,
             "weekly_consistency": weekly_consistency,
             "tasks_completed_today": priorities_completed,
@@ -613,42 +614,90 @@ def approve_next_day_review(
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _compute_weekly_consistency(db: Client, session_id: UUID, week_start: date) -> list[int]:
-    """Returns 7 integers (Sun-Sat) representing daily completion % for this week."""
+    """Returns 7 integers where elapsed days are 100 if active, else 0. Future days remain 0."""
+    week_end = week_start + timedelta(days=6)
+    priorities = plans_db.list_daily_priorities_for_range(db, session_id, week_start, week_end)
+    habit_logs = habits_db.list_habit_logs_for_session(db, session_id, week_start, week_end)
+
+    active_days: set[date] = set()
+    for item in priorities:
+        if item.get("completed"):
+            active_days.add(date.fromisoformat(item["date"]))
+    for log in habit_logs:
+        if log.get("completed"):
+            active_days.add(date.fromisoformat(log["date"]))
+
+    today = get_session_today(db, session_id)
     result = []
     for i in range(7):
         day = week_start + timedelta(days=i)
-        if day > date.today():
+        if day > today:
             result.append(0)
             continue
-        priorities = plans_db.list_daily_priorities(db, session_id, day)
-        main = [p for p in priorities if p.get("is_main")]
-        if not main:
-            result.append(0)
-            continue
-        done = sum(1 for p in main if p.get("completed"))
-        result.append(compute_completion_rate(done, len(main)))
+        result.append(100 if day in active_days else 0)
     return result
 
 
-def _compute_execution_streak(db: Client, session_id: UUID, today: date) -> int:
-    """Count consecutive days where at least one priority was completed."""
-    streak = 0
-    check_date = today
-    for _ in range(90):  # check up to 90 days back
-        priorities = plans_db.list_daily_priorities(db, session_id, check_date)
-        main = [p for p in priorities if p.get("is_main")]
-        if not main:
-            if check_date == today:
-                check_date -= timedelta(days=1)
+def _compute_execution_streaks(db: Client, session_id: UUID, today: date) -> tuple[int, int]:
+    """
+    Return (current_streak, best_streak).
+
+    A streak day only counts when that day had at least one main priority and
+    every main priority for that day was completed.
+    """
+    session = sessions_db.get_session(db, session_id) or {}
+    created_at = str(session.get("created_at") or "")[:10]
+    try:
+        history_start = date.fromisoformat(created_at)
+    except ValueError:
+        history_start = today - timedelta(days=365)
+
+    rows = plans_db.list_daily_priorities_for_range(db, session_id, history_start, today)
+    by_day: dict[date, dict[str, int]] = {}
+    for row in rows:
+        if not row.get("is_main"):
+            continue
+        day = date.fromisoformat(row["date"])
+        snapshot = by_day.setdefault(day, {"total": 0, "completed": 0})
+        snapshot["total"] += 1
+        if row.get("completed"):
+            snapshot["completed"] += 1
+
+    def is_elite_execution(day: date) -> bool | None:
+        snapshot = by_day.get(day)
+        if not snapshot or snapshot["total"] == 0:
+            return None
+        return snapshot["completed"] == snapshot["total"]
+
+    current_streak = 0
+    check_day = today
+    skipped_today_without_commitment = False
+    while check_day >= history_start:
+        outcome = is_elite_execution(check_day)
+        if outcome is None:
+            if check_day == today and not skipped_today_without_commitment:
+                skipped_today_without_commitment = True
+                check_day -= timedelta(days=1)
                 continue
             break
-        completed = sum(1 for p in main if p.get("completed"))
-        if completed > 0:
-            streak += 1
-            check_date -= timedelta(days=1)
-        else:
+        if not outcome:
             break
-    return streak
+        current_streak += 1
+        check_day -= timedelta(days=1)
+
+    best_streak = 0
+    running_streak = 0
+    cursor = history_start
+    while cursor <= today:
+        outcome = is_elite_execution(cursor)
+        if outcome:
+            running_streak += 1
+            best_streak = max(best_streak, running_streak)
+        else:
+            running_streak = 0
+        cursor += timedelta(days=1)
+
+    return current_streak, best_streak
 
 
 def _titles_for_summary(goals: list[dict]) -> list[str]:
