@@ -18,6 +18,7 @@ import {
   getCurrentYear,
   getToday,
 } from "./mockData";
+import { getWeekNumber } from "./goalsView";
 import { isUuid } from "./uuid";
 import type { DashboardMetrics, YearReport } from "./types";
 import {
@@ -217,6 +218,28 @@ interface AppState {
 
 let idCounter = 1000;
 const genId = (prefix: string) => `${prefix}-${++idCounter}`;
+
+function getReferenceDate(isoDate: string): Date {
+  const parsed = new Date(`${isoDate}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function isCurrentMonthlyGoal(goal: Pick<MonthlyGoal, "year" | "month">, activeDashboardDate: string): boolean {
+  const referenceDate = getReferenceDate(activeDashboardDate);
+  return goal.year === referenceDate.getFullYear() && goal.month === referenceDate.getMonth() + 1;
+}
+
+function isCurrentWeeklyGoal(
+  goal: Pick<WeeklyGoal, "year" | "weekNumber">,
+  activeDashboardDate: string,
+  weekStartsOn: WeekStartsOn,
+): boolean {
+  const referenceDate = getReferenceDate(activeDashboardDate);
+  return (
+    goal.year === referenceDate.getFullYear() &&
+    goal.weekNumber === getWeekNumber(referenceDate, weekStartsOn)
+  );
+}
 
 function requiresServerPersistence(): boolean {
   return isCloudSupabaseConfigured() && !isAuthLocalOnly();
@@ -1260,8 +1283,17 @@ export const useAppStore = create<AppState>()(
       // ── Monthly goals ────────────────────────────────────────────────────────
       addMonthlyGoal: (goal) => {
         const localId = genId("mg");
-        set((s) => ({ monthlyGoals: [...s.monthlyGoals, { ...goal, id: localId }] }));
-        const { sessionId } = get();
+        const { sessionId, activeDashboardDate } = get();
+        set((s) => ({
+          monthlyGoals: [
+            ...s.monthlyGoals,
+            {
+              ...goal,
+              id: localId,
+              editable: isCurrentMonthlyGoal(goal, activeDashboardDate),
+            },
+          ],
+        }));
         if (sessionId) {
           const request = monthlyPlanApi
             .addGoal(sessionId, goal.year, goal.month, {
@@ -1282,6 +1314,7 @@ export const useAppStore = create<AppState>()(
                         ...g,
                         id: created.id,
                         yearlyGoalId: created.yearly_goal_id ?? g.yearlyGoalId,
+                        editable: created.editable ?? g.editable,
                       }
                     : g
                 ),
@@ -1348,8 +1381,17 @@ export const useAppStore = create<AppState>()(
       // ── Weekly goals ─────────────────────────────────────────────────────────
       addWeeklyGoal: (goal) => {
         const localId = genId("wg");
-        set((s) => ({ weeklyGoals: [...s.weeklyGoals, { ...goal, id: localId }] }));
-        const { sessionId } = get();
+        const { sessionId, activeDashboardDate, sessionWeekStartsOn } = get();
+        set((s) => ({
+          weeklyGoals: [
+            ...s.weeklyGoals,
+            {
+              ...goal,
+              id: localId,
+              editable: isCurrentWeeklyGoal(goal, activeDashboardDate, sessionWeekStartsOn),
+            },
+          ],
+        }));
         if (sessionId) {
           const request = weeklyPlanApi
             .addGoal(sessionId, goal.year, goal.weekNumber, {
@@ -1369,6 +1411,7 @@ export const useAppStore = create<AppState>()(
                         ...g,
                         id: created.id,
                         monthlyGoalId: created.monthly_goal_id ?? g.monthlyGoalId,
+                        editable: created.editable ?? g.editable,
                       }
                     : g
                 ),
