@@ -7,6 +7,7 @@ from .session import RecapQueueEntry
 
 class DashboardMetrics(BaseModel):
     execution_streak: int
+    best_execution_streak: int
     yesterday_completion: int           # 0-100
     weekly_consistency: list[int]       # 7 values Sun-Sat (0-100)
     tasks_completed_today: int

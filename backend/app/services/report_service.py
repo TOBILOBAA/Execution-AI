@@ -468,8 +468,8 @@ def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
         monthly_summaries.append(ms)
 
     # Execution streak from latest daily report or recompute
-    from app.services.dashboard_service import _compute_execution_streak
-    streak = _compute_execution_streak(db, session_id, date.today())
+    from app.services.dashboard_service import _compute_execution_streaks
+    streak, _ = _compute_execution_streaks(db, session_id, date.today())
 
     # Previous year comparison
     prev_report = reports_db.get_report(db, session_id, "yearly", year - 1)
@@ -989,11 +989,11 @@ def _build_yearly_summary(
         for (summary_year, _month), summary in sorted(monthly_summaries_by_key.items())
         if summary_year == year
     ]
-    from app.services.dashboard_service import _compute_execution_streak
+    from app.services.dashboard_service import _compute_execution_streaks
 
     metrics = aggregate_yearly_metrics(
         monthly_summaries=monthly_summaries,
-        execution_streak=_compute_execution_streak(db, session_id, date.today()),
+        execution_streak=_compute_execution_streaks(db, session_id, date.today())[0],
         previous_year_completion=previous_completion,
     )
     metrics["year"] = year
