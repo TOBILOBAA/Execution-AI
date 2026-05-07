@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { reportsApi, type ApiReport } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { getCurrentYear } from "@/lib/mockData";
@@ -23,46 +22,33 @@ import {
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { sessionId, yearlyGoals, monthlyGoals, metrics } = useAppStore(
+  const { sessionId, yearlyGoals, monthlyGoals, metrics, reports, reportsLoading, reportsHydrated, syncReports, syncError } = useAppStore(
     useShallow((state) => ({
       sessionId: state.sessionId,
       yearlyGoals: state.yearlyGoals,
       monthlyGoals: state.monthlyGoals,
       metrics: state.metrics,
+      reports: state.reports,
+      reportsLoading: state.reportsLoading,
+      reportsHydrated: state.reportsHydrated,
+      syncReports: state.syncReports,
+      syncError: state.syncError,
     })),
   );
-  const [reports, setReports] = useState<ApiReport[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
+    void syncReports();
+  }, [sessionId, syncReports]);
 
-    let cancelled = false;
-    reportsApi
-      .list(sessionId)
-      .then((data) => {
-        if (!cancelled) {
-          setReports(data);
-          setError(null);
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Could not load reports.");
-          setReports([]);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId]);
+  const error = syncError?.includes("Load reports list") ? syncError : null;
+  const showInitialLoading = Boolean(sessionId && !reportsHydrated && reportsLoading && reports.length === 0);
 
   const currentYear = getCurrentYear();
   const currentYearGoals = yearlyGoals.filter((goal) => goal.year === currentYear);
   const currentYearMonthlyGoals = monthlyGoals.filter((goal) => goal.year === currentYear);
 
-  const yearSnapshots = useMemo(() => listYearSnapshots(reports ?? []), [reports]);
+  const yearSnapshots = useMemo(() => listYearSnapshots(reports), [reports]);
   const generatedYears = yearSnapshots
     .filter((item) => item.yearly || item.monthly.length)
     .sort((a, b) => b.year - a.year);
@@ -224,7 +210,7 @@ export default function ReportsPage() {
               Historical report archive
             </h2>
           </div>
-          {reports === null && (
+          {showInitialLoading && (
             <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c4d0cb" }}>
               Loading
             </span>
@@ -236,6 +222,21 @@ export default function ReportsPage() {
             <p className="text-sm" style={{ color: "#8a9e97" }}>
               Sign in and create a backend session to build a report archive.
             </p>
+          </div>
+        ) : showInitialLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={index}
+                className="rounded-2xl p-5 animate-pulse"
+                style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.07)" }}
+              >
+                <div className="h-8 w-20 rounded-full" style={{ background: "#ecf1ee" }} />
+                <div className="mt-3 h-3 w-28 rounded-full" style={{ background: "#f0f4f2" }} />
+                <div className="mt-6 h-3 w-full rounded-full" style={{ background: "#f3f6f4" }} />
+                <div className="mt-2 h-3 w-4/5 rounded-full" style={{ background: "#f3f6f4" }} />
+              </div>
+            ))}
           </div>
         ) : pastYears.length === 0 ? (
           <div className="rounded-2xl p-6 bg-white" style={{ border: "1.5px dashed rgba(0,108,74,0.25)" }}>

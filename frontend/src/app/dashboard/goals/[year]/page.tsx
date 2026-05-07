@@ -42,11 +42,9 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
 
   const {
     ready,
-    loading,
+    hasCachedData,
     error,
     today,
-    currentMonth,
-    currentWeekNumber,
     yearlyGoals,
     monthlyGoals,
     weeklyGoals,
@@ -77,7 +75,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
     );
   }
 
-  if (!ready || loading) {
+  if (!ready && !hasCachedData) {
     return (
       <GoalsLoadingShell
         eyebrow={`${year} yearly goals`}
@@ -206,12 +204,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
           </div>
         </div>
 
-        <GoalsHierarchyNav
-          year={year}
-          active="yearly"
-          currentMonth={currentMonth}
-          currentWeekNumber={currentWeekNumber}
-        />
+        <GoalsHierarchyNav year={year} active="yearly" />
       </div>
 
       {error && (

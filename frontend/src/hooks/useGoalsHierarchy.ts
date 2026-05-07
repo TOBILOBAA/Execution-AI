@@ -40,6 +40,7 @@ type GoalsSlice = Pick<
 export interface UseGoalsHierarchyResult {
   ready: boolean;
   loading: boolean;
+  hasCachedData: boolean;
   error: string | null;
   lastSyncedAt: string | null;
   year: number;
@@ -58,6 +59,8 @@ export interface UseGoalsHierarchyResult {
   habits: FoundationalHabit[];
   refresh: () => Promise<void>;
 }
+
+const pendingGoalsHierarchyLoads = new Map<string, Promise<{ hierarchy: ApiGoalsHierarchy; habits: ApiHabit[] }>>();
 
 function mapApiCategory(category: ApiCategory): Category {
   return {
@@ -197,12 +200,28 @@ async function fetchGoalsHierarchy(
   year: number,
   weekNumber?: number,
 ): Promise<{ hierarchy: ApiGoalsHierarchy; habits: ApiHabit[] }> {
-  const [hierarchy, habits] = await Promise.all([
+  const requestKey = `${sessionId}:${year}:${weekNumber ?? "all"}`;
+  const existing = pendingGoalsHierarchyLoads.get(requestKey);
+  if (existing) {
+    return existing;
+  }
+
+  const request = Promise.all([
     goalsApi.hierarchy(sessionId, { year, weekNumber }),
     habitsApi.list(sessionId).catch(() => []),
-  ]);
-  hydrateGoalsStore(hierarchy, habits);
-  return { hierarchy, habits };
+  ])
+    .then(([hierarchy, habits]) => {
+      hydrateGoalsStore(hierarchy, habits);
+      return { hierarchy, habits };
+    })
+    .finally(() => {
+      if (pendingGoalsHierarchyLoads.get(requestKey) === request) {
+        pendingGoalsHierarchyLoads.delete(requestKey);
+      }
+    });
+
+  pendingGoalsHierarchyLoads.set(requestKey, request);
+  return request;
 }
 
 export function useGoalsHierarchy(
@@ -237,6 +256,18 @@ export function useGoalsHierarchy(
   const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(requestedWeekNumber ?? null);
   const [selectedWeekStart, setSelectedWeekStart] = useState<string | null>(null);
   const [selectedWeekEnd, setSelectedWeekEnd] = useState<string | null>(null);
+  const yearlySnapshot = useMemo(() => storeYearlyGoals.filter((goal) => goal.year === year), [storeYearlyGoals, year]);
+  const monthlySnapshot = useMemo(() => storeMonthlyGoals.filter((goal) => goal.year === year), [storeMonthlyGoals, year]);
+  const weeklySnapshot = useMemo(() => storeWeeklyGoals.filter((goal) => goal.year === year), [storeWeeklyGoals, year]);
+  const dailySnapshot = useMemo(
+    () => storeDailyPriorities.filter((priority) => priority.date.startsWith(`${year}-`)),
+    [storeDailyPriorities, year],
+  );
+  const hasCachedData =
+    yearlySnapshot.length > 0 ||
+    monthlySnapshot.length > 0 ||
+    weeklySnapshot.length > 0 ||
+    dailySnapshot.length > 0;
 
   const refresh = useCallback(async () => {
     if (Number.isNaN(year)) {
@@ -292,6 +323,7 @@ export function useGoalsHierarchy(
   return {
     ready,
     loading,
+    hasCachedData,
     error,
     lastSyncedAt,
     year,
@@ -302,10 +334,10 @@ export function useGoalsHierarchy(
     selectedWeekStart,
     selectedWeekEnd,
     categories: storeCategories,
-    yearlyGoals: storeYearlyGoals.filter((goal) => goal.year === year),
-    monthlyGoals: storeMonthlyGoals.filter((goal) => goal.year === year),
-    weeklyGoals: storeWeeklyGoals.filter((goal) => goal.year === year),
-    yearDailyPriorities: storeDailyPriorities.filter((priority) => priority.date.startsWith(`${year}-`)),
+    yearlyGoals: yearlySnapshot,
+    monthlyGoals: monthlySnapshot,
+    weeklyGoals: weeklySnapshot,
+    yearDailyPriorities: dailySnapshot,
     selectedWeekDailyPriorities:
       selectedWeekStart && selectedWeekEnd
         ? storeDailyPriorities.filter(

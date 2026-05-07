@@ -7,29 +7,17 @@ type GoalsHierarchyTab = "yearly" | "monthly" | "weekly" | "daily";
 interface GoalsHierarchyNavProps {
   year: number;
   active: GoalsHierarchyTab;
-  currentMonth?: number | null;
-  currentWeekNumber?: number | null;
 }
 
 export function GoalsHierarchyNav({
   year,
   active,
-  currentMonth,
-  currentWeekNumber,
 }: GoalsHierarchyNavProps) {
   const items = [
     { id: "yearly", label: "Yearly", href: `/dashboard/goals/${year}` },
     { id: "monthly", label: "Monthly", href: `/dashboard/goals/${year}/monthly` },
-    {
-      id: "weekly",
-      label: "Weekly",
-      href: `/dashboard/goals/${year}/weekly${currentMonth ? `?month=${currentMonth}` : ""}`,
-    },
-    {
-      id: "daily",
-      label: "Daily",
-      href: `/dashboard/goals/${year}/daily${currentWeekNumber ? `?week=${currentWeekNumber}` : ""}`,
-    },
+    { id: "weekly", label: "Weekly", href: `/dashboard/goals/${year}/weekly` },
+    { id: "daily", label: "Daily", href: `/dashboard/goals/${year}/daily` },
   ] as const;
 
   return (

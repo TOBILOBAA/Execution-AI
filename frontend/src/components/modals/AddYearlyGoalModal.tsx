@@ -9,9 +9,10 @@ interface Props {
   open: boolean;
   onClose: () => void;
   initialData?: YearlyGoal;
+  yearOverride?: number;
 }
 
-export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
+export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }: Props) {
   const { categories, addYearlyGoal, updateYearlyGoal, removeYearlyGoal, activeDashboardDate } = useAppStore(
     useShallow((state) => ({
       categories: state.categories,
@@ -23,7 +24,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
   );
   const isEdit = !!initialData;
   const titleId = isEdit ? "yearly-goal-edit-title" : "yearly-goal-add-title";
-  const activeDashboardYear = Number(activeDashboardDate.slice(0, 4)) || new Date().getFullYear();
+  const activeDashboardYear = yearOverride ?? (Number(activeDashboardDate.slice(0, 4)) || new Date().getFullYear());
 
   const [title, setCategoryTitle] = useState(initialData?.title ?? "");
   const [categoryId, setCategoryId] = useState(

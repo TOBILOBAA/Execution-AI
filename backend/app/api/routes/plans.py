@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from supabase import Client
 
 from app.api.deps import get_db
-from app.core.exceptions import AIGenerationError, NotFoundError
+from app.core.exceptions import AIGenerationError, ConflictError, NotFoundError
 from app.schemas.plans import (
     MonthlyPlanGenerateRequest, MonthlyPlanApproveRequest,
     WeeklyPlanGenerateRequest, WeeklyPlanApproveRequest,
@@ -20,12 +20,19 @@ import app.db.sessions as sessions_db
 from app.utils.date_utils import get_week_boundaries
 from app.utils.period_guards import (
     assert_period_current_daily,
-    assert_period_current_monthly,
-    assert_period_current_weekly,
+    assert_period_plannable_daily,
+    assert_period_plannable_monthly,
+    assert_period_plannable_weekly,
     get_session_temporal_context,
 )
 
 router = APIRouter(tags=["Plans"])
+
+MAIN_GOAL_CAP = 3
+
+
+def _count_main_rows(rows: list[dict]) -> int:
+    return sum(1 for row in rows if row.get("is_main"))
 
 
 def _ensure_monthly_plan_row(db: Client, session_id: UUID, plan_year: int, plan_month: int) -> dict:
@@ -92,7 +99,7 @@ def generate_monthly_plan(
 ):
     """Generate an AI monthly plan draft. Does not approve it."""
     try:
-        assert_period_current_monthly(body.session_id, body.year, body.month, db)
+        assert_period_plannable_monthly(body.session_id, body.year, body.month, db)
         return planning_service.generate_monthly_plan(
             db, body.session_id, body.year, body.month
         )
@@ -109,7 +116,7 @@ def approve_monthly_plan(
     db: Client = Depends(get_db),
 ):
     """Approve a monthly plan draft. Persists monthly goals."""
-    assert_period_current_monthly(session_id, year, month, db)
+    assert_period_plannable_monthly(session_id, year, month, db)
     return planning_service.approve_monthly_plan(
         db, session_id, year, month, body.goals
     )
@@ -146,7 +153,11 @@ def add_monthly_goal(
     ctx = get_session_temporal_context(db, session_id)
     plan_year = year or ctx.current_year
     plan_month = month or ctx.current_month
-    assert_period_current_monthly(session_id, plan_year, plan_month, db)
+    assert_period_plannable_monthly(session_id, plan_year, plan_month, db)
+    if body.is_main:
+        existing = plans_db.list_monthly_goals(db, session_id, plan_year, plan_month)
+        if _count_main_rows(existing) >= MAIN_GOAL_CAP:
+            raise ConflictError("You can only save up to 3 main goals for this month.")
     plan = _ensure_monthly_plan_row(db, session_id, plan_year, plan_month)
     data = {
         **body.model_dump(),
@@ -173,7 +184,11 @@ def update_monthly_goal(
     goal = plans_db.get_monthly_goal(db, goal_id, session_id)
     if not goal:
         raise NotFoundError("Monthly goal", str(goal_id))
-    assert_period_current_monthly(session_id, int(goal["year"]), int(goal["month"]), db)
+    assert_period_plannable_monthly(session_id, int(goal["year"]), int(goal["month"]), db)
+    if body.is_main is True and not goal.get("is_main"):
+        existing = plans_db.list_monthly_goals(db, session_id, int(goal["year"]), int(goal["month"]))
+        if _count_main_rows([row for row in existing if str(row.get("id")) != str(goal_id)]) >= MAIN_GOAL_CAP:
+            raise ConflictError("You can only save up to 3 main goals for this month.")
     return plans_db.update_monthly_goal(
         db, goal_id, session_id, body.model_dump(exclude_unset=True)
     )
@@ -188,7 +203,7 @@ def delete_monthly_goal(
     goal = plans_db.get_monthly_goal(db, goal_id, session_id)
     if not goal:
         raise NotFoundError("Monthly goal", str(goal_id))
-    assert_period_current_monthly(session_id, int(goal["year"]), int(goal["month"]), db)
+    assert_period_plannable_monthly(session_id, int(goal["year"]), int(goal["month"]), db)
     plans_db.delete_monthly_goal(db, goal_id, session_id)
     return None
 
@@ -202,7 +217,7 @@ def generate_weekly_plan(
 ):
     """Generate an AI weekly plan draft."""
     try:
-        assert_period_current_weekly(body.session_id, body.year, body.week_number, db)
+        assert_period_plannable_weekly(body.session_id, body.year, body.week_number, db)
         return planning_service.generate_weekly_plan(
             db, body.session_id, body.year, body.week_number
         )
@@ -219,7 +234,7 @@ def approve_weekly_plan(
     db: Client = Depends(get_db),
 ):
     """Approve a weekly plan draft. Persists weekly goals."""
-    assert_period_current_weekly(session_id, year, week_number, db)
+    assert_period_plannable_weekly(session_id, year, week_number, db)
     return planning_service.approve_weekly_plan(
         db, session_id, year, week_number, body.goals
     )
@@ -256,7 +271,11 @@ def add_weekly_goal(
     ctx = get_session_temporal_context(db, session_id)
     plan_year = year or ctx.current_year
     plan_week = week_number or ctx.current_week_number
-    assert_period_current_weekly(session_id, plan_year, plan_week, db)
+    assert_period_plannable_weekly(session_id, plan_year, plan_week, db)
+    if body.is_main:
+        existing = plans_db.list_weekly_goals(db, session_id, plan_year, plan_week)
+        if _count_main_rows(existing) >= MAIN_GOAL_CAP:
+            raise ConflictError("You can only save up to 3 main goals for this week.")
     plan = _ensure_weekly_plan_row(db, session_id, plan_year, plan_week)
     week_start, _ = get_week_boundaries(plan_year, plan_week, week_starts_on)
     data = {
@@ -285,7 +304,11 @@ def update_weekly_goal(
     goal = plans_db.get_weekly_goal(db, goal_id, session_id)
     if not goal:
         raise NotFoundError("Weekly goal", str(goal_id))
-    assert_period_current_weekly(session_id, int(goal["year"]), int(goal["week_number"]), db)
+    assert_period_plannable_weekly(session_id, int(goal["year"]), int(goal["week_number"]), db)
+    if body.is_main is True and not goal.get("is_main"):
+        existing = plans_db.list_weekly_goals(db, session_id, int(goal["year"]), int(goal["week_number"]))
+        if _count_main_rows([row for row in existing if str(row.get("id")) != str(goal_id)]) >= MAIN_GOAL_CAP:
+            raise ConflictError("You can only save up to 3 main goals for this week.")
     return plans_db.update_weekly_goal(
         db, goal_id, session_id, body.model_dump(exclude_unset=True)
     )
@@ -300,7 +323,7 @@ def delete_weekly_goal(
     goal = plans_db.get_weekly_goal(db, goal_id, session_id)
     if not goal:
         raise NotFoundError("Weekly goal", str(goal_id))
-    assert_period_current_weekly(session_id, int(goal["year"]), int(goal["week_number"]), db)
+    assert_period_plannable_weekly(session_id, int(goal["year"]), int(goal["week_number"]), db)
     plans_db.delete_weekly_goal(db, goal_id, session_id)
     return None
 
@@ -314,7 +337,7 @@ def generate_daily_plan(
 ):
     """Generate an AI daily plan draft."""
     try:
-        assert_period_current_daily(body.session_id, body.date, db)
+        assert_period_plannable_daily(body.session_id, body.date, db)
         return planning_service.generate_daily_plan(db, body.session_id, body.date)
     except RuntimeError as exc:
         raise AIGenerationError(str(exc)) from exc

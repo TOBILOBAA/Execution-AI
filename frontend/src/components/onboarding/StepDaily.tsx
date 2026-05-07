@@ -389,14 +389,30 @@ export function StepDaily({ onFinish, onBack }: Props) {
     setAiError(null);
     setAiDraft(null);
     const result = await generateDailyPlan(getToday());
-    if (result?.draft) {
+    if (!result.ok) {
+      const banner = useAppStore.getState().syncError;
+      const apiDetail =
+        result.code === "api_error" &&
+        banner &&
+        banner.includes("Daily plan (AI generate)")
+          ? banner
+          : null;
+      const msg =
+        result.code === "no_weekly_or_habits"
+          ? "Add weekly goals or at least one active habit, commit so they sync, then try again."
+          : result.code === "weekly_sync_failed"
+            ? "Weekly goals are still syncing. Fix any sync banner above, then try again."
+            : result.code === "invalid_date"
+              ? "Today’s date isn’t valid for planning."
+              : result.code === "no_session"
+                ? "Sign in or refresh your session, then try again."
+                : apiDetail ??
+                  "AI generation failed. Add weekly goals (or use AI on the previous step and accept), click “Commit Plan” so they save, and add at least one habit if you have no weeklies — then try again.";
+      setAiError(msg);
+    } else {
       const draft = result.draft as DailyAIDraft;
       setAiDraft(draft);
       setAiRowKeys(buildAiRowKeys(draft));
-    } else {
-      setAiError(
-        "AI generation failed. Add weekly goals (or use AI on the previous step and accept), click “Commit Plan” so they save, and add at least one habit if you have no weeklies — then try again."
-      );
     }
     setAiLoading(false);
   };

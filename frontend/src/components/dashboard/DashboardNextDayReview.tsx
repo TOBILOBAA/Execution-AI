@@ -668,11 +668,29 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     setError(null);
     try {
       const result = await generateDailyPlan(currentReview.today);
-      const draft = result?.draft as DailyAIDraft | undefined;
-      if (!draft) {
-        setError("AI could not generate a daily plan right now. You can still build the plan manually.");
+      if (!result.ok) {
+        const banner = useAppStore.getState().syncError;
+        const apiDetail =
+          result.code === "api_error" &&
+          banner &&
+          banner.includes("Daily plan (AI generate)")
+            ? banner
+            : null;
+        const msg =
+          result.code === "no_weekly_or_habits"
+            ? "Add weekly goals or at least one active habit and sync them, then try AI again."
+            : result.code === "weekly_sync_failed"
+              ? "Weekly goals haven’t finished syncing yet. Fix the issue above, then try again."
+              : result.code === "invalid_date"
+                ? "That date isn’t valid for daily planning."
+                : result.code === "no_session"
+                  ? "Your session isn’t active. Refresh or sign in, then try again."
+                  : apiDetail ??
+                    "AI could not generate a daily plan right now. You can still build the plan manually.";
+        setError(msg);
         return;
       }
+      const draft = result.draft as DailyAIDraft;
       const aiPriorities = (draft.top_priorities ?? [])
         .filter((item) => item.title?.trim())
         .map<EditableReviewItem>((item) => ({

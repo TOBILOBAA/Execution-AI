@@ -38,7 +38,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
   const updateMonthlyGoal = useAppStore((state) => state.updateMonthlyGoal);
   const {
     ready,
-    loading,
+    hasCachedData,
     error,
     lastSyncedAt,
     today,
@@ -65,7 +65,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
     );
   }
 
-  if (!ready || loading) {
+  if (!ready && !hasCachedData) {
     return (
       <GoalsLoadingShell
         eyebrow={`Q${quarter} board`}

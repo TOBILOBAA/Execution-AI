@@ -9,6 +9,7 @@ import { StepYearly, YearlyAIGuidancePanel } from "@/components/onboarding/StepY
 import { StepMonthly, MonthlyAIGuidancePanel } from "@/components/onboarding/StepMonthly";
 import { StepWeekly, WeeklyAIGuidancePanel } from "@/components/onboarding/StepWeekly";
 import { StepDaily, DailyAIGuidancePanel } from "@/components/onboarding/StepDaily";
+import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 
 const STEPS = [
   { num: 1, label: "Set yearly goals" },
@@ -26,6 +27,7 @@ export default function OnboardingPage() {
     setOnboardingStep,
     completeOnboarding,
     authReady,
+    backendReady,
     workspaceHydrating,
   } = useAppStore(
     useShallow((state) => ({
@@ -35,6 +37,7 @@ export default function OnboardingPage() {
       setOnboardingStep: state.setOnboardingStep,
       completeOnboarding: state.completeOnboarding,
       authReady: state.authReady,
+      backendReady: state.backendReady,
       workspaceHydrating: state.workspaceHydrating,
     })),
   );
@@ -45,16 +48,21 @@ export default function OnboardingPage() {
       router.replace("/auth");
       return;
     }
+    if (!backendReady) {
+      return;
+    }
     if (onboardingComplete) {
       router.replace("/dashboard");
     }
-  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, router]);
+  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
 
-  if (!authReady || workspaceHydrating || !currentUser || onboardingComplete) {
+  if (!authReady || workspaceHydrating || !currentUser || !backendReady || onboardingComplete) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
-        <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>Loading…</p>
-      </div>
+      <AppLoadingScreen
+        eyebrow="Preparing onboarding"
+        title="Building your setup flow"
+        detail="We are confirming your account and loading the yearly, monthly, weekly, and daily planning steps."
+      />
     );
   }
 

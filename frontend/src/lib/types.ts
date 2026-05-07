@@ -13,6 +13,7 @@ export type TimeHorizon = "yearly" | "monthly" | "weekly" | "daily";
 
 export type HabitFrequency = "daily" | "weekdays" | "3x_week" | "5x_week" | "weekends";
 export type WeekStartsOn = "sunday" | "monday";
+export type RecapType = "weekly" | "monthly" | "quarterly" | "yearly";
 
 // ─── Category / Bucket ────────────────────────────────────────────────────────
 
@@ -103,6 +104,15 @@ export interface FoundationalHabit {
   active: boolean;
 }
 
+export interface DashboardRecapEntry {
+  type: RecapType;
+  periodYear: number;
+  periodWeek?: number;
+  periodMonth?: number;
+  periodQuarter?: number;
+  firedAt: string;
+}
+
 // ─── Dashboard Metrics ────────────────────────────────────────────────────────
 
 export interface DashboardMetrics {
@@ -111,13 +121,13 @@ export interface DashboardMetrics {
   weeklyConsistency: number[]; // 7 values in the workspace's week order (0–100)
   weeklyObjective: string;
   monthlyContext: string;
+  weeklyCompletionRate?: number;
+  monthlyCompletionRate?: number;
   /** From dashboard API (optional for older persisted state). */
   tasksCompletedToday?: number;
   tasksTotalToday?: number;
   habitsCompletedToday?: number;
   habitsTotalToday?: number;
-  weeklyCompletionRate?: number;
-  monthlyCompletionRate?: number;
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
@@ -184,6 +194,7 @@ export interface AppStore {
   habits: FoundationalHabit[];
   metrics: DashboardMetrics;
   reports: YearReport[];
+  pendingRecaps: DashboardRecapEntry[];
 
   // UI State
   activeModal: ModalType | null;

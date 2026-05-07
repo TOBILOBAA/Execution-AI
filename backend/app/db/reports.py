@@ -92,6 +92,23 @@ def update_report(db: Client, report_id: UUID, updates: dict) -> dict:
     return result.data[0]
 
 
+def mark_daily_report_stale(
+    db: Client,
+    session_id: UUID,
+    report_date: date,
+) -> dict | None:
+    report = get_report(
+        db,
+        session_id,
+        report_type="daily",
+        period_year=report_date.year,
+        period_date=report_date,
+    )
+    if not report:
+        return None
+    return update_report(db, UUID(report["id"]), {"status": "stale"})
+
+
 def list_reports(
     db: Client, session_id: UUID, report_type: str | None = None
 ) -> list[dict]:

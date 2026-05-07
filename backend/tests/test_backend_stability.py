@@ -5,6 +5,7 @@ from uuid import uuid4
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from postgrest.exceptions import APIError
 
 
 for key, value in {
@@ -43,13 +44,15 @@ class FakeResult:
 
 
 class RecordingTable:
-    def __init__(self, result_rows=None):
+    def __init__(self, result_rows=None, update_error=None):
         self.result_rows = result_rows
+        self.update_error = update_error
         self.insert_payload = None
         self.update_payload = None
         self.upsert_payload = None
         self.upsert_conflict = None
         self._maybe_single = False
+        self.update_calls = []
 
     def select(self, *args, **kwargs):
         return self
@@ -60,6 +63,7 @@ class RecordingTable:
 
     def update(self, payload):
         self.update_payload = payload
+        self.update_calls.append(payload)
         return self
 
     def upsert(self, payload, on_conflict=None):
@@ -98,6 +102,10 @@ class RecordingTable:
             if self._maybe_single and not self.result_rows:
                 return FakeResult(None)
             return FakeResult(self.result_rows)
+        if self.update_error is not None and self.update_payload is not None:
+            error = self.update_error
+            self.update_error = None
+            raise error
         if self.insert_payload is not None:
             return FakeResult([self.insert_payload])
         if self.update_payload is not None:
@@ -108,13 +116,17 @@ class RecordingTable:
 
 
 class FakeDB:
-    def __init__(self, result_rows_by_table=None):
+    def __init__(self, result_rows_by_table=None, update_error_by_table=None):
         self.result_rows_by_table = result_rows_by_table or {}
+        self.update_error_by_table = update_error_by_table or {}
         self.tables = {}
 
     def table(self, name):
         if name not in self.tables:
-            self.tables[name] = RecordingTable(self.result_rows_by_table.get(name))
+            self.tables[name] = RecordingTable(
+                self.result_rows_by_table.get(name),
+                self.update_error_by_table.get(name),
+            )
         return self.tables[name]
 
 
@@ -145,6 +157,32 @@ class BackendStabilityTests(unittest.TestCase):
             _parse_cors_origin_regex("", "development"),
             r"^https://[a-z0-9-]+\.vercel\.app$",
         )
+
+    def test_session_update_ignores_missing_recap_columns(self):
+        session_id = uuid4()
+        db = FakeDB(
+            update_error_by_table={
+                "sessions": APIError(
+                    {
+                        "message": "Could not find the 'pending_recaps' column in the schema cache",
+                        "code": "PGRST204",
+                    }
+                )
+            }
+        )
+
+        updated = sessions_db.update_session(
+            db,
+            session_id,
+            {"timezone": "UTC", "pending_recaps": [{"type": "weekly"}], "handled_recaps": ["weekly:2026:::18"]},
+        )
+
+        self.assertEqual(updated["timezone"], "UTC")
+        self.assertEqual(updated["pending_recaps"], [])
+        self.assertEqual(updated["handled_recaps"], [])
+        self.assertEqual(len(db.tables["sessions"].update_calls), 2)
+        self.assertNotIn("pending_recaps", db.tables["sessions"].update_calls[-1])
+        self.assertNotIn("handled_recaps", db.tables["sessions"].update_calls[-1])
 
     def test_session_start_reuses_existing_auth_user_workspace(self):
         auth_user_id = "user-123"
