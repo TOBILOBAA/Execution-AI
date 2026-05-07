@@ -16,7 +16,7 @@ interface Props {
 }
 
 export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData }: Props) {
-  const { dailyPriorities, categories, weeklyGoals, sessionWeekStartsOn, addDailyPriority, updateDailyPriority, activeDashboardDate } = useAppStore(
+  const { dailyPriorities, categories, weeklyGoals, sessionWeekStartsOn, addDailyPriority, updateDailyPriority, removeDailyPriority, activeDashboardDate } = useAppStore(
     useShallow((state) => ({
       dailyPriorities: state.dailyPriorities,
       categories: state.categories,
@@ -24,6 +24,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
       sessionWeekStartsOn: state.sessionWeekStartsOn,
       addDailyPriority: state.addDailyPriority,
       updateDailyPriority: state.updateDailyPriority,
+      removeDailyPriority: state.removeDailyPriority,
       activeDashboardDate: state.activeDashboardDate,
     })),
   );
@@ -114,6 +115,13 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
         priority: "high",
       });
     }
+    onClose();
+  };
+
+  const handleDelete = () => {
+    if (!initialData) return;
+    if (!window.confirm("Delete this daily priority? This cannot be undone.")) return;
+    removeDailyPriority(initialData.id);
     onClose();
   };
 
@@ -305,26 +313,50 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
 
         {/* Footer */}
         <div
-          className="px-8 py-5 flex items-center justify-end gap-4"
+          className="px-8 py-5 flex items-center justify-between gap-4"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
-          <button
-            onClick={onClose}
-            className="text-sm font-semibold transition-opacity hover:opacity-60"
-            style={{ color: "#8a9e97" }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={isBatchEdit ? handleSaveBatch : handleSaveSingle}
-            disabled={!isBatchEdit && !singleWeeklyGoalId}
-            className="px-7 py-3 rounded-xl text-sm font-bold text-white transition-all"
-            style={{ background: "#006c4a", boxShadow: "0 2px 10px rgba(0,108,74,0.20)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#004d38")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#006c4a")}
-          >
-            {isBatchEdit ? "Save Changes" : initialData ? "Save Priority" : "Add Priority"}
-          </button>
+          <div>
+            {initialData ? (
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-70"
+                style={{ color: "#ef4444" }}
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+                Delete Priority
+              </button>
+            ) : (
+              <button
+                onClick={onClose}
+                className="text-sm font-semibold transition-opacity hover:opacity-60"
+                style={{ color: "#8a9e97" }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            {initialData && (
+              <button
+                onClick={onClose}
+                className="text-sm font-semibold transition-opacity hover:opacity-60"
+                style={{ color: "#8a9e97" }}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={isBatchEdit ? handleSaveBatch : handleSaveSingle}
+              disabled={!isBatchEdit && !singleWeeklyGoalId}
+              className="px-7 py-3 rounded-xl text-sm font-bold text-white transition-all"
+              style={{ background: "#006c4a", boxShadow: "0 2px 10px rgba(0,108,74,0.20)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#004d38")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#006c4a")}
+            >
+              {isBatchEdit ? "Save Changes" : initialData ? "Save Priority" : "Add Priority"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
