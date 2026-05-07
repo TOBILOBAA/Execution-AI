@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { type ApiReport } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { MetricInfoTooltip } from "@/components/reports/MetricInfoTooltip";
+import { ReportMetricCard } from "@/components/reports/ReportMetricCard";
 import {
   average,
   buildExecutionScore,
@@ -759,7 +759,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                     1. Performance Metrics
                   </p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {[
                     {
                       label: "Execution Score",
@@ -768,6 +768,8 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       helper: `${executionGrade.label} · ${executionGrade.rangeLabel}`,
                       detail:
                         "A = 85-100, B = 70-84, C = 55-69, D = 40-54, F = 0-39. The grade blends completion, consistency, alignment, realism, and momentum.",
+                      emphasized: true,
+                      tone: "mint" as const,
                     },
                     {
                       label: "Completion",
@@ -802,33 +804,17 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   ].map((metric) => (
                     <div
                       key={metric.label}
-                      className="bg-white rounded-2xl p-5"
-                      style={{ border: "1.5px solid rgba(0,0,0,0.07)" }}
+                      className={metric.label === "Execution Score" ? "md:col-span-2 xl:col-span-1" : ""}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>
-                          {metric.label}
-                        </p>
-                        <MetricInfoTooltip label={metric.label} detail={metric.detail} />
-                      </div>
-                      <p
-                        className="font-headline font-extrabold mt-3"
-                        style={{
-                          color: "#1a1f1e",
-                          fontSize: metric.label === "Execution Score" ? "40px" : "32px",
-                          lineHeight: 1,
-                        }}
-                      >
-                        {metric.value}
-                      </p>
-                      <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
-                        {metric.subvalue}
-                      </p>
-                      {"helper" in metric && metric.helper && (
-                        <p className="text-xs mt-2" style={{ color: "#006c4a" }}>
-                          {metric.helper}
-                        </p>
-                      )}
+                      <ReportMetricCard
+                        label={metric.label}
+                        value={metric.value}
+                        subvalue={metric.subvalue}
+                        detail={metric.detail}
+                        helper={metric.helper}
+                        emphasized={metric.emphasized}
+                        tone={metric.tone ?? "white"}
+                      />
                     </div>
                   ))}
                 </div>
@@ -900,7 +886,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   ].map((card) => (
                     <div
                       key={card.title}
-                      className="rounded-2xl p-5"
+                      className="flex h-full flex-col rounded-2xl p-5"
                       style={{ background: card.tone, border: `1.5px solid ${card.border}` }}
                     >
                       <p className="font-bold text-sm mb-3" style={{ color: card.color }}>
