@@ -85,16 +85,16 @@ export function DailyKickoffModal({ priorities, tasks, habits, onBegin }: Props)
                 All Set — Begin Executing
               </h2>
               <p className="text-sm mt-1 leading-relaxed" style={{ color: "#8a9e97" }}>
-                Here&apos;s everything you need to do today. Stay locked in.
+                Here&apos;s everything you need to focus on today. Stay locked in.
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-5">
-            {/* ── Essential Priorities ── */}
+            {/* ── Main Goals ── */}
             {priorities.length > 0 && (
               <div>
-                <SectionLabel icon="star" label="Essential Priorities" />
+                <SectionLabel icon="star" label="Main Goals" />
                 <div
                   className="rounded-2xl overflow-hidden"
                   style={{ border: "1px solid rgba(0,0,0,0.07)" }}
@@ -139,10 +139,10 @@ export function DailyKickoffModal({ priorities, tasks, habits, onBegin }: Props)
             )}
 
             <div className="space-y-5">
-              {/* ── Supporting Priorities ── */}
+              {/* ── Secondary Goals ── */}
               {tasks.length > 0 && (
                 <div>
-                  <SectionLabel icon="checklist" label="Supporting Priorities" />
+                  <SectionLabel icon="checklist" label="Secondary Goals" />
                   <div
                     className="rounded-2xl overflow-hidden"
                     style={{ border: "1px solid rgba(0,0,0,0.07)" }}
@@ -186,10 +186,10 @@ export function DailyKickoffModal({ priorities, tasks, habits, onBegin }: Props)
                 </div>
               )}
 
-              {/* ── Foundational Habits ── */}
+              {/* ── Routines ── */}
               {activeHabits.length > 0 && (
                 <div>
-                  <SectionLabel icon="self_improvement" label="Foundational Habits" />
+                  <SectionLabel icon="self_improvement" label="Routines" />
                   <div className="flex flex-wrap gap-2">
                     {activeHabits.map((habit) => (
                       <div

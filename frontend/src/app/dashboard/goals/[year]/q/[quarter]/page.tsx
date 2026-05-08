@@ -276,7 +276,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                         {card.mainGoal?.title ?? `No main goal saved for ${card.name}`}
                       </h2>
                       <p className="text-sm mt-2 max-w-2xl leading-relaxed" style={{ color: card.mainGoal?.description ? "#5d6d67" : "#8a9e97" }}>
-                        {card.mainGoal?.description || "Create a main monthly goal so this month has a clear focal point instead of scattered tasks."}
+                        {card.mainGoal?.description || "Create a main monthly goal so this month has a clear focal point instead of scattered work."}
                       </p>
                     </div>
 

@@ -399,7 +399,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
           : null;
       const msg =
         result.code === "no_weekly_or_habits"
-          ? "Add weekly goals or at least one active habit, commit so they sync, then try again."
+          ? "Add weekly goals or at least one active routine, commit so they sync, then try again."
           : result.code === "weekly_sync_failed"
             ? "Weekly goals are still syncing. Fix any sync banner above, then try again."
             : result.code === "invalid_date"
@@ -407,7 +407,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
               : result.code === "no_session"
                 ? "Sign in or refresh your session, then try again."
                 : apiDetail ??
-                  "AI generation failed. Add weekly goals (or use AI on the previous step and accept), click “Commit Plan” so they save, and add at least one habit if you have no weeklies — then try again.";
+                  "AI generation failed. Add weekly goals (or use AI on the previous step and accept), click “Commit Plan” so they save, and add at least one routine if you have no weekly goals — then try again.";
       setAiError(msg);
     } else {
       const draft = result.draft as DailyAIDraft;
@@ -454,13 +454,13 @@ export function StepDaily({ onFinish, onBack }: Props) {
       return;
     }
     if (todayTasksCount > 3) {
-      setLeaveError("You can have at most three secondary tasks for today.");
+      setLeaveError("You can have at most three secondary goals for today.");
       return;
     }
     const ok = await syncDailySetupToServer(getToday());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
-      setLeaveError("Daily tasks and habits have not finished saving to the server yet. Fix the sync error above, then try again.");
+      setLeaveError("Your daily goals and routines have not finished saving to the server yet. Fix the sync error above, then try again.");
       return;
     }
     await onFinish();
@@ -543,7 +543,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 Tap the circle on each row to include or exclude it before saving.
               </p>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Top Priorities</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Main Goals</p>
                 <div className="space-y-1.5">
                   {aiDraft.top_priorities?.map((p, i) => {
                     const key = `p:${i}`;
@@ -641,12 +641,12 @@ export function StepDaily({ onFinish, onBack }: Props) {
           </div>
         )}
 
-        {/* ── 01. Essential Priorities ── */}
+        {/* ── 01. Main Goal ── */}
         <section>
           <SectionHeader
             number="01"
-            title="Essential Priorities"
-            subtitle="The three non-negotiables for a successful day."
+            title="Main Goal"
+            subtitle="The goal that matters most in the day."
             action="Add Main Goal"
             onAction={() => setPriorityModal(true)}
           />
@@ -657,7 +657,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             {todayPriorities.length === 0 ? (
               <div className="py-8 text-center">
                 <p className="text-sm" style={{ color: "#a8b5af" }}>
-                  No priorities yet — add your top 3 for today.
+                  No main goal yet.
                 </p>
               </div>
             ) : (
@@ -675,13 +675,13 @@ export function StepDaily({ onFinish, onBack }: Props) {
           </div>
         </section>
 
-        {/* ── 02. Supporting Priorities ── */}
+        {/* ── 02. Secondary Goals ── */}
         <section>
           <SectionHeader
             number="02"
-            title="Supporting Priorities"
-            subtitle="Supporting tasks to be addressed after primary focus."
-            action="Add Task"
+            title="Secondary Goals"
+            subtitle="Additional goals to work on after the main goal."
+            action="Add Secondary Goal"
             onAction={() => setTaskModal(true)}
           />
           <div
@@ -709,12 +709,12 @@ export function StepDaily({ onFinish, onBack }: Props) {
           </div>
         </section>
 
-        {/* ── 03. High-Performance Habits ── */}
+        {/* ── 03. Routines ── */}
         <section>
           <SectionHeader
             number="03"
-            title="High-Performance Habits"
-            subtitle="Micro-actions that fuel your long-term output."
+            title="Routines"
+            subtitle="Repeatable actions you want to keep in the day."
             action="Add Routine"
             onAction={() => setHabitModal(true)}
           />
@@ -897,14 +897,14 @@ const GUIDANCE_TIPS = [
   },
   {
     title: "Protect Deep Work Time",
-    body: "Schedule your highest-energy priority first. Block the first 90 minutes of your day for focused execution before any meetings or communication.",
-    tip: "Close all notification channels during your Essential Priorities block for maximum output.",
+    body: "Schedule your highest-energy goal first. Block the first 90 minutes of your day for focused execution before any meetings or communication.",
+    tip: "Close all notification channels during your main-goal block for maximum output.",
     mindset: "Clarity precedes action. Know your target before you start moving.",
   },
   {
-    title: "Energy Before Tasks",
-    body: "Match tasks to your natural energy curve. Do creative and analytical work in the morning, operational tasks in the afternoon.",
-    tip: "A 10-minute walk between Priority 02 and 03 resets your focus and reduces decision fatigue.",
+    title: "Energy Before Work",
+    body: "Match your goals to your natural energy curve. Do creative and analytical work in the morning, operational work in the afternoon.",
+    tip: "A 10-minute walk between your goals resets your focus and reduces decision fatigue.",
     mindset: "Small consistent actions compound into extraordinary results over time.",
   },
 ];

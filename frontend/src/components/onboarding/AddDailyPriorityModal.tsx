@@ -57,7 +57,7 @@ export function AddDailyPriorityModal({
 
   const handleSubmit = () => {
     if (!title.trim()) {
-      setError("Please enter a task name.");
+      setError("Please enter a goal name.");
       return;
     }
     const mins = isCustom ? parseInt(customMins) || 30 : allocation;
@@ -90,7 +90,7 @@ export function AddDailyPriorityModal({
             Align your daily output with your architectural pillars.
           </p>
 
-          {/* TASK NAME */}
+          {/* GOAL NAME */}
           <div className="mb-5">
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
               Main Goal

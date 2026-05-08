@@ -19,13 +19,13 @@ const GOAL_TYPES = [
     key: "add-weekly-goal",
     icon: "view_week",
     label: "Weekly Goal",
-    desc: "Short-term sprints focusing on key projects and habit building.",
+    desc: "Short-term focus built around key projects and routines.",
   },
   {
     key: "add-daily-priority",
     icon: "today",
     label: "Daily Goal",
-    desc: "The critical tasks and small wins that define your day-to-day success.",
+    desc: "The daily goals that define your day-to-day success.",
   },
 ];
 

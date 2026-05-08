@@ -168,7 +168,7 @@ function SecondaryGoalCard({
             color: goal.aiSuggested ? "#006c4a" : "#8a9e97",
           }}
         >
-          {goal.aiSuggested ? "AI Suggested" : "Supporting Goal"}
+          {goal.aiSuggested ? "AI Suggested" : "Secondary Goal"}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -719,7 +719,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       <section>
         <SectionHeader
           title="Secondary Weekly Goals"
-          action="Add Target"
+          action="Add Goal"
           actionIcon="add"
           onAction={() => { setEditGoal(null); setAddSecOpen(true); }}
         />
@@ -773,7 +773,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       {/* ── FOUNDATIONAL HABITS ── */}
       <section>
         <SectionHeader
-          title="Foundational Habits"
+          title="Routines"
           action="Define Routine"
           actionIcon="add_circle"
           onAction={() => { setEditHabitId(null); setAddHabitOpen(true); }}
@@ -957,9 +957,9 @@ export function WeeklyAIGuidancePanel() {
           </p>
           <div className="space-y-2.5">
             {[
-              { num: "1", text: "Main Goal that moves your monthly needle." },
+              { num: "1", text: "Main goal for the week." },
               { num: "2", text: "Secondary goals for operational momentum." },
-              { num: "3+", text: "Habits that protect your energy and focus." },
+              { num: "3+", text: "Routines that protect your energy and focus." },
             ].map((item) => (
               <div key={item.num} className="flex items-start gap-2.5">
                 <span
@@ -984,7 +984,7 @@ export function WeeklyAIGuidancePanel() {
             </p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            A focused week with one flagship goal and two supporting targets dramatically increases your monthly goal completion rate.
+            A focused week with one flagship goal and two secondary goals dramatically increases your monthly goal completion rate.
           </p>
         </div>
 
@@ -992,7 +992,7 @@ export function WeeklyAIGuidancePanel() {
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>stacked_line_chart</span>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              Habit Continuity
+              Routine Continuity
             </p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>

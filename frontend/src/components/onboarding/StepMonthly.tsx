@@ -45,7 +45,7 @@ export function MonthlyAIGuidancePanel() {
             For a balanced month, use a &lsquo;Bedrock&rsquo; setup:{" "}
             <strong style={{ color: "#1a1f1e" }}>1 Main Goal</strong> for focus and{" "}
             <strong style={{ color: "#1a1f1e" }}>2 Secondary Goals</strong> for support.{" "}
-            Foundational habits are yours to define below — AI only suggests the goals.
+            Routines are yours to define below — AI only suggests the goals.
           </p>
         </div>
         <div>
@@ -506,7 +506,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
         {/* ── Main Goals ── */}
         <section>
-          <SectionHeader label="Main Goals (High Priority)" action="Add Goal" onAction={() => setGoalModal("main")} />
+          <SectionHeader label="Main Goals" action="Add Goal" onAction={() => setGoalModal("main")} />
           <div className="space-y-3">
             {mainGoals.map((goal) => (
               <MainGoalCard
@@ -525,7 +525,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
         {/* ── Secondary Goals ── */}
         <section>
-          <SectionHeader label="Secondary Goals" action="Add Target" onAction={() => setGoalModal("secondary")} />
+          <SectionHeader label="Secondary Goals" action="Add Goal" onAction={() => setGoalModal("secondary")} />
           <div className="grid grid-cols-2 gap-3">
             {secondaryGoals.map((goal) => (
               <SecondaryGoalCard
@@ -543,9 +543,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
           </div>
         </section>
 
-        {/* ── Foundational Habits ── */}
+        {/* ── Routines ── */}
         <section>
-          <SectionHeader label="Foundational Habits" action="Define Routine" onAction={() => setHabitModal(true)} />
+          <SectionHeader label="Routines" action="Define Routine" onAction={() => setHabitModal(true)} />
           <div className="space-y-2">
             {activeHabits.map((habit) => (
               <HabitRow
