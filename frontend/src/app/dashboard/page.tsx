@@ -94,7 +94,7 @@ export default function DashboardHome() {
                         className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
                         style={{ background: "rgba(0,108,74,0.10)", color: "#006c4a" }}
                       >
-                        {remaining} {remaining === 1 ? "Priority" : "Priorities"} Remaining
+                        {remaining} {remaining === 1 ? "Goal" : "Goals"} Remaining
                       </span>
                     )}
                   </div>

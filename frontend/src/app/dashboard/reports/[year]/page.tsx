@@ -774,7 +774,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                     {
                       label: "Completion",
                       value: `${completionRate}%`,
-                      subvalue: "planned tasks finished",
+                      subvalue: "planned goals finished",
                       detail: "How much of your planned work actually got completed.",
                     },
                     {

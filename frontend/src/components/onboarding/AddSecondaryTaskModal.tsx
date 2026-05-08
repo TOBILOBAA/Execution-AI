@@ -53,7 +53,7 @@ export function AddSecondaryTaskModal({
 
   const handleSubmit = () => {
     if (!title.trim()) {
-      setError("Please enter a task name.");
+      setError("Please enter a goal name.");
       return;
     }
     const cat = categories.find((c) => c.id === categoryId);
@@ -85,7 +85,7 @@ export function AddSecondaryTaskModal({
                 Secondary Goal
               </p>
               <h2 className="font-headline text-xl font-bold leading-snug" style={{ color: "#1a1f1e" }}>
-                {isEdit ? "Edit Task" : "Add Secondary Task"}
+                {isEdit ? "Edit Secondary Goal" : "Add Secondary Goal"}
               </h2>
               <p className="text-xs leading-relaxed mt-1" style={{ color: "#8a9e97" }}>
                 Add another goal for today without crowding the main goal.
@@ -102,7 +102,7 @@ export function AddSecondaryTaskModal({
             </button>
           </div>
 
-          {/* TASK NAME */}
+          {/* GOAL NAME */}
           <div className="mb-5">
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
               Secondary Goal
@@ -278,7 +278,7 @@ export function AddSecondaryTaskModal({
               onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
             >
-              {isEdit ? "Save Changes" : "Add Task"}
+              {isEdit ? "Save Changes" : "Add Goal"}
             </button>
           </div>
         </div>

@@ -156,7 +156,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
             {mainGoal?.title ?? "No main weekly goal yet"}
           </p>
           <p className="text-sm mt-2 leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
-            {mainGoal?.description || "Add one clear main weekly goal so the sprint is more than a list of disconnected tasks."}
+            {mainGoal?.description || "Add one clear main weekly goal so the sprint is more than a scattered list of work."}
           </p>
         </div>
       </div>

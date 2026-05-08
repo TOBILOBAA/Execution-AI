@@ -654,9 +654,9 @@ def ensure_historical_reports(
                     "period_year": plan_date.year,
                     "metrics": metrics,
                     "ai_narrative": {
-                        "summary": f"Execution snapshot for {plan_date.isoformat()} reconstructed from saved priorities and habits.",
-                        "top_win": f"Completed {metrics['priorities_completed']} of {metrics['priorities_total']} main priorities.",
-                        "key_miss": f"{metrics['secondary_tasks_total'] - metrics['secondary_tasks_completed']} secondary tasks were left unfinished.",
+                        "summary": f"Execution snapshot for {plan_date.isoformat()} reconstructed from saved goals and routines.",
+                        "top_win": f"Completed {metrics['priorities_completed']} of {metrics['priorities_total']} main goals.",
+                        "key_miss": f"{metrics['secondary_tasks_total'] - metrics['secondary_tasks_completed']} secondary goals were left unfinished.",
                         "reflection": "This historical daily report was reconstructed from saved execution data.",
                         "tomorrow_focus": "Carry the most important unfinished work into the next planned day.",
                     },
