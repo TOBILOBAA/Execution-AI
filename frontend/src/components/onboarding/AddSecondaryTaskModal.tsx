@@ -82,13 +82,13 @@ export function AddSecondaryTaskModal({
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "#a8b5af" }}>
-                Secondary Action
+                Secondary Goal
               </p>
               <h2 className="font-headline text-xl font-bold leading-snug" style={{ color: "#1a1f1e" }}>
                 {isEdit ? "Edit Task" : "Add Secondary Task"}
               </h2>
               <p className="text-xs leading-relaxed mt-1" style={{ color: "#8a9e97" }}>
-                Define a supporting task to optimize your daily execution flow.
+                Add another goal for today without crowding the main goal.
               </p>
             </div>
             <button
@@ -105,7 +105,7 @@ export function AddSecondaryTaskModal({
           {/* TASK NAME */}
           <div className="mb-5">
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
-              Task Name
+              Secondary Goal
             </label>
             <input
               type="text"
@@ -257,7 +257,7 @@ export function AddSecondaryTaskModal({
                 style={{ color: "#ef4444" }}
               >
                 <span className="material-symbols-outlined text-[16px]">delete</span>
-                Delete Task
+                Delete Secondary Goal
               </button>
             ) : null}
           </div>

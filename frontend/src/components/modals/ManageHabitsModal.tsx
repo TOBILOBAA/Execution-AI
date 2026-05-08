@@ -162,13 +162,13 @@ export function ManageHabitsModal({ open, onClose }: Props) {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#006c4a" }}>
-                Foundation
+                Routines
               </p>
               <h2 id={titleId} className="font-headline font-extrabold text-xl" style={{ color: "#1a1f1e" }}>
-                Manage Foundational Habits
+                Manage Routines
               </h2>
               <p className="text-sm mt-1" style={{ color: "#a8b5af" }}>
-                Configure the core rituals that define your execution sanctuary.
+                Set the repeatable routines you want in your day.
               </p>
             </div>
             <button
@@ -200,11 +200,11 @@ export function ManageHabitsModal({ open, onClose }: Props) {
               style={{ background: "#f7f9f8", border: "1.5px solid rgba(0,108,74,0.15)" }}
             >
               <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#006c4a" }}>
-                New Habit
+                New Routine
               </p>
               <input
                 type="text"
-                placeholder="Habit name..."
+                placeholder="Routine name..."
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 autoFocus
@@ -267,7 +267,7 @@ export function ManageHabitsModal({ open, onClose }: Props) {
                   className="px-5 py-2 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-40"
                   style={{ background: "#006c4a" }}
                 >
-                  Add Habit
+                  Add Routine
                 </button>
               </div>
             </div>
@@ -289,7 +289,7 @@ export function ManageHabitsModal({ open, onClose }: Props) {
               }}
             >
               <span className="material-symbols-outlined text-[18px]">add_circle</span>
-              Add New Habit
+              Add New Routine
             </button>
           )}
         </div>
@@ -312,7 +312,7 @@ export function ManageHabitsModal({ open, onClose }: Props) {
             onMouseEnter={(e) => (e.currentTarget.style.background = "#004d38")}
             onMouseLeave={(e) => (e.currentTarget.style.background = "#006c4a")}
           >
-            Save Habits
+            Save Routines
           </button>
         </div>
       </div>

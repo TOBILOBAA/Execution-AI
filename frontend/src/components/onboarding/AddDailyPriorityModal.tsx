@@ -84,7 +84,7 @@ export function AddDailyPriorityModal({
       >
         <div className="px-7 pt-7 pb-0">
           <h2 className="font-headline text-2xl font-bold mb-1" style={{ color: "#1a1f1e" }}>
-            {isEdit ? "Edit Priority" : "Add Daily Priority"}
+            {isEdit ? "Edit Main Goal" : "Add Daily Main Goal"}
           </h2>
           <p className="text-sm mb-6 leading-relaxed" style={{ color: "#8a9e97" }}>
             Align your daily output with your architectural pillars.
@@ -93,7 +93,7 @@ export function AddDailyPriorityModal({
           {/* TASK NAME */}
           <div className="mb-5">
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
-              Task Name
+              Main Goal
             </label>
             <input
               type="text"
@@ -256,7 +256,7 @@ export function AddDailyPriorityModal({
                   style={{ color: "#ef4444" }}
                 >
                   <span className="material-symbols-outlined text-[16px]">delete</span>
-                  Delete Priority
+                  Delete Main Goal
                 </button>
               ) : null}
             </div>
@@ -277,7 +277,7 @@ export function AddDailyPriorityModal({
                 onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
               >
-                {isEdit ? "Save Changes" : "Add Priority"}
+                {isEdit ? "Save Changes" : "Add Main Goal"}
               </button>
             </div>
           </div>
