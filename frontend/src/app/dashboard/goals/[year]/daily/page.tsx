@@ -6,7 +6,7 @@ import { GoalsHierarchyNav } from "@/components/goals/GoalsHierarchyNav";
 import { GoalsInfoTooltip } from "@/components/goals/GoalsInfoTooltip";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
-import { dashboardApi, habitsApi, tasksApi, type ApiDailyPriority, type ApiDashboard } from "@/lib/api";
+import { dashboardApi, type ApiDailyPriority, type ApiDashboard } from "@/lib/api";
 import {
   countGoalStates,
   formatGoalDay,
@@ -102,6 +102,9 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   const openModal = useAppStore((state) => state.openModal);
   const loadDashboard = useAppStore((state) => state.loadDashboard);
   const setActiveDashboardDate = useAppStore((state) => state.setActiveDashboardDate);
+  const toggleDailyPriority = useAppStore((state) => state.toggleDailyPriority);
+  const toggleSecondaryTask = useAppStore((state) => state.toggleSecondaryTask);
+  const toggleHabitInStore = useAppStore((state) => state.toggleHabit);
   const activeModal = useAppStore((state) => state.activeModal);
   const storeDailyPriorities = useAppStore((state) => state.dailyPriorities);
   const storeSecondaryTasks = useAppStore((state) => state.secondaryTasks);
@@ -126,6 +129,10 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   const selectedDayDetail = selectedDay ? selectedDayDetailsByDate[selectedDay] ?? null : null;
 
   const liveYear = Number(today.slice(0, 4));
+  const activeYearDailyPriorities = useMemo(
+    () => storeDailyPriorities.filter((priority) => priority.date.startsWith(`${year}-`)),
+    [storeDailyPriorities, year],
+  );
   const throughDate =
     year === liveYear
       ? today
@@ -322,8 +329,10 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     );
   }
 
+  const prioritiesForRows = year === liveYear ? activeYearDailyPriorities : yearDailyPriorities;
+
   const rows = daySlots.map((date) => {
-    const priorities = yearDailyPriorities.filter((priority) => priority.date === date);
+    const priorities = prioritiesForRows.filter((priority) => priority.date === date);
     const stateCounts = countGoalStates(priorities, today);
     const completedCount = priorities.filter((priority) => priority.completed || priority.status === "completed").length;
     const progress = priorities.length > 0 ? Math.round((completedCount / priorities.length) * 100) : 0;
@@ -370,17 +379,18 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   }
 
   async function toggleTask(task: ApiDailyPriority) {
-    if (!sessionId || !selectedDayIsCurrent) return;
-    await tasksApi.toggleStatus(sessionId, task.id, !task.completed);
-    await refreshSelectedDayDetail();
-    await loadDashboard(selectedDay ?? today);
+    if (!selectedDayIsCurrent) return;
+    if (task.is_main) {
+      toggleDailyPriority(task.id);
+      return;
+    }
+    toggleSecondaryTask(task.id);
   }
 
-  async function toggleHabit(habitId: string, completedToday: boolean) {
-    if (!sessionId || !selectedDayIsCurrent || !selectedDay) return;
-    await habitsApi.toggle(sessionId, habitId, !completedToday, selectedDay);
-    await refreshSelectedDayDetail();
-    await loadDashboard(selectedDay);
+  async function toggleHabit(habitId: string) {
+    if (!selectedDayIsCurrent || !selectedDay) return;
+    setActiveDashboardDate(selectedDay);
+    toggleHabitInStore(habitId);
   }
 
   function renderSelectedDayDetail() {
@@ -679,7 +689,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                         {selectedDayIsCurrent ? (
                           <button
                             type="button"
-                            onClick={() => void toggleHabit(habit.id, habit.completed_today)}
+                            onClick={() => void toggleHabit(habit.id)}
                             className="w-7 h-7 rounded-full flex items-center justify-center"
                             style={{
                               background: habit.completed_today ? "#006c4a" : "#f7faf8",

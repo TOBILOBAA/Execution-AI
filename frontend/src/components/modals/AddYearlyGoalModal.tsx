@@ -5,6 +5,23 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import type { YearlyGoal } from "@/lib/types";
 
+const ICON_OPTIONS = [
+  "business_center",
+  "fitness_center",
+  "psychology",
+  "savings",
+  "school",
+  "favorite",
+  "home",
+  "travel_explore",
+  "sports_soccer",
+  "groups",
+  "science",
+  "art",
+  "music_note",
+  "restaurant",
+] as const;
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -13,9 +30,10 @@ interface Props {
 }
 
 export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }: Props) {
-  const { categories, addYearlyGoal, updateYearlyGoal, removeYearlyGoal, activeDashboardDate } = useAppStore(
+  const { categories, addCategory, addYearlyGoal, updateYearlyGoal, removeYearlyGoal, activeDashboardDate } = useAppStore(
     useShallow((state) => ({
       categories: state.categories,
+      addCategory: state.addCategory,
       addYearlyGoal: state.addYearlyGoal,
       updateYearlyGoal: state.updateYearlyGoal,
       removeYearlyGoal: state.removeYearlyGoal,
@@ -33,15 +51,29 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [targetDate, setTargetDate] = useState(initialData?.targetDate ?? "");
   const [error, setError] = useState("");
+  const [showCategoryBuilder, setShowCategoryBuilder] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState<(typeof ICON_OPTIONS)[number]>("business_center");
+  const [categoryError, setCategoryError] = useState("");
 
   useEffect(() => {
     if (!open) return;
+    const fallbackCategoryId = useAppStore.getState().categories[0]?.id ?? "";
     setCategoryTitle(initialData?.title ?? "");
-    setCategoryId(initialData?.categoryId ?? categories[0]?.id ?? "");
+    setCategoryId(initialData?.categoryId ?? fallbackCategoryId);
     setDescription(initialData?.description ?? "");
     setTargetDate(initialData?.targetDate ?? "");
     setError("");
-  }, [open, initialData, categories]);
+    setShowCategoryBuilder(false);
+    setNewCategoryName("");
+    setNewCategoryIcon("business_center");
+    setCategoryError("");
+  }, [open, initialData]);
+
+  useEffect(() => {
+    if (!open || initialData || categoryId || !categories[0]?.id) return;
+    setCategoryId(categories[0].id);
+  }, [categories, categoryId, initialData, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -82,6 +114,24 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
     onClose();
   };
 
+  const handleCreateCategory = () => {
+    if (!newCategoryName.trim()) {
+      setCategoryError("Give this category a name first.");
+      return;
+    }
+    addCategory({ name: newCategoryName.trim(), icon: newCategoryIcon });
+    const createdCategory = [...useAppStore.getState().categories]
+      .reverse()
+      .find((category) => category.name === newCategoryName.trim() && category.icon === newCategoryIcon);
+    if (createdCategory) {
+      setCategoryId(createdCategory.id);
+    }
+    setShowCategoryBuilder(false);
+    setNewCategoryName("");
+    setNewCategoryIcon("business_center");
+    setCategoryError("");
+  };
+
   const handleDiscard = () => {
     if (initialData) removeYearlyGoal(initialData.id);
     onClose();
@@ -108,7 +158,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
               {isEdit ? "Edit Yearly Goal" : "Add Yearly Goal"}
             </h2>
             <p className="text-sm mt-1" style={{ color: "#8a9e97" }}>
-              {isEdit ? "Refine your vision for the upcoming year." : "Define a new anchor for your annual success."}
+              {isEdit ? "Refine the outcome you want this year to deliver." : "Choose the outcome you want this year to deliver."}
             </p>
           </div>
           <button
@@ -172,6 +222,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
                 onFocus={(e) => (e.currentTarget.style.border = "1.5px solid #006c4a")}
                 onBlur={(e) => (e.currentTarget.style.border = "1.5px solid rgba(0,0,0,0.07)")}
               >
+                <option value="">No category yet</option>
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.name}
@@ -185,6 +236,92 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
                 expand_more
               </span>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowCategoryBuilder((current) => !current);
+                setCategoryError("");
+              }}
+              className="inline-flex items-center gap-2 text-sm font-semibold transition-opacity hover:opacity-80"
+              style={{ color: "#006c4a" }}
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              {showCategoryBuilder ? "Hide category setup" : "Add a new category"}
+            </button>
+            {showCategoryBuilder ? (
+              <div
+                className="rounded-2xl p-4 space-y-4"
+                style={{ background: "#f7faf8", border: "1px solid rgba(0,108,74,0.12)" }}
+              >
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                    Category Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(event) => {
+                      setNewCategoryName(event.target.value);
+                      setCategoryError("");
+                    }}
+                    placeholder="e.g., Career Growth"
+                    className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all"
+                    style={{
+                      background: "#fff",
+                      border: categoryError ? "1.5px solid #ef4444" : "1.5px solid rgba(0,0,0,0.07)",
+                      color: "#1a1f1e",
+                    }}
+                  />
+                </div>
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                    Pick an icon
+                  </p>
+                  <div className="grid grid-cols-7 gap-2">
+                    {ICON_OPTIONS.map((icon) => {
+                      const active = newCategoryIcon === icon;
+                      return (
+                        <button
+                          key={icon}
+                          type="button"
+                          onClick={() => setNewCategoryIcon(icon)}
+                          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all"
+                          style={{
+                            background: active ? "#006c4a" : "#fff",
+                            color: active ? "#fff" : "#6b7c75",
+                            border: active ? "1px solid #006c4a" : "1px solid rgba(0,0,0,0.06)",
+                          }}
+                        >
+                          <span className="material-symbols-outlined text-[18px]">{icon}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {categoryError ? <p className="text-xs" style={{ color: "#ef4444" }}>{categoryError}</p> : null}
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCategoryBuilder(false);
+                      setCategoryError("");
+                    }}
+                    className="text-sm font-semibold transition-opacity hover:opacity-70"
+                    style={{ color: "#8a9e97" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateCategory}
+                    className="px-4 py-2.5 rounded-xl text-sm font-bold text-white"
+                    style={{ background: "#006c4a" }}
+                  >
+                    Create category
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* Description */}
@@ -193,7 +330,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
               Description
             </label>
             <textarea
-              placeholder="Add more context about what success looks like for this goal."
+              placeholder="What would tell you this goal really happened?"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all resize-y min-h-[96px]"
