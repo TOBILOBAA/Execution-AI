@@ -797,7 +797,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               }}
             >
               <span className="material-symbols-outlined text-[18px]">add</span>
-              Define your first foundational habit
+              Define your first routine
             </button>
           )}
         </div>
@@ -996,7 +996,7 @@ export function WeeklyAIGuidancePanel() {
             </p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Your foundational habits carry over each week. Consistency here compounds into transformational results over the month.
+            Your routines carry over each week. Consistency here compounds into stronger follow-through over the month.
           </p>
         </div>
       </div>

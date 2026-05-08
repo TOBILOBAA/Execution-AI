@@ -367,7 +367,7 @@ function aiButtonLabel(type: ReviewType) {
 
 function supportCopy(type: ReviewType) {
   if (type === "weekly") {
-    return "Keep only the main weekly goal and the supporting moves that actually deserve space on the board.";
+    return "Keep only the main weekly goal and the secondary goals that actually deserve space on the board.";
   }
   if (type === "monthly") {
     return "Group the month around a few meaningful anchors, then let the board carry the detail.";
@@ -1250,10 +1250,10 @@ export function DashboardPeriodReviewPrompts() {
     setPlanSectionUnlocked(true);
     if (habitEditor?.habit) {
       updateHabit(habitEditor.habit.id, { name, icon, categoryId: categoryId || undefined, frequency, active: true });
-      setSavedNotice("Foundational habit updated.");
+      setSavedNotice("Routine updated.");
     } else {
       addHabit({ name, icon, categoryId: categoryId || undefined, frequency, completedToday: false, streak: 0, active: true });
-      setSavedNotice("Foundational habit added.");
+      setSavedNotice("Routine added.");
     }
     setHabitEditor(null);
   }
@@ -1272,7 +1272,7 @@ export function DashboardPeriodReviewPrompts() {
 
   function removeExistingHabit(habitId: string) {
     removeHabit(habitId);
-    setSavedNotice("Foundational habit removed.");
+    setSavedNotice("Routine removed.");
   }
 
   async function handleGenerateDraft() {
@@ -1504,9 +1504,9 @@ export function DashboardPeriodReviewPrompts() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               {planSectionUnlocked ? (
                 <div className="flex min-w-0 flex-wrap gap-2">
-                  <InfoPill>{existingMainGoals.length} main</InfoPill>
-                  <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
-                  <InfoPill>{activeHabits.length} habit{activeHabits.length === 1 ? "" : "s"}</InfoPill>
+                  <InfoPill>{existingMainGoals.length} main goal{existingMainGoals.length === 1 ? "" : "s"}</InfoPill>
+                  <InfoPill>{existingSecondaryGoals.length} secondary goal{existingSecondaryGoals.length === 1 ? "" : "s"}</InfoPill>
+                  <InfoPill>{activeHabits.length} routine{activeHabits.length === 1 ? "" : "s"}</InfoPill>
                 </div>
               ) : (
                 <p className="min-w-0 flex-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
@@ -1553,7 +1553,7 @@ export function DashboardPeriodReviewPrompts() {
                   style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add supporting
+                  Add secondary goal
                 </button>
                 <button
                   type="button"
@@ -1565,7 +1565,7 @@ export function DashboardPeriodReviewPrompts() {
                   style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add habit
+                  Add routine
                 </button>
               </div>
             </div>
@@ -1607,7 +1607,7 @@ export function DashboardPeriodReviewPrompts() {
               )}
             </Subsection>
 
-            <Subsection label="Supporting goals">
+            <Subsection label="Secondary goals">
               {planDraft.secondary_goals?.length ? (
                 <div className="space-y-3">
                   {planDraft.secondary_goals.map((goal, index) => (
@@ -1620,7 +1620,7 @@ export function DashboardPeriodReviewPrompts() {
                   ))}
                 </div>
               ) : (
-                <EmptyBlock copy="The draft did not return any supporting goals." />
+                <EmptyBlock copy="The draft did not return any secondary goals." />
               )}
             </Subsection>
 
@@ -1648,8 +1648,8 @@ export function DashboardPeriodReviewPrompts() {
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
-                <InfoPill>{existingMainGoals.length} main</InfoPill>
-                <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
+                <InfoPill>{existingMainGoals.length} main goal{existingMainGoals.length === 1 ? "" : "s"}</InfoPill>
+                <InfoPill>{existingSecondaryGoals.length} secondary goal{existingSecondaryGoals.length === 1 ? "" : "s"}</InfoPill>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -1672,7 +1672,7 @@ export function DashboardPeriodReviewPrompts() {
                   style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add supporting
+                  Add secondary goal
                 </button>
               </div>
             </div>
@@ -1714,9 +1714,9 @@ export function DashboardPeriodReviewPrompts() {
               )}
             </Subsection>
 
-            <Subsection label="Supporting goals">
+            <Subsection label="Secondary goals">
               {existingSecondaryGoals.length === 0 ? (
-                <EmptyBlock copy="No supporting goals are saved for this period yet." />
+                <EmptyBlock copy="No secondary goals are saved for this period yet." />
               ) : (
                 <div className="space-y-3">
                   {existingSecondaryGoals.map((goal) => (
@@ -1756,15 +1756,15 @@ export function DashboardPeriodReviewPrompts() {
 
       {planSectionUnlocked && (activeCandidate.type === "weekly" || activeCandidate.type === "monthly") && (
         <SectionCard
-          eyebrow="Foundational habits"
+          eyebrow="Routines"
           title="Keep the repeatable layer visible"
-          description="Habit upkeep sits beside board goals—not inside AI drafts."
+          description="Routine upkeep sits beside board goals, not inside AI drafts."
           tone="soft"
         >
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
-                <InfoPill>{activeHabits.length} active habit{activeHabits.length === 1 ? "" : "s"}</InfoPill>
+                <InfoPill>{activeHabits.length} active routine{activeHabits.length === 1 ? "" : "s"}</InfoPill>
               </div>
               <button
                 type="button"
@@ -1773,12 +1773,12 @@ export function DashboardPeriodReviewPrompts() {
                 style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
               >
                 <span className="material-symbols-outlined text-[15px]">add</span>
-                Add habit
+                Add routine
               </button>
             </div>
 
             {activeHabits.length === 0 ? (
-              <EmptyBlock copy="No active foundational habits yet. Add only the ones that should still carry this period." />
+              <EmptyBlock copy="No active routines yet. Add only the ones that should still carry this period." />
             ) : (
               <div className="grid gap-3 md:grid-cols-2">
                 {activeHabits.map((habit) => (
@@ -1839,7 +1839,7 @@ export function DashboardPeriodReviewPrompts() {
                   {card.mainGoal?.description ?? "This month still needs a clear anchor before the quarter feels intentional."}
                 </p>
                 <p className="mt-2 text-[11px]" style={{ color: "#8a9e97" }}>
-                  {card.supportCount} supporting goal{card.supportCount === 1 ? "" : "s"}
+                  {card.supportCount} secondary goal{card.supportCount === 1 ? "" : "s"}
                 </p>
               </div>
             ))}

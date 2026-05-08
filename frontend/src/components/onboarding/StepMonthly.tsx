@@ -60,10 +60,10 @@ export function MonthlyAIGuidancePanel() {
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>stacked_line_chart</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Habit Stacking</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Routine Design</p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Select habits that directly support your goals. If your goal is financial, &ldquo;Daily Expense Logging&rdquo; is a critical foundational habit.
+            Select routines that directly strengthen your goals. If your goal is financial, &ldquo;Daily Expense Logging&rdquo; is a critical routine.
           </p>
         </div>
       </div>
@@ -321,7 +321,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
             Plan {MONTH_NAMES[getCurrentMonth() - 1]}.
           </h1>
           <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#6b7b74" }}>
-            Pick 1 main goal, up to 2 secondary goals, and the foundational habits you&apos;ll hold this month. Each goal
+            Pick 1 main goal, up to 2 secondary goals, and the routines you&apos;ll hold this month. Each goal
             connects to a yearly goal.
           </p>
         </div>
@@ -537,7 +537,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
             ))}
             {secondaryGoals.length === 0 && (
               <div className="col-span-2">
-                <EmptySlot label="Add supporting goals" onAdd={() => setGoalModal("secondary")} />
+                <EmptySlot label="Add secondary goals" onAdd={() => setGoalModal("secondary")} />
               </div>
             )}
           </div>
@@ -558,7 +558,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
               />
             ))}
             {activeHabits.length === 0 && (
-              <EmptySlot label="Define your foundational habits" onAdd={() => setHabitModal(true)} />
+              <EmptySlot label="Define your routines" onAdd={() => setHabitModal(true)} />
             )}
           </div>
         </section>

@@ -29,7 +29,7 @@ export function YearlyAIGuidancePanel() {
       </div>
       <div className="space-y-5">
         {[
-          { icon: "trending_up", label: "Think Long-Term", body: "Yearly goals are milestones on a longer journey. Ensure they move the needle toward your 3–5 year vision." },
+          { icon: "trending_up", label: "Think Long-Term", body: "Yearly goals are milestones on a longer journey. Make sure they clearly align with your 3–5 year vision." },
           { icon: "my_location", label: "Be Specific", body: "\u201CGet healthy\u201D is a wish; \u201CRun a half-marathon by October\u201D is a goal." },
           { icon: "favorite", label: "Align with Values", body: "Productivity without purpose leads to burnout. Ask yourself: \u201CWhy does this matter to me right now?\u201D" },
         ].map(({ icon, label, body }) => (

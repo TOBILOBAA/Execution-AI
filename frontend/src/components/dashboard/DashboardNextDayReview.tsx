@@ -663,7 +663,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     const currentReview = review;
     if (!sessionId || !currentReview) return;
     if (cleanPriorities.length === 0) {
-      setError("Add at least one main priority before saving the plan.");
+      setError("Add at least one main goal before saving the plan.");
       return;
     }
     setSaving(true);
@@ -898,7 +898,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                           {review.yesterday_summary.completion_rate}% complete
                         </span>
                         <span className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(255,255,255,0.72)", color: "#1a1f1e" }}>
-                          {review.yesterday_summary.completed_main_count + review.yesterday_summary.completed_task_count} tasks done
+                          {review.yesterday_summary.completed_main_count + review.yesterday_summary.completed_task_count} goals done
                         </span>
                       </div>
                     </div>
@@ -912,7 +912,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       groups={[
                         { label: "Main priorities", items: review.yesterday_summary.completed_main_titles },
                         { label: "Supporting tasks", items: review.yesterday_summary.completed_task_titles },
-                        { label: "Habits kept", items: review.yesterday_summary.completed_habit_names },
+                        { label: "Routines kept", items: review.yesterday_summary.completed_habit_names },
                       ]}
                       emptyCopy="No completed work was recorded."
                     />
@@ -922,8 +922,8 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       title="What still needs a decision"
                       description="Keep it only if it still deserves space in the next plan."
                       groups={[
-                        { label: "Unfinished main priorities", items: review.yesterday_summary.incomplete_main_titles },
-                        { label: "Unfinished supporting tasks", items: review.yesterday_summary.incomplete_task_titles },
+                        { label: "Unfinished main goals", items: review.yesterday_summary.incomplete_main_titles },
+                        { label: "Unfinished secondary goals", items: review.yesterday_summary.incomplete_task_titles },
                         { label: "Habits missed", items: review.yesterday_summary.missed_habit_names },
                       ]}
                       emptyCopy="No loose ends were carried into the next day."
@@ -990,7 +990,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       description="The few things that make the day count."
                       items={priorities}
                       emptyCopy="Add the main work that deserves dashboard attention first."
-                      addLabel="Add main priority"
+                      addLabel="Add main goal"
                       suggestions={availablePrioritySuggestions}
                       suggestionLabel="Worth carrying from yesterday or your weekly focus"
                       onAdd={() => setPlannerModal({ type: "priority" })}
@@ -1004,10 +1004,10 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                     <PlannerSection
                       eyebrow={tasks.length ? `${tasks.length} supporting` : "Supporting tasks"}
                       title="Supporting tasks"
-                      description="Helpful work that backs the main priorities."
+                      description="Additional goals that still deserve space in the day."
                       items={tasks}
                       emptyCopy="Add only the support work that should travel with the plan."
-                      addLabel="Add supporting task"
+                      addLabel="Add secondary goal"
                       suggestions={availableTaskSuggestions}
                       suggestionLabel="Useful support work you may still want to keep"
                       onAdd={() => setPlannerModal({ type: "task" })}
