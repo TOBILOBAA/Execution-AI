@@ -450,7 +450,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
     const todayPrioritiesCount = dailyPriorities.filter(p => p.date === getToday()).length;
     const todayTasksCount = secondaryTasks.filter(t => t.date === getToday()).length;
     if (todayPrioritiesCount !== 1) {
-      setLeaveError("You need exactly one main priority for today before continuing.");
+      setLeaveError("You need exactly one main goal for today before continuing.");
       return;
     }
     if (todayTasksCount > 3) {
@@ -475,7 +475,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             Set up {headlineDate.weekday}, {headlineDate.monthShort} {headlineDate.day}.
           </h1>
           <p className="text-sm leading-relaxed max-w-md mx-auto" style={{ color: "#8a9e97" }}>
-            1 main priority, up to 3 secondary tasks. Each connects to a weekly goal. Your habits roll forward from Step 2.
+            1 main goal, up to 3 secondary goals. Each connects to a weekly goal. Your routines roll forward from Step 2.
           </p>
         </div>
 
@@ -580,7 +580,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
               </div>
               {(aiDraft.secondary_tasks?.length ?? 0) > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Secondary Tasks</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Secondary Goals</p>
                   <div className="space-y-1.5">
                     {(aiDraft.secondary_tasks ?? []).map((t, i) => {
                       const key = `t:${i}`;
@@ -647,7 +647,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             number="01"
             title="Essential Priorities"
             subtitle="The three non-negotiables for a successful day."
-            action="Add Priority"
+            action="Add Main Goal"
             onAction={() => setPriorityModal(true)}
           />
           <div
@@ -691,7 +691,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             {todayTasks.length === 0 ? (
               <div className="py-8 text-center">
                 <p className="text-sm" style={{ color: "#a8b5af" }}>
-                  No supporting tasks — add tasks to stay on top of everything.
+                  No secondary goals yet.
                 </p>
               </div>
             ) : (
@@ -715,7 +715,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             number="03"
             title="High-Performance Habits"
             subtitle="Micro-actions that fuel your long-term output."
-            action="Add Habit"
+            action="Add Routine"
             onAction={() => setHabitModal(true)}
           />
           <div className="space-y-2.5">
@@ -739,7 +739,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 onMouseLeave={(e) => { e.currentTarget.style.border = "1.5px dashed rgba(0,108,74,0.25)"; e.currentTarget.style.color = "#8a9e97"; }}
               >
                 <span className="material-symbols-outlined text-[18px]">add</span>
-                Define your first habit
+                Define your first routine
               </button>
             )}
           </div>
@@ -748,7 +748,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
         {/* Bottom CTA */}
         <div className="text-center space-y-4 pt-2 pb-2">
           <p className="text-sm leading-relaxed" style={{ color: "#8a9e97" }}>
-            Ready to begin your day with precision? All tasks and<br />habits are synced to your dashboard.
+            Ready to begin your day with precision? All goals and<br />routines are synced to your dashboard.
           </p>
         </div>
 
@@ -891,8 +891,8 @@ export function StepDaily({ onFinish, onBack }: Props) {
 const GUIDANCE_TIPS = [
   {
     title: "Minimize Context Switching",
-    body: "Your priorities today require high cognitive load. Batch your Supporting Tasks into a single 30-minute block at 4:00 PM to protect your morning momentum.",
-    tip: "Drink 500ml of water during Priority 01 to maintain peak neural function.",
+    body: "Your goals today require high cognitive load. Batch your secondary goals into a single 30-minute block at 4:00 PM to protect your morning momentum.",
+    tip: "Drink 500ml of water during Main Goal 01 to maintain peak neural function.",
     mindset: "Execution is the only form of progress that matters today. Done is better than perfect.",
   },
   {

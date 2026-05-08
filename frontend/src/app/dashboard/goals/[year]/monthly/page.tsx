@@ -406,7 +406,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
                 style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}
               >
                 {isSelectedMonthCurrent
-                  ? "No monthly goals are saved for this month yet. Add the main and supporting goals you want this month to carry."
+                  ? "No monthly goals are saved for this month yet. Add the main and secondary goals you want this month to carry."
                   : "No monthly goals were saved for this month."}
               </div>
             ) : (
@@ -439,7 +439,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
                                   className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
                                   style={{ background: "#006c4a", color: "#fff" }}
                                 >
-                                  Main focus
+                                  Main goal
                                 </span>
                                 <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
                                   {goal.progress}% complete
@@ -494,15 +494,15 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
                 <section className="space-y-3">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                      Supporting goals
+                      Secondary goals
                     </p>
                     <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                      {selectedMonthSecondaryGoals.length} supporting goal{selectedMonthSecondaryGoals.length === 1 ? "" : "s"}
+                      {selectedMonthSecondaryGoals.length} secondary goal{selectedMonthSecondaryGoals.length === 1 ? "" : "s"}
                     </p>
                   </div>
                   {selectedMonthSecondaryGoals.length === 0 ? (
                     <p className="text-sm" style={{ color: "#8a9e97" }}>
-                      No supporting monthly goals were saved for this month.
+                      No secondary monthly goals were saved for this month.
                     </p>
                   ) : (
                     <div className="space-y-2">

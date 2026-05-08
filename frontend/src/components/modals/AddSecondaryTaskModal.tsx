@@ -78,7 +78,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
   if (!open) return null;
 
   const handleSave = () => {
-    if (!title.trim()) { setError("Task name is required"); return; }
+    if (!title.trim()) { setError("Secondary goal name is required"); return; }
     if (!weeklyGoalId) { setError("Pick a weekly goal first"); return; }
     if (isEdit && initialData) {
       updateSecondaryTask(initialData.id, {
@@ -105,7 +105,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
 
   const handleDelete = () => {
     if (!initialData) return;
-    if (!window.confirm("Delete this secondary task? This cannot be undone.")) return;
+    if (!window.confirm("Delete this secondary goal? This cannot be undone.")) return;
     removeSecondaryTask(initialData.id);
     onClose();
   };
@@ -128,10 +128,10 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
         <div className="px-8 pt-8 pb-6 flex items-start justify-between" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-              {isEdit ? "Edit Task" : "Execution Layer"}
+              {isEdit ? "Edit Goal" : "Execution Layer"}
             </p>
             <h2 id={titleId} className="font-headline font-extrabold text-xl" style={{ color: "#1a1f1e" }}>
-              {isEdit ? "Edit Secondary Task" : "New Secondary Task"}
+              {isEdit ? "Edit Secondary Goal" : "New Secondary Goal"}
             </h2>
           </div>
           <button
@@ -148,10 +148,10 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
 
         {/* Body */}
         <div className="px-8 py-7 space-y-6">
-          {/* Task Name */}
+          {/* Goal Name */}
           <div className="space-y-2">
             <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              Task Name
+              Secondary Goal
             </label>
             <input
               type="text"
@@ -284,7 +284,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
                 style={{ color: "#ef4444" }}
               >
                 <span className="material-symbols-outlined text-[16px]">delete</span>
-                Delete Task
+                Delete Secondary Goal
               </button>
             ) : (
               <button
@@ -314,7 +314,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
               onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
             >
-              {isEdit ? "Save Changes" : "Add to Today"}
+              {isEdit ? "Save Changes" : "Add Secondary Goal"}
               <span className="material-symbols-outlined text-[16px]">{isEdit ? "check" : "bolt"}</span>
             </button>
           </div>

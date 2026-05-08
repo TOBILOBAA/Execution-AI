@@ -148,7 +148,7 @@ function ConnectedDailyPriorityModal({
       onDelete={
         initialData
           ? () => {
-              if (!window.confirm("Delete this daily priority? This cannot be undone.")) return;
+              if (!window.confirm("Delete this main goal? This cannot be undone.")) return;
               removeDailyPriority(initialData.id);
               onClose();
             }
@@ -246,7 +246,7 @@ function ConnectedSecondaryTaskModal({
       onDelete={
         initialData
           ? () => {
-              if (!window.confirm("Delete this secondary task? This cannot be undone.")) return;
+              if (!window.confirm("Delete this secondary goal? This cannot be undone.")) return;
               removeSecondaryTask(initialData.id);
               onClose();
             }
