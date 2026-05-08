@@ -56,7 +56,7 @@ export function AddWeeklyGoalModal({
 
   const handleSubmit = () => {
     if (!title.trim()) {
-      setError("Please enter a task name.");
+      setError("Please enter a goal name.");
       return;
     }
     onSubmit({

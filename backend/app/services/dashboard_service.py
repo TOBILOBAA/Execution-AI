@@ -792,9 +792,9 @@ def _build_review_insights(
     insights: list[str] = []
     insights.append(f"Yesterday closed at {yesterday_completion}% overall completion.")
     if incomplete_main:
-        insights.append(f"{len(incomplete_main)} main priority item(s) are still unfinished and worth deciding on before you start.")
+        insights.append(f"{len(incomplete_main)} main goal(s) are still unfinished and worth deciding on before you start.")
     if incomplete_tasks:
-        insights.append(f"{len(incomplete_tasks)} supporting task(s) can be carried forward or dropped intentionally.")
+        insights.append(f"{len(incomplete_tasks)} secondary goal(s) can be carried forward or dropped intentionally.")
     if weekly_main:
         insights.append(f"Your active weekly focus is {weekly_main[0]['title']}.")
     return insights[:3]
@@ -811,17 +811,17 @@ def _build_review_reflection(
 ) -> str:
     wins: list[str] = []
     if completed_main:
-        wins.append(f"you closed {len(completed_main)} main priorit{'y' if len(completed_main) == 1 else 'ies'}")
+        wins.append(f"you closed {len(completed_main)} main goal{'s' if len(completed_main) != 1 else ''}")
     if completed_tasks:
-        wins.append(f"finished {len(completed_tasks)} supporting task{'s' if len(completed_tasks) != 1 else ''}")
+        wins.append(f"finished {len(completed_tasks)} secondary goal{'s' if len(completed_tasks) != 1 else ''}")
     if completed_habits:
-        wins.append(f"kept {len(completed_habits)} habit{'s' if len(completed_habits) != 1 else ''} alive")
+        wins.append(f"kept {len(completed_habits)} routine{'s' if len(completed_habits) != 1 else ''} alive")
 
     friction: list[str] = []
     if incomplete_main:
-        friction.append(f"{len(incomplete_main)} main item{' is' if len(incomplete_main) == 1 else 's are'} still open")
+        friction.append(f"{len(incomplete_main)} main goal{' is' if len(incomplete_main) == 1 else 's are'} still open")
     if incomplete_tasks:
-        friction.append(f"{len(incomplete_tasks)} supporting task{' remains' if len(incomplete_tasks) == 1 else 's remain'} undecided")
+        friction.append(f"{len(incomplete_tasks)} secondary goal{' remains' if len(incomplete_tasks) == 1 else 's remain'} undecided")
 
     weekly_focus = weekly_main[0]["title"] if weekly_main else None
 

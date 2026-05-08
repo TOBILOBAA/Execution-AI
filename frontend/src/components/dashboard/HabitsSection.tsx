@@ -106,7 +106,7 @@ export function HabitsSection({ habits, onManage }: HabitsSectionProps) {
           className="font-headline font-extrabold tracking-tight"
           style={{ fontSize: "22px", color: "#1a1f1e" }}
         >
-          Foundational Habits
+          Routines
         </h3>
         <button
           onClick={onManage}

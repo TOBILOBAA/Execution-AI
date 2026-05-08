@@ -49,7 +49,7 @@ export function AddHabitModal({
   const [error, setError] = useState("");
 
   const handleSubmit = () => {
-    if (!name.trim()) { setError("Habit name is required."); return; }
+    if (!name.trim()) { setError("Routine name is required."); return; }
     onSubmit(name.trim(), selectedIcon, categoryId, frequency);
   };
 
@@ -64,14 +64,14 @@ export function AddHabitModal({
           {/* Header */}
           <div className="flex items-start justify-between mb-1">
             <h2 className="font-headline text-xl font-bold" style={{ color: "#1a1f1e" }}>
-              {isEdit ? "Edit Habit" : "Define Foundational Habit"}
+              {isEdit ? "Edit Routine" : "Define Routine"}
             </h2>
             <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition" style={{ color: "#5a6b65" }}>
               <span className="material-symbols-outlined text-[18px]">close</span>
             </button>
           </div>
           <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
-            {isEdit ? "Update the habit name, icon, category, or frequency." : "Link this to your yearly vision and define your focus for the month."}
+            {isEdit ? "Update the routine name, icon, category, or frequency." : "Set the routine you want to keep in motion."}
           </p>
 
           {/* Icon picker */}
@@ -105,10 +105,10 @@ export function AddHabitModal({
             </div>
           </div>
 
-          {/* Habit name */}
+          {/* Routine name */}
           <div className="mb-5">
             <label className="block mb-2" style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8a9e97" }}>
-              Habit Name
+              Routine Name
             </label>
             <input
               autoFocus
@@ -200,7 +200,7 @@ export function AddHabitModal({
             className="px-6 py-2.5 rounded-full text-sm font-bold text-white transition hover:opacity-90"
             style={{ background: "#1a2b24" }}
           >
-            {isEdit ? "Save Changes" : "Add to Plan"}
+            {isEdit ? "Save Changes" : "Add Routine"}
           </button>
         </div>
       </div>

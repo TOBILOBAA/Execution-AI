@@ -474,9 +474,9 @@ function HabitSection({
 
   return (
     <SectionCard
-      eyebrow="Habits"
-      title="Keep the foundation visible"
-      description="Only the habits that should still show up with the next plan belong here."
+      eyebrow="Routines"
+      title="Keep routines visible"
+      description="Only the routines that should still show up with the next plan belong here."
       tone="soft"
     >
       <div className="flex justify-end">
@@ -487,7 +487,7 @@ function HabitSection({
           style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
         >
           <span className="material-symbols-outlined text-[15px]">add</span>
-          Add habit
+          Add routine
         </button>
       </div>
 
@@ -497,7 +497,7 @@ function HabitSection({
             className="rounded-2xl px-4 py-6 text-center text-sm"
             style={{ background: "white", border: "1.5px dashed rgba(0,108,74,0.2)", color: "#8a9e97" }}
           >
-            No active habits yet. Add only the ones that still matter to the next day.
+            No active routines yet. Add only the ones that still matter to the next day.
           </div>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
@@ -704,7 +704,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
             : null;
         const msg =
           result.code === "no_weekly_or_habits"
-            ? "Add weekly goals or at least one active habit and sync them, then try AI again."
+            ? "Add weekly goals or at least one active routine and sync them, then try AI again."
             : result.code === "weekly_sync_failed"
               ? "Weekly goals haven’t finished syncing yet. Fix the issue above, then try again."
               : result.code === "invalid_date"
@@ -749,7 +749,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
       setAiNote(
         draft.reasoning?.trim()
           || (draft.foundational_habits?.length
-            ? `AI also surfaced these habits: ${draft.foundational_habits.join(", ")}.`
+            ? `AI also surfaced these routines: ${draft.foundational_habits.join(", ")}.`
             : "AI suggestions were added to the planner.")
           || null,
       );
@@ -910,8 +910,8 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       title="What actually moved"
                       description="The finished work worth carrying forward in your thinking."
                       groups={[
-                        { label: "Main priorities", items: review.yesterday_summary.completed_main_titles },
-                        { label: "Supporting tasks", items: review.yesterday_summary.completed_task_titles },
+                        { label: "Main goals", items: review.yesterday_summary.completed_main_titles },
+                        { label: "Secondary goals", items: review.yesterday_summary.completed_task_titles },
                         { label: "Routines kept", items: review.yesterday_summary.completed_habit_names },
                       ]}
                       emptyCopy="No completed work was recorded."
@@ -924,7 +924,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       groups={[
                         { label: "Unfinished main goals", items: review.yesterday_summary.incomplete_main_titles },
                         { label: "Unfinished secondary goals", items: review.yesterday_summary.incomplete_task_titles },
-                        { label: "Habits missed", items: review.yesterday_summary.missed_habit_names },
+                        { label: "Routines missed", items: review.yesterday_summary.missed_habit_names },
                       ]}
                       emptyCopy="No loose ends were carried into the next day."
                     />
@@ -985,8 +985,8 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
 
                   <div className="grid gap-4 xl:grid-cols-2">
                     <PlannerSection
-                      eyebrow={priorities.length ? `${priorities.length} locked in` : "Main priorities"}
-                      title="Main priorities"
+                      eyebrow={priorities.length ? `${priorities.length} locked in` : "Main goals"}
+                      title="Main goals"
                       description="The few things that make the day count."
                       items={priorities}
                       emptyCopy="Add the main work that deserves dashboard attention first."
@@ -998,18 +998,18 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       onRemove={(localId) => setPriorities((current) => current.filter((item) => item.localId !== localId))}
                       onAddSuggestion={(item) => setPriorities((current) => addUniqueMainItem(current, { ...item, is_main: true }, "priority"))}
                       addDisabled={mainPriorityCapReached}
-                      addDisabledCopy="Main priority cap reached"
+                      addDisabledCopy="Main goal cap reached"
                     />
 
                     <PlannerSection
-                      eyebrow={tasks.length ? `${tasks.length} supporting` : "Supporting tasks"}
-                      title="Supporting tasks"
+                      eyebrow={tasks.length ? `${tasks.length} secondary` : "Secondary goals"}
+                      title="Secondary goals"
                       description="Additional goals that still deserve space in the day."
                       items={tasks}
-                      emptyCopy="Add only the support work that should travel with the plan."
+                      emptyCopy="Add only the additional goals that should travel with the plan."
                       addLabel="Add secondary goal"
                       suggestions={availableTaskSuggestions}
-                      suggestionLabel="Useful support work you may still want to keep"
+                      suggestionLabel="Useful goals you may still want to keep"
                       onAdd={() => setPlannerModal({ type: "task" })}
                       onEdit={(item) => setPlannerModal({ type: "task", item })}
                       onRemove={(localId) => setTasks((current) => current.filter((item) => item.localId !== localId))}
