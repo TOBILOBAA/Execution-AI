@@ -139,6 +139,10 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
       : yearDailyPriorities.reduce((latest, item) => (item.date > latest ? item.date : latest), `${year}-12-31`);
   const daySlots = useMemo(() => listDaysForYearThroughDate(year, throughDate), [year, throughDate]);
   const selectedDayIsCurrent = selectedDay === today;
+  const secondaryTasksForYear = useMemo(
+    () => storeSecondaryTasks.filter((task) => task.date.startsWith(`${year}-`)),
+    [storeSecondaryTasks, year],
+  );
   const selectedDayStoreSnapshot = useMemo(() => {
     if (!selectedDay) return "";
 
@@ -336,16 +340,23 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
 
   const rows = daySlots.map((date) => {
     const priorities = prioritiesForRows.filter((priority) => priority.date === date);
-    const stateCounts = countGoalStates(priorities, today);
-    const completedCount = priorities.filter((priority) => priority.completed || priority.status === "completed").length;
-    const progress = priorities.length > 0 ? Math.round((completedCount / priorities.length) * 100) : 0;
+    const secondaryTasks = secondaryTasksForYear.filter((task) => task.date === date);
+    const activeHabits = date === today ? storeHabits.filter((habit) => habit.active) : [];
+    const taskItems = [...priorities, ...secondaryTasks];
+    const taskStateCounts = countGoalStates(taskItems, today);
+    const completedHabits = activeHabits.filter((habit) => habit.completedToday).length;
+    const openHabits = activeHabits.length - completedHabits;
+    const completedCount =
+      taskItems.filter((item) => item.completed || item.status === "completed").length + completedHabits;
+    const totalCount = taskItems.length + activeHabits.length;
+    const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
     return {
       date,
-      prioritiesCount: priorities.length,
-      completed: stateCounts.completed,
-      inProgress: stateCounts["on-track"],
-      atRisk: stateCounts["at-risk"],
-      notStarted: stateCounts["not-started"],
+      prioritiesCount: totalCount,
+      completed: taskStateCounts.completed + completedHabits,
+      inProgress: taskStateCounts["on-track"],
+      atRisk: taskStateCounts["at-risk"],
+      notStarted: taskStateCounts["not-started"] + openHabits,
       progress,
     };
   });
