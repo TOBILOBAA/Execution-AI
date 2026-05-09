@@ -19,6 +19,7 @@ interface Props {
     weeklyGoalId?: string;
     description: string;
   }) => void;
+  onDelete?: () => void;
   onClose: () => void;
 }
 
@@ -37,6 +38,7 @@ export function AddSecondaryTaskModal({
   initialAllocation = 30,
   initialDescription = "",
   onSubmit,
+  onDelete,
   onClose,
 }: Props) {
   const isEdit = !!initialTitle;
@@ -80,13 +82,13 @@ export function AddSecondaryTaskModal({
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "#a8b5af" }}>
-                Secondary Action
+                Secondary Goal
               </p>
               <h2 className="font-headline text-xl font-bold leading-snug" style={{ color: "#1a1f1e" }}>
                 {isEdit ? "Edit Task" : "Add Secondary Task"}
               </h2>
               <p className="text-xs leading-relaxed mt-1" style={{ color: "#8a9e97" }}>
-                Define a supporting task to optimize your daily execution flow.
+                Add another goal for today without crowding the main goal.
               </p>
             </div>
             <button
@@ -103,7 +105,7 @@ export function AddSecondaryTaskModal({
           {/* TASK NAME */}
           <div className="mb-5">
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
-              Task Name
+              Secondary Goal
             </label>
             <input
               type="text"
@@ -244,27 +246,41 @@ export function AddSecondaryTaskModal({
 
         {/* Footer */}
         <div
-          className="flex items-center justify-end gap-4 px-7 py-5"
+          className="flex items-center justify-between gap-4 px-7 py-5"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}
         >
-          <button
-            onClick={onClose}
-            className="text-sm font-semibold transition-colors"
-            style={{ color: "#8a9e97" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#1a1f1e")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#8a9e97")}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
-            style={{ background: "#003d2b" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
-          >
-            {isEdit ? "Save Changes" : "Add Task"}
-          </button>
+          <div>
+            {isEdit && onDelete ? (
+              <button
+                onClick={onDelete}
+                className="flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-70"
+                style={{ color: "#ef4444" }}
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+                Delete Secondary Goal
+              </button>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onClose}
+              className="text-sm font-semibold transition-colors"
+              style={{ color: "#8a9e97" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#1a1f1e")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#8a9e97")}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+              style={{ background: "#003d2b" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
+            >
+              {isEdit ? "Save Changes" : "Add Task"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -598,16 +598,16 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
       ? "Reduce secondary workload by 20-30% so your weekly plan matches your actual execution capacity."
       : null,
     consistencyScore < 70
-      ? "Reinforce one or two foundational habits first, then scale your task load after follow-through stabilizes."
+      ? "Reinforce one or two routines first, then scale your goal load after follow-through stabilizes."
       : null,
     alignmentScore < 70
-      ? "Link every monthly priority back to a yearly goal so effort is not spread across low-value work."
+      ? "Link every monthly goal back to a yearly goal so effort is not spread across low-value work."
       : null,
     momentumScore < 70
       ? "Protect the part of the week where execution dips and deliberately schedule lighter recovery work there."
       : null,
     completionRate < 70
-      ? "Focus on fewer commitments and finish more of them before adding new priorities."
+      ? "Focus on fewer commitments and finish more of them before adding new goals."
       : null,
   ]
     .filter((step): step is string => Boolean(step))

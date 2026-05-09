@@ -49,7 +49,7 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
           </span>
         </div>
         <p className="text-[10px] mt-1.5 font-medium leading-snug" style={{ color: "rgba(255,255,255,0.35)" }}>
-          Grows only when every main priority for the day gets finished.
+          Grows only when every main goal for the day gets finished.
         </p>
       </div>
 

@@ -160,7 +160,7 @@ export function AddWeeklyGoalModal({
               className="block text-[10px] font-bold uppercase tracking-widest mb-2"
               style={{ color: "#8a9e97" }}
             >
-              Weekly Task Name
+              Weekly Goal
             </label>
             <input
               type="text"

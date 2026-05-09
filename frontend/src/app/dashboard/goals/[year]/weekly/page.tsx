@@ -196,7 +196,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
             style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}
           >
             {selectedWeekIsCurrent
-              ? "No weekly goals are saved for this week yet. Add the main and supporting goals you want this week to carry."
+              ? "No weekly goals are saved for this week yet. Add the main and secondary goals you want this week to carry."
               : "No weekly goals were saved for this week."}
           </div>
         ) : (
@@ -284,15 +284,15 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                  Supporting goals
+                  Secondary goals
                 </p>
                 <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                  {selectedWeekSecondaryGoals.length} supporting goal{selectedWeekSecondaryGoals.length === 1 ? "" : "s"}
+                  {selectedWeekSecondaryGoals.length} secondary goal{selectedWeekSecondaryGoals.length === 1 ? "" : "s"}
                 </p>
               </div>
               {selectedWeekSecondaryGoals.length === 0 ? (
                 <p className="text-sm" style={{ color: "#8a9e97" }}>
-                  No supporting weekly goals were saved for this week.
+                  No secondary weekly goals were saved for this week.
                 </p>
               ) : (
                 <div className="space-y-2">

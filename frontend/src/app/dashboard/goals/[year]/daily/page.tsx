@@ -15,13 +15,13 @@ import {
   listDaysForYearThroughDate,
 } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
-import type { DailyPriority, ModalType } from "@/lib/types";
+import type { DailyPriority, FoundationalHabit, ModalType } from "@/lib/types";
 
 const STATUS_GUIDE_DETAIL = [
-  "Completed: daily priorities already finished.",
-  "In Progress: priorities started and still moving without being overdue.",
-  "At Risk: priorities overdue or already marked missed.",
-  "Not Started: priorities with no progress yet.",
+  "Completed: daily goals already finished.",
+  "In Progress: goals started and still moving without being overdue.",
+  "At Risk: goals overdue or already marked missed.",
+  "Not Started: goals with no progress yet.",
 ].join(" ");
 
 function formatHeaderDate(todayIso: string) {
@@ -53,6 +53,45 @@ function mapApiPriorityToStoreShape(priority: ApiDailyPriority): DailyPriority {
   };
 }
 
+function mapStorePriorityToApiShape(priority: DailyPriority): ApiDailyPriority {
+  return {
+    id: priority.id,
+    session_id: "",
+    daily_plan_id: "",
+    weekly_goal_id: priority.weeklyGoalId,
+    title: priority.title,
+    description: priority.description,
+    date: priority.date,
+    status: priority.status,
+    completed: priority.completed,
+    priority: priority.priority,
+    estimated_minutes: priority.estimatedMinutes,
+    is_main: priority.isMain,
+    tag: priority.tag,
+    ai_suggested: priority.aiSuggested ?? false,
+    editable: priority.editable,
+    created_at: "",
+    updated_at: "",
+  };
+}
+
+function mapStoreHabitToApiShape(habit: FoundationalHabit) {
+  return {
+    id: habit.id,
+    session_id: "",
+    name: habit.name,
+    icon: habit.icon,
+    frequency: habit.frequency,
+    active: habit.active,
+    category_id: habit.categoryId,
+    sort_order: 0,
+    completed_today: habit.completedToday,
+    streak: habit.streak,
+    created_at: "",
+    updated_at: "",
+  };
+}
+
 export default function DailyGoalsPage({ params }: { params: Promise<{ year: string }> }) {
   const { year: yearStr } = use(params);
   const year = parseInt(yearStr, 10);
@@ -65,6 +104,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   const setActiveDashboardDate = useAppStore((state) => state.setActiveDashboardDate);
   const activeModal = useAppStore((state) => state.activeModal);
   const storeDailyPriorities = useAppStore((state) => state.dailyPriorities);
+  const storeSecondaryTasks = useAppStore((state) => state.secondaryTasks);
   const storeHabits = useAppStore((state) => state.habits);
   const [page, setPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
@@ -107,6 +147,17 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
       }))
       .sort((a, b) => a.id.localeCompare(b.id));
 
+    const secondaryTasks = storeSecondaryTasks
+      .filter((item) => item.date === selectedDay)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        weeklyGoalId: item.weeklyGoalId,
+        completed: item.completed,
+        tag: item.tag ?? "",
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+
     const habits = storeHabits
       .map((habit) => ({
         id: habit.id,
@@ -117,13 +168,62 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
       }))
       .sort((a, b) => a.id.localeCompare(b.id));
 
-    return JSON.stringify({ priorities, habits });
-  }, [selectedDay, storeDailyPriorities, storeHabits]);
+    return JSON.stringify({ priorities, secondaryTasks, habits });
+  }, [selectedDay, storeDailyPriorities, storeHabits, storeSecondaryTasks]);
+
+  const immediateSelectedDayDetail = useMemo(() => {
+    if (!selectedDay) return null;
+
+    const mainPrioritiesSource = selectedDayIsCurrent
+      ? storeDailyPriorities.filter((item) => item.date === selectedDay)
+      : yearDailyPriorities.filter((item) => item.date === selectedDay);
+    const secondaryTasksSource = selectedDayIsCurrent
+      ? storeSecondaryTasks.filter((item) => item.date === selectedDay)
+      : [];
+    const habitsSource = selectedDayIsCurrent ? storeHabits.filter((habit) => habit.active) : [];
+
+    if (!mainPrioritiesSource.length && !secondaryTasksSource.length && !habitsSource.length) {
+      return null;
+    }
+
+    return {
+      session_id: sessionId ?? "",
+      today: selectedDay,
+      week_number: 0,
+      month: Number(selectedDay.slice(5, 7)) || 0,
+      year: Number(selectedDay.slice(0, 4)) || year,
+      week_start: selectedDay,
+      week_end: selectedDay,
+      days_left_in_week: 0,
+      days_left_in_month: 0,
+      daily_priorities: mainPrioritiesSource.map(mapStorePriorityToApiShape),
+      secondary_tasks: secondaryTasksSource.map(mapStorePriorityToApiShape),
+      weekly_goals: [],
+      monthly_context: [],
+      habits: habitsSource.map(mapStoreHabitToApiShape),
+      metrics: {
+        execution_streak: 0,
+        best_execution_streak: 0,
+        yesterday_completion: 0,
+        weekly_consistency: [],
+        tasks_completed_today: 0,
+        tasks_total_today: 0,
+        habits_completed_today: 0,
+        habits_total_today: 0,
+        weekly_completion_rate: 0,
+        monthly_completion_rate: 0,
+      },
+    } satisfies ApiDashboard;
+  }, [selectedDay, selectedDayIsCurrent, sessionId, storeDailyPriorities, storeHabits, storeSecondaryTasks, year, yearDailyPriorities]);
+
+  const resolvedSelectedDayDetail = selectedDayIsCurrent
+    ? immediateSelectedDayDetail ?? selectedDayDetail
+    : selectedDayDetail ?? immediateSelectedDayDetail;
 
   const refreshSelectedDayDetail = useCallback(async (options?: { background?: boolean }) => {
     if (!selectedDay || !sessionId || !backendReady) return;
-    const hasCachedDetail = Boolean(selectedDayDetailsByDate[selectedDay]);
-    if (!options?.background || !hasCachedDetail) {
+    const hasVisibleDetail = Boolean(selectedDayDetailsByDate[selectedDay] ?? immediateSelectedDayDetail);
+    if (!options?.background || !hasVisibleDetail) {
       setSelectedDayLoading(true);
     }
     setSelectedDayError(null);
@@ -136,11 +236,11 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     } catch (error) {
       setSelectedDayError(error instanceof Error ? error.message : "Could not load this day.");
     } finally {
-      if (!options?.background || !hasCachedDetail) {
+      if (!options?.background || !hasVisibleDetail) {
         setSelectedDayLoading(false);
       }
     }
-  }, [backendReady, selectedDay, selectedDayDetailsByDate, sessionId]);
+  }, [backendReady, immediateSelectedDayDetail, selectedDay, selectedDayDetailsByDate, sessionId]);
 
   useEffect(() => {
     if (!selectedDay) {
@@ -153,8 +253,14 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
       setSelectedDayLoading(false);
       return;
     }
+    if (immediateSelectedDayDetail) {
+      setSelectedDayError(null);
+      setSelectedDayLoading(false);
+      void refreshSelectedDayDetail({ background: true });
+      return;
+    }
     void refreshSelectedDayDetail();
-  }, [refreshSelectedDayDetail, selectedDay, selectedDayDetailsByDate]);
+  }, [immediateSelectedDayDetail, refreshSelectedDayDetail, selectedDay, selectedDayDetailsByDate]);
 
   useEffect(() => {
     const previousModal = previousModalRef.current;
@@ -212,7 +318,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
       <GoalsLoadingShell
         eyebrow={`${year} daily goals`}
         title="Loading the daily execution layer"
-        detail="We are pulling daily priorities across the year so the table reflects the real day-by-day progression of execution."
+        detail="We are pulling daily goals across the year so the table reflects the real day-by-day progression of execution."
       />
     );
   }
@@ -310,7 +416,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 style={{ background: "#006c4a", color: "#fff" }}
               >
                 <span className="material-symbols-outlined text-[16px]">add</span>
-                Add main priority
+                Add main goal
               </button>
               <button
                 type="button"
@@ -321,7 +427,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
               >
                 <span className="material-symbols-outlined text-[16px]">playlist_add</span>
-                Add supporting task
+                Add secondary goal
               </button>
               <button
                 type="button"
@@ -332,7 +438,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
               >
                 <span className="material-symbols-outlined text-[16px]">settings</span>
-                Manage habits
+                Manage routines
               </button>
             </div>
           ) : (
@@ -346,7 +452,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           )}
         </div>
 
-        {selectedDayLoading ? (
+        {selectedDayLoading && !resolvedSelectedDayDetail ? (
           <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}>
             Loading this day&apos;s plan…
           </div>
@@ -354,24 +460,32 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.12)", color: "#8a5b12" }}>
             {selectedDayError}
           </div>
-        ) : selectedDayDetail ? (
+        ) : resolvedSelectedDayDetail ? (
           <div className="mt-5 space-y-6">
+            {selectedDayLoading ? (
+              <div
+                className="rounded-2xl px-4 py-3 text-sm"
+                style={{ background: "rgba(0,108,74,0.06)", border: "1px solid rgba(0,108,74,0.10)", color: "#2f6d58" }}
+              >
+                Refreshing this day&apos;s plan in the background…
+              </div>
+            ) : null}
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#006c4a" }}>
-                  Main priorities
+                  Main goals
                 </p>
                 <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                  {selectedDayDetail.daily_priorities.length} priority{selectedDayDetail.daily_priorities.length === 1 ? "" : "ies"}
+                  {resolvedSelectedDayDetail.daily_priorities.length} main goal{resolvedSelectedDayDetail.daily_priorities.length === 1 ? "" : "s"}
                 </p>
               </div>
-              {selectedDayDetail.daily_priorities.length === 0 ? (
+              {resolvedSelectedDayDetail.daily_priorities.length === 0 ? (
                 <p className="text-sm" style={{ color: "#8a9e97" }}>
-                  No main priorities were saved for this day.
+                  No main goals were saved for this day.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {selectedDayDetail.daily_priorities.map((priority) => {
+                  {resolvedSelectedDayDetail.daily_priorities.map((priority) => {
                     const storePriority = mapApiPriorityToStoreShape(priority);
                     return (
                       <div
@@ -449,19 +563,19 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                  Supporting tasks
+                  Secondary goals
                 </p>
                 <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                  {selectedDayDetail.secondary_tasks.length} task{selectedDayDetail.secondary_tasks.length === 1 ? "" : "s"}
+                  {resolvedSelectedDayDetail.secondary_tasks.length} secondary goal{resolvedSelectedDayDetail.secondary_tasks.length === 1 ? "" : "s"}
                 </p>
               </div>
-              {selectedDayDetail.secondary_tasks.length === 0 ? (
+              {resolvedSelectedDayDetail.secondary_tasks.length === 0 ? (
                 <p className="text-sm" style={{ color: "#8a9e97" }}>
-                  No supporting tasks were saved for this day.
+                  No secondary goals were saved for this day.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {selectedDayDetail.secondary_tasks.map((task) => {
+                  {resolvedSelectedDayDetail.secondary_tasks.map((task) => {
                     const storeTask = mapApiPriorityToStoreShape(task);
                     return (
                       <div
@@ -480,7 +594,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                             {task.title}
                           </p>
                           <p className="text-xs mt-1" style={{ color: "#6b7c75" }}>
-                            {task.tag || "Supporting task"}
+                            {task.tag || "Secondary goal"}
                           </p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -528,19 +642,19 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                  Habit status
+                  Routine status
                 </p>
                 <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                  {selectedDayDetail.habits.filter((habit) => habit.active).length} active habit{selectedDayDetail.habits.filter((habit) => habit.active).length === 1 ? "" : "s"}
+                  {resolvedSelectedDayDetail.habits.filter((habit) => habit.active).length} active routine{resolvedSelectedDayDetail.habits.filter((habit) => habit.active).length === 1 ? "" : "s"}
                 </p>
               </div>
-              {selectedDayDetail.habits.filter((habit) => habit.active).length === 0 ? (
+              {resolvedSelectedDayDetail.habits.filter((habit) => habit.active).length === 0 ? (
                 <p className="text-sm" style={{ color: "#8a9e97" }}>
-                  No active habits were available for this day.
+                  No active routines were available for this day.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {selectedDayDetail.habits.filter((habit) => habit.active).map((habit) => (
+                  {resolvedSelectedDayDetail.habits.filter((habit) => habit.active).map((habit) => (
                     <div
                       key={habit.id}
                       className="rounded-2xl p-4"
@@ -598,7 +712,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           </div>
         ) : (
           <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}>
-            Choose a day from the table to inspect the exact priorities, tasks, and habits for that date.
+            Choose a day from the table to inspect the exact main goals, secondary goals, and routines for that date.
           </div>
         )}
       </div>

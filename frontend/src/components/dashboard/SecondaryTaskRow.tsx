@@ -111,7 +111,7 @@ export function SecondaryTaskRow({ task, onToggle, onRemove, onEdit }: Secondary
         style={{ opacity: hovered ? 1 : 0.72, color: "#c4d0cb" }}
         onMouseEnter={(e) => { e.currentTarget.style.background = "#fff0f0"; e.currentTarget.style.color = "#ef4444"; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#c4d0cb"; }}
-        aria-label="Remove task"
+        aria-label="Remove secondary goal"
       >
         <span className="material-symbols-outlined text-[15px]">delete</span>
       </button>

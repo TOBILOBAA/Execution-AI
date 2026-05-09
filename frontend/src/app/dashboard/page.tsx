@@ -108,7 +108,7 @@ export default function DashboardHome() {
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3 flex-wrap">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                      Main Priorities
+                      Main Goals
                     </p>
                     <span className="text-xs font-medium" style={{ color: "#8a9e97" }}>
                       {displayDateLabel}
@@ -124,7 +124,7 @@ export default function DashboardHome() {
                     }}
                   >
                     <span className="material-symbols-outlined text-[15px]">add</span>
-                    {mainPriorityCapReached ? "Main priority cap reached" : "Add main priority"}
+                    {mainPriorityCapReached ? "Main goal cap reached" : "Add main goal"}
                   </button>
                 </div>
 
@@ -151,12 +151,12 @@ export default function DashboardHome() {
                       style={{ background: "#fafcfb", border: "1.5px dashed rgba(0,108,74,0.25)" }}
                     >
                       <p className="font-headline font-bold text-base mb-1" style={{ color: "#1a1f1e" }}>
-                        No main priorities saved yet
+                        No main goals saved yet
                       </p>
                       <p className="text-sm mb-5 max-w-md mx-auto" style={{ color: "#8a9e97" }}>
                         {isPreviewingAnotherDay
-                          ? `Nothing is locked in for ${displayDateLabel} yet. Add the main priorities you want the user to execute first.`
-                          : `The home screen shows the main priorities scheduled for ${displayDateLabel}. Add them during onboarding or from here.`}
+                          ? `Nothing is locked in for ${displayDateLabel} yet. Add the main goals you want the user to execute first.`
+                          : `The home screen shows the main goals scheduled for ${displayDateLabel}. Add them during onboarding or from here.`}
                       </p>
                       <div className="flex flex-wrap items-center justify-center gap-3">
                         <button
@@ -165,7 +165,7 @@ export default function DashboardHome() {
                           className="px-5 py-2.5 rounded-xl text-sm font-bold text-white"
                           style={{ background: "#006c4a" }}
                         >
-                          Add first main priority
+                          Add first main goal
                         </button>
                         <button
                           type="button"
@@ -194,7 +194,7 @@ export default function DashboardHome() {
               </div>
             </div>
 
-            {/* Secondary Tasks */}
+            {/* Secondary Goals */}
             <div
               className="rounded-[30px]"
               style={{ background: "#fbfcfb", border: "1.5px solid rgba(0,0,0,0.05)" }}
@@ -202,10 +202,10 @@ export default function DashboardHome() {
               <div className="flex items-center justify-between px-6 pt-5 pb-4">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                    Supporting Tasks
+                    Secondary Goals
                   </p>
                   <p className="text-[11px] mt-0.5 font-medium" style={{ color: "#a8b5af" }}>
-                    Helpful work that supports the main priorities without competing with them.
+                    Additional goals for the day that still deserve attention.
                   </p>
                 </div>
                 <button
@@ -214,7 +214,7 @@ export default function DashboardHome() {
                   style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add supporting task
+                  Add secondary goal
                 </button>
               </div>
 
@@ -238,7 +238,7 @@ export default function DashboardHome() {
                       className="text-sm text-center py-8"
                       style={{ color: "#c4d0cb" }}
                     >
-                      No supporting tasks saved for this day yet
+                      No secondary goals saved for this day yet
                     </p>
                   )
                 ) : (
