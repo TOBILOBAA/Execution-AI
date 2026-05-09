@@ -17,7 +17,7 @@ const ICON_OPTIONS = [
   "sports_soccer",
   "groups",
   "science",
-  "art",
+  "palette",
   "music_note",
   "restaurant",
 ] as const;
@@ -246,13 +246,21 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
               style={{ color: "#006c4a" }}
             >
               <span className="material-symbols-outlined text-[16px]">add</span>
-              {showCategoryBuilder ? "Hide category setup" : "Add a new category"}
+              {showCategoryBuilder ? "Hide category builder" : "Create a new category here"}
             </button>
             {showCategoryBuilder ? (
               <div
-                className="rounded-2xl p-4 space-y-4"
-                style={{ background: "#f7faf8", border: "1px solid rgba(0,108,74,0.12)" }}
+                className="rounded-2xl p-5 space-y-5"
+                style={{ background: "#f9fbfa", border: "1px solid rgba(0,108,74,0.12)" }}
               >
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                    New category
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: "#7f8d88" }}>
+                    Create it here and we will select it for this goal right away.
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
                     Category Name
@@ -277,7 +285,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
                   <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
                     Pick an icon
                   </p>
-                  <div className="grid grid-cols-7 gap-2">
+                  <div className="grid grid-cols-5 sm:grid-cols-7 gap-2">
                     {ICON_OPTIONS.map((icon) => {
                       const active = newCategoryIcon === icon;
                       return (
@@ -285,12 +293,14 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
                           key={icon}
                           type="button"
                           onClick={() => setNewCategoryIcon(icon)}
-                          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all"
+                          className="h-11 rounded-xl flex items-center justify-center transition-all"
                           style={{
                             background: active ? "#006c4a" : "#fff",
                             color: active ? "#fff" : "#6b7c75",
                             border: active ? "1px solid #006c4a" : "1px solid rgba(0,0,0,0.06)",
+                            boxShadow: active ? "0 10px 24px rgba(0,108,74,0.12)" : "none",
                           }}
+                          aria-label={`Use ${icon} icon`}
                         >
                           <span className="material-symbols-outlined text-[18px]">{icon}</span>
                         </button>
@@ -299,6 +309,25 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
                   </div>
                 </div>
                 {categoryError ? <p className="text-xs" style={{ color: "#ef4444" }}>{categoryError}</p> : null}
+                <div
+                  className="rounded-2xl px-4 py-3 flex items-center gap-3"
+                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)" }}
+                >
+                  <div
+                    className="w-10 h-10 rounded-2xl flex items-center justify-center"
+                    style={{ background: "rgba(0,108,74,0.10)", color: "#006c4a" }}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">{newCategoryIcon}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                      Preview
+                    </p>
+                    <p className="text-sm font-semibold truncate" style={{ color: "#1a1f1e" }}>
+                      {newCategoryName.trim() || "Your new category"}
+                    </p>
+                  </div>
+                </div>
                 <div className="flex items-center justify-end gap-3">
                   <button
                     type="button"
@@ -314,8 +343,8 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
                   <button
                     type="button"
                     onClick={handleCreateCategory}
-                    className="px-4 py-2.5 rounded-xl text-sm font-bold text-white"
-                    style={{ background: "#006c4a" }}
+                    className="px-5 py-2.5 rounded-xl text-sm font-bold text-white"
+                    style={{ background: "#006c4a", boxShadow: "0 10px 24px rgba(0,108,74,0.16)" }}
                   >
                     Create category
                   </button>

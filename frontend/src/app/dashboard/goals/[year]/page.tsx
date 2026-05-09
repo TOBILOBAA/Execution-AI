@@ -4,6 +4,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoalCompletionButton } from "@/components/goals/GoalCompletionButton";
 import { GoalsHierarchyNav } from "@/components/goals/GoalsHierarchyNav";
+import { GoalsInfoTooltip } from "@/components/goals/GoalsInfoTooltip";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
 import {
@@ -18,6 +19,12 @@ import {
 import { useAppStore } from "@/lib/store";
 
 type FilterKey = "all" | "in-progress" | "ready-for-review" | "at-risk" | "not-started" | "completed";
+
+const YEARLY_PROGRESS_DETAIL =
+  "Progress reflects aligned month, week, and day execution under this yearly goal. It shows motion, not final real-world proof.";
+
+const YEARLY_STATUS_DETAIL =
+  "Status shows where the goal stands right now: Not Started means no aligned month yet, In Progress means linked work is active, Ready for Review means enough aligned work is done to review, At Risk means a linked month slipped without recovery underway, and Completed means you confirmed the outcome.";
 
 function formatHeaderDate(todayIso: string) {
   const date = new Date(`${todayIso}T12:00:00`);
@@ -270,15 +277,27 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
           <table className="min-w-full">
             <thead>
               <tr className="text-left">
-                {["Goal", "Category", "Progress", "Status", "Actions"].map((label) => (
-                  <th
-                    key={label}
-                    className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]"
-                    style={{ color: "#8a9e97" }}
-                  >
-                    {label}
-                  </th>
-                ))}
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                  Goal
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                  Category
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                  <span className="inline-flex items-center gap-1.5">
+                    Progress
+                    <GoalsInfoTooltip label="Yearly progress" detail={YEARLY_PROGRESS_DETAIL} />
+                  </span>
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                  <span className="inline-flex items-center gap-1.5">
+                    Status
+                    <GoalsInfoTooltip label="Yearly status" detail={YEARLY_STATUS_DETAIL} />
+                  </span>
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -293,19 +312,20 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
                   const completed = row.state === "completed";
                   const stateMeta = getYearlyGoalStateMeta(row.state);
                   const progressTone = getProgressTone(row.progress);
+                  const requiresRecovery = !completed && !row.review.canMarkComplete;
                   return (
                     <tr key={row.goal.id} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                       <td className="px-4 py-4 align-top">
-                        <div className="max-w-[300px]">
+                        <div className="max-w-[320px]">
                           <p className="text-sm font-semibold leading-relaxed" style={{ color: "#1a1f1e" }}>
                             {row.goal.title}
                           </p>
                           <p className="text-xs mt-1.5 leading-relaxed" style={{ color: "#6b7c75" }}>
                             {row.goal.description || "No description saved yet."}
                           </p>
-                          <p className="text-xs mt-2" style={{ color: "#8a9e97" }}>
+                          <p className="text-xs mt-2 leading-relaxed" style={{ color: "#8a9e97" }}>
                             {row.firstScheduledMonth
-                              ? `Linked to ${row.linkedMonthlyCount} monthly goal${row.linkedMonthlyCount === 1 ? "" : "s"} and ${row.linkedWeeklyCount} weekly goal${row.linkedWeeklyCount === 1 ? "" : "s"} · Due ${formatGoalDate(row.goal.targetDate)}`
+                              ? `${row.linkedMonthlyCount} linked month${row.linkedMonthlyCount === 1 ? "" : "s"} · ${row.linkedWeeklyCount} linked week${row.linkedWeeklyCount === 1 ? "" : "s"} · Due ${formatGoalDate(row.goal.targetDate)}`
                               : `No monthly breakdown yet · Due ${formatGoalDate(row.goal.targetDate)}`}
                           </p>
                         </div>
@@ -332,8 +352,10 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
                             style={{ width: `${row.progress}%`, background: progressTone }}
                           />
                         </div>
-                        <p className="text-xs mt-2" style={{ color: "#8a9e97" }}>
-                          Progress reflects aligned monthly execution, not outcome proof.
+                        <p className="text-xs mt-2 font-medium" style={{ color: "#8a9e97" }}>
+                          {row.review.readyMonths > 0
+                            ? `${row.review.readyMonths} month${row.review.readyMonths === 1 ? "" : "s"} ready to review`
+                            : "Tracking aligned execution"}
                         </p>
                       </td>
                       <td className="px-4 py-4 align-top">
@@ -355,13 +377,13 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
                           ) : null}
                         </div>
                       </td>
-                      <td className="px-4 py-4 align-top">
-                        <div className="flex items-center gap-2 flex-wrap">
+                      <td className="px-4 py-4 align-top min-w-[220px]">
+                        <div className="flex items-center gap-2 flex-wrap justify-start lg:justify-end">
                           {row.goal.editable ? (
                             <>
                               <GoalCompletionButton
                                 completed={completed}
-                                disabled={!completed && !row.review.canMarkComplete}
+                                disabled={requiresRecovery}
                                 onClick={() =>
                                   updateYearlyGoal(row.goal.id, {
                                     status: completed ? "active" : "completed",
@@ -369,11 +391,6 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
                                   })
                                 }
                               />
-                              {!completed && !row.review.canMarkComplete ? (
-                                <span className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                                  Finish an aligned month before closing this goal.
-                                </span>
-                              ) : null}
                               <button
                                 type="button"
                                 onClick={() => openModal("edit-yearly-goal", row.goal)}

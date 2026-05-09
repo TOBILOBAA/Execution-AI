@@ -182,8 +182,8 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     if (!selectedDay) return null;
 
     const mainPrioritiesSource = selectedDayIsCurrent
-      ? storeDailyPriorities.filter((item) => item.date === selectedDay)
-      : yearDailyPriorities.filter((item) => item.date === selectedDay);
+      ? storeDailyPriorities.filter((item) => item.date === selectedDay && item.isMain)
+      : yearDailyPriorities.filter((item) => item.date === selectedDay && item.isMain);
     const secondaryTasksSource = selectedDayIsCurrent
       ? storeSecondaryTasks.filter((item) => item.date === selectedDay)
       : [];
@@ -330,7 +330,9 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     );
   }
 
-  const prioritiesForRows = year === liveYear ? activeYearDailyPriorities : yearDailyPriorities;
+  const prioritiesForRows = (year === liveYear ? activeYearDailyPriorities : yearDailyPriorities).filter(
+    (priority) => priority.isMain,
+  );
 
   const rows = daySlots.map((date) => {
     const priorities = prioritiesForRows.filter((priority) => priority.date === date);
