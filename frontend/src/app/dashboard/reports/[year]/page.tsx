@@ -113,6 +113,57 @@ function firstSentence(value: string | null): string | null {
   return (match?.[0] ?? value).trim();
 }
 
+function metricCount(report: ApiReport | null, key: string): number | null {
+  if (!report) return null;
+  return asNumber(asRecord(report.metrics)[key]);
+}
+
+function dayArchiveBadge(status: "future" | "current" | "past", hasReport: boolean) {
+  if (hasReport) return "Saved";
+  if (status === "future") return "Future";
+  if (status === "current") return "Today";
+  return "Empty";
+}
+
+function monthSummaryLine(report: ApiReport | null) {
+  const completedGoals = metricCount(report, "goals_completed");
+  const totalGoals = metricCount(report, "goals_total");
+  const completedTasks = metricCount(report, "tasks_completed");
+  const totalTasks = metricCount(report, "tasks_total");
+  const completion = monthlyCompletionRate(report);
+
+  if (
+    completedGoals !== null &&
+    totalGoals !== null &&
+    completedTasks !== null &&
+    totalTasks !== null &&
+    completion !== null
+  ) {
+    return `${completedGoals} of ${totalGoals} goals completed and ${completedTasks} of ${totalTasks} tasks finished, with ${completion}% average weekly completion.`;
+  }
+
+  return firstSentence(monthlySummary(report)) ?? "Open this month to review the saved archive snapshot.";
+}
+
+function dailyMainGoalsLine(report: ApiReport | null) {
+  const completed = metricCount(report, "priorities_completed");
+  const total = metricCount(report, "priorities_total");
+  if (completed === null || total === null) return "No main goal data saved.";
+  return `Main goals ${completed} / ${total}`;
+}
+
+function dailyWorkLine(report: ApiReport | null) {
+  const mainCompleted = metricCount(report, "priorities_completed") ?? 0;
+  const mainTotal = metricCount(report, "priorities_total") ?? 0;
+  const secondaryCompleted = metricCount(report, "secondary_tasks_completed") ?? 0;
+  const secondaryTotal = metricCount(report, "secondary_tasks_total") ?? 0;
+  const habitsCompleted = metricCount(report, "habits_completed") ?? 0;
+  const habitsTotal = metricCount(report, "habits_total") ?? 0;
+  const completed = mainCompleted + secondaryCompleted + habitsCompleted;
+  const total = mainTotal + secondaryTotal + habitsTotal;
+  return total > 0 ? `All tracked work ${completed} / ${total}` : "No tracked work saved.";
+}
+
 function compactBullets(values: Array<string | null | undefined>, fallback: string): string[] {
   const bullets = values
     .map((value) => firstSentence(value ?? null) ?? (value?.trim() || null))
@@ -281,7 +332,6 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
     syncError,
     openModal,
     generateQuarterlyReport,
-    generateDailyReport,
   } = useAppStore(
     useShallow((state) => ({
       sessionId: state.sessionId,
@@ -293,13 +343,12 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
       syncError: state.syncError,
       openModal: state.openModal,
       generateQuarterlyReport: state.generateQuarterlyReport,
-      generateDailyReport: state.generateDailyReport,
     })),
   );
   const [generatingQuarter, setGeneratingQuarter] = useState<number | null>(null);
-  const [generatingDailyDate, setGeneratingDailyDate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ArchiveTab>("overview");
   const [expandedDailyMonths, setExpandedDailyMonths] = useState<number[]>(() => [new Date().getMonth() + 1]);
+  const [visibleWeeklyCount, setVisibleWeeklyCount] = useState(8);
 
   useEffect(() => {
     if (!sessionId || Number.isNaN(year)) return;
@@ -401,19 +450,9 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
     [year, openModal],
   );
 
-  const handleDailyGemini = useCallback(
-    async (dateIso: string) => {
-      setGeneratingDailyDate(dateIso);
-      try {
-        const saved = await generateDailyReport(dateIso);
-        if (!saved) return;
-        void syncReports(true);
-      } finally {
-        setGeneratingDailyDate(null);
-      }
-    },
-    [generateDailyReport, syncReports],
-  );
+  useEffect(() => {
+    setVisibleWeeklyCount(8);
+  }, [year]);
 
   if (Number.isNaN(year)) {
     return (
@@ -522,6 +561,11 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
       todayIso < range.start ? "future" : todayIso > range.end ? "past" : "current";
     return { week, report, range, status };
   });
+  const weeklyArchiveStarted = weekArchive
+    .filter((entry) => entry.status !== "future")
+    .sort((a, b) => b.week - a.week);
+  const visibleWeeklyArchive = weeklyArchiveStarted.slice(0, visibleWeeklyCount);
+  const hasMoreWeeklyArchive = weeklyArchiveStarted.length > visibleWeeklyArchive.length;
   const dailyArchiveMonths = Array.from({ length: 12 }, (_, index) => {
     const month = index + 1;
     const daysInThisMonth = new Date(year, month, 0).getDate();
@@ -1377,7 +1421,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   return (
                     <div
                       key={entry.month}
-                      className="rounded-2xl p-5"
+                      className="rounded-2xl p-5 min-h-[260px]"
                       style={{ background: inactive.background, border: inactive.border }}
                     >
                       <div className="flex items-start justify-between gap-3 mb-3">
@@ -1407,7 +1451,6 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 const tone = archiveCardTone(rate);
                 const currentMonthSnapshot = entry.status === "current";
                 const historicalMonthSnapshot = isHistoricalSnapshot(entry.report);
-                const monthlySummaryText = monthlySummary(entry.report);
                 const monthlyReflectionText = monthlyReflection(entry.report);
                 const monthlyNextFocusText = monthlyNextFocus(entry.report);
                 const monthlyMetrics = asRecord(entry.report.metrics);
@@ -1421,7 +1464,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                     key={entry.month}
                     type="button"
                     onClick={() => router.push(`/dashboard/reports/${year}/${entry.month}`)}
-                    className="bg-white rounded-2xl p-5 text-left transition-opacity hover:opacity-80"
+                    className="bg-white rounded-2xl p-5 text-left transition-opacity hover:opacity-80 min-h-[260px]"
                     style={{ border: `1.5px solid ${tone.border}` }}
                   >
                     <div className="flex items-start justify-between gap-3 mb-3">
@@ -1447,7 +1490,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                         {currentMonthSnapshot ? "In progress" : rate === null ? "No score" : `${rate}%`}
                       </span>
                     </div>
-                    <div className="rounded-xl p-4 mb-3" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
+                    <div className="rounded-xl p-4 mb-4" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
                       <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
                         {currentMonthSnapshot
                           ? "Month in progress"
@@ -1460,24 +1503,15 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                           ? "This month is still open. The final monthly review will appear after the month closes."
                           : historicalMonthSnapshot
                             ? "This month was reconstructed from saved plans and execution rows, so it should be treated as a factual archive snapshot."
-                            : firstSentence(monthlySummaryText) ??
-                              "Open this month for its full report, reflection, and linked weekly archive."}
+                            : monthSummaryLine(entry.report)}
                       </p>
                     </div>
-                    <p className="text-sm leading-relaxed mb-3" style={{ color: "#5d6d67" }}>
-                      {currentMonthSnapshot
-                        ? "You can review the live numbers so far, but the full reflection and next-month focus should wait until the period is complete."
-                        : historicalMonthSnapshot
-                          ? monthlySummaryText ??
-                            "Open this month to review the saved completion metrics and linked weekly archive."
-                          : monthlySummaryText ?? "Open this month for its full report, reflection, and linked weekly archive."}
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mb-4">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
                           {currentMonthSnapshot ? "Tracked weeks" : historicalMonthSnapshot ? "Best week" : "Reflection"}
                         </p>
-                        <p style={{ color: "#1a1f1e" }}>
+                        <p className="leading-relaxed" style={{ color: "#1a1f1e" }}>
                           {currentMonthSnapshot
                             ? monthlyWeeksCount === null
                               ? "Tracking in progress"
@@ -1486,24 +1520,27 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                               ? monthlyBestWeek === null
                                 ? "No best week yet"
                                 : `Week ${monthlyBestWeek}`
-                              : monthlyReflectionText ?? "-"}
+                              : firstSentence(monthlyReflectionText) ?? "-"}
                         </p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
                           {currentMonthSnapshot ? "Current pillar" : historicalMonthSnapshot ? "Completion" : "Next focus"}
                         </p>
-                        <p style={{ color: "#1a1f1e" }}>
+                        <p className="leading-relaxed" style={{ color: "#1a1f1e" }}>
                           {currentMonthSnapshot
                             ? monthlyTopPillar(entry.report) ?? "Still forming"
                             : historicalMonthSnapshot
                               ? rate === null
                                 ? "No saved score"
                                 : `${rate}% average weekly completion`
-                              : monthlyNextFocusText ?? "-"}
+                              : firstSentence(monthlyNextFocusText) ?? "-"}
                         </p>
                       </div>
                     </div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                      Open monthly archive
+                    </p>
                   </button>
                 );
               })}
@@ -1511,8 +1548,17 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
           )}
 
           {activeTab === "weekly" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {weekArchive.map((entry) => {
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <p className="text-sm" style={{ color: "#6b7b74" }}>
+                  Showing the most recent started weeks first so the archive stays readable.
+                </p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                  {visibleWeeklyArchive.length} of {weeklyArchiveStarted.length} weeks
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {visibleWeeklyArchive.map((entry) => {
                 if (!entry.report) {
                   const inactive = inactiveCardStyle(entry.status);
                   return (
@@ -1544,50 +1590,68 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   );
                 }
 
-                const weeklyRate = asNumber(asRecord(entry.report.metrics).avg_daily_completion);
-                const tone = archiveCardTone(weeklyRate);
-                return (
-                  <div
-                    key={entry.week}
-                    className="bg-white rounded-2xl p-5"
-                    style={{ border: `1.5px solid ${tone.border}` }}
+                  const weeklyRate = asNumber(asRecord(entry.report.metrics).avg_daily_completion);
+                  const tone = archiveCardTone(weeklyRate);
+                  return (
+                    <div
+                      key={entry.week}
+                      className="bg-white rounded-2xl p-5 min-h-[225px]"
+                      style={{ border: `1.5px solid ${tone.border}` }}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div>
+                          <p className="font-headline font-bold text-xl" style={{ color: "#1a1f1e" }}>
+                            Week {entry.week}
+                          </p>
+                          <p className="text-xs mt-1" style={{ color: "#8a9e97" }}>
+                            {weeklyRange(entry.report)}
+                          </p>
+                        </div>
+                        {completionBadge(weeklyRate)}
+                      </div>
+                      <div className="rounded-xl p-4 mb-4" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
+                        <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+                          Weekly report
+                        </p>
+                        <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
+                          {firstSentence(narrativeField(entry.report, "summary")) ?? "A saved weekly report exists for this range."}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+                            Key pattern
+                          </p>
+                          <p className="leading-relaxed" style={{ color: "#1a1f1e" }}>
+                            {firstSentence(narrativeField(entry.report, "key_pattern")) ?? "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+                            Next week priority
+                          </p>
+                          <p className="leading-relaxed" style={{ color: "#1a1f1e" }}>
+                            {firstSentence(narrativeField(entry.report, "next_week_priority")) ?? "-"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {hasMoreWeeklyArchive && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleWeeklyCount((count) => count + 8)}
+                    className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-opacity hover:opacity-85"
+                    style={{ background: "#f3f7f5", color: "#006c4a", border: "1px solid rgba(0,108,74,0.12)" }}
                   >
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div>
-                        <p className="font-headline font-bold text-xl" style={{ color: "#1a1f1e" }}>
-                          Week {entry.week}
-                        </p>
-                        <p className="text-xs mt-1" style={{ color: "#8a9e97" }}>
-                          {weeklyRange(entry.report)}
-                        </p>
-                      </div>
-                      {completionBadge(weeklyRate)}
-                    </div>
-                    <div className="rounded-xl p-4 mb-3" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
-                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                        Weekly report
-                      </p>
-                      <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
-                        {firstSentence(narrativeField(entry.report, "summary")) ?? "A saved weekly report exists for this range."}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                          Key pattern
-                        </p>
-                        <p style={{ color: "#1a1f1e" }}>{narrativeField(entry.report, "key_pattern") ?? "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                          Next week priority
-                        </p>
-                        <p style={{ color: "#1a1f1e" }}>{narrativeField(entry.report, "next_week_priority") ?? "-"}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    Show older weeks
+                    <span className="material-symbols-outlined text-[16px]">expand_more</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1652,7 +1716,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                             return (
                               <div
                                 key={entry.date}
-                                className="rounded-xl p-3"
+                                className="rounded-xl p-3 min-h-[210px]"
                                 style={{ background: inactive.background, border: inactive.border }}
                               >
                                 <div className="flex items-start justify-between gap-2">
@@ -1663,69 +1727,75 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                                     className="text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-full"
                                     style={{ background: inactive.badgeBg, color: inactive.badgeColor }}
                                   >
-                                    {entry.status === "future" ? "Future" : entry.status === "current" ? "Today" : "Empty"}
+                                    {dayArchiveBadge(entry.status, false)}
                                   </span>
                                 </div>
-                                <p className="text-xs mt-2 leading-relaxed" style={{ color: inactive.color }}>
-                                  {periodAvailabilityMessage({
-                                    kind: "day",
-                                    label: `${monthName(monthEntry.month)} ${entry.day}`,
-                                    status: entry.status,
-                                  })}
+                                <p className="text-sm font-semibold mt-3" style={{ color: inactive.color }}>
+                                  {entry.status === "current"
+                                    ? "Today is still unfolding."
+                                    : entry.status === "future"
+                                      ? `${monthName(monthEntry.month)} ${entry.day} has not started yet.`
+                                      : `${monthName(monthEntry.month)} ${entry.day} has no saved daily reflection.`}
                                 </p>
-                                {entry.status !== "future" && (
-                                  <button
-                                    type="button"
-                                    disabled={generatingDailyDate === entry.date}
-                                    onClick={() => void handleDailyGemini(entry.date)}
-                                    className="mt-2 w-full rounded-lg py-2 text-[9px] font-bold uppercase tracking-widest text-white transition-opacity hover:opacity-90 disabled:opacity-45"
-                                    style={{ background: "#006c4a" }}
-                                  >
-                                    {generatingDailyDate === entry.date
-                                      ? "Generating…"
-                                      : "Run AI daily review"}
-                                  </button>
-                                )}
+                                <p className="text-xs mt-3 leading-relaxed" style={{ color: inactive.color }}>
+                                  {entry.status === "current"
+                                    ? "The daily archive should fill in after the day closes."
+                                    : entry.status === "future"
+                                      ? "Once execution begins on this day, it will appear here automatically."
+                                      : "It stays visible here so the archive remains truthful even when that day was skipped."}
+                                </p>
                               </div>
                             );
                           }
 
                           const tone = archiveCardTone(dailyCompletion(entry.report));
+                          const mainGoalsLine = dailyMainGoalsLine(entry.report);
+                          const allWorkLine = dailyWorkLine(entry.report);
+                          const reflectionLine =
+                            firstSentence(narrativeField(entry.report, "reflection")) ??
+                            firstSentence(narrativeField(entry.report, "summary")) ??
+                            "Saved execution snapshot.";
+                          const isHistoricalDaily = !hasSavedAiReview(entry.report);
                           return (
                             <div
                               key={entry.date}
-                              className="rounded-xl p-3"
+                              className="rounded-xl p-4 min-h-[210px]"
                               style={{ background: "#fff", border: `1.5px solid ${tone.border}` }}
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
                                   {pad2(entry.day)}
                                 </p>
+                                <span
+                                  className="text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-full"
+                                  style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                                >
+                                  {isHistoricalDaily ? "Snapshot" : "Saved"}
+                                </span>
+                              </div>
+                              <div className="mt-3 flex items-start justify-between gap-2">
+                                <p className="text-sm font-semibold leading-snug" style={{ color: "#1a1f1e" }}>
+                                  {narrativeField(entry.report, "top_win") ?? "Daily reflection saved"}
+                                </p>
                                 {completionBadge(dailyCompletion(entry.report))}
                               </div>
-                              <p className="text-xs font-semibold mt-2" style={{ color: "#1a1f1e" }}>
-                                {narrativeField(entry.report, "top_win") ?? "Saved daily review"}
+                              <p className="text-xs mt-3 leading-relaxed" style={{ color: "#5d6d67" }}>
+                                {reflectionLine}
                               </p>
-                              <p className="text-xs mt-2 leading-relaxed" style={{ color: "#5d6d67" }}>
-                                {firstSentence(narrativeField(entry.report, "summary")) ??
-                                  firstSentence(narrativeField(entry.report, "reflection")) ??
-                                  "Open the saved daily report details."}
-                              </p>
-                              {entry.status !== "future" && (
-                                <button
-                                  type="button"
-                                  disabled={generatingDailyDate === entry.date}
-                                  onClick={() => void handleDailyGemini(entry.date)}
-                                  className="mt-2 w-full rounded-lg py-2 text-[9px] font-bold uppercase tracking-widest transition-opacity hover:opacity-90 disabled:opacity-45"
-                                  style={{ background: "rgba(0,108,74,0.12)", color: "#006c4a" }}
-                                >
-                                  {generatingDailyDate === entry.date
-                                    ? "Generating…"
-                                    : narrativeField(entry.report, "summary")
-                                      ? "Regenerate AI daily review"
-                                      : "Run AI daily review"}
-                                </button>
-                              )}
+                              <div className="mt-4 grid grid-cols-1 gap-2 text-[11px]">
+                                <div className="rounded-lg px-3 py-2" style={{ background: "#f7faf8" }}>
+                                  <p className="font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                                    Main goals
+                                  </p>
+                                  <p className="mt-1" style={{ color: "#1a1f1e" }}>{mainGoalsLine}</p>
+                                </div>
+                                <div className="rounded-lg px-3 py-2" style={{ background: "#f7faf8" }}>
+                                  <p className="font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                                    All work
+                                  </p>
+                                  <p className="mt-1" style={{ color: "#1a1f1e" }}>{allWorkLine}</p>
+                                </div>
+                              </div>
                             </div>
                           );
                         })}
