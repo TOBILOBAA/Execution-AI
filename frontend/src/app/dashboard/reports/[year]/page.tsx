@@ -56,6 +56,11 @@ function narrativeField(report: ApiReport | null, key: string): string | null {
   return asString(asRecord(report.ai_narrative)[key]);
 }
 
+function hasSavedAiReview(report: ApiReport | null | undefined): boolean {
+  if (!report?.ai_generated_at) return false;
+  return Object.keys(asRecord(report.ai_narrative)).length > 0;
+}
+
 /** Gemini quarterly narrative fields from persisted report snapshot */
 function quarterlyNarrativeFromReport(report: ApiReport | null | undefined): {
   summary: string;
@@ -224,6 +229,10 @@ function scoreTone(score: number): { label: string; color: string } {
   if (score >= 75) return { label: "Strong", color: "#006c4a" };
   if (score >= 60) return { label: "Building", color: "#b45309" };
   return { label: "Needs attention", color: "#dc2626" };
+}
+
+function isHistoricalSnapshot(report: ApiReport | null | undefined): boolean {
+  return Boolean(report) && !hasSavedAiReview(report);
 }
 
 function metricTitle(label: string): string {
@@ -802,10 +811,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       detail: "Whether your execution is being sustained over time instead of fading between periods.",
                     },
                   ].map((metric) => (
-                    <div
-                      key={metric.label}
-                      className={metric.label === "Execution Score" ? "md:col-span-2 xl:col-span-1" : ""}
-                    >
+                    <div key={metric.label}>
                       <ReportMetricCard
                         label={metric.label}
                         value={metric.value}
@@ -814,6 +820,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                         helper={metric.helper}
                         emphasized={metric.emphasized}
                         tone={metric.tone ?? "white"}
+                        density="compact"
                       />
                     </div>
                   ))}
@@ -1163,6 +1170,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
           {activeTab === "quarterly" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {quarterArchive.map((quarter) => {
+                const savedQuarterReview = hasSavedAiReview(quarter.snapshot.report);
                 const strongestMonth = [...quarter.snapshot.months]
                   .map((report) => ({
                     report,
@@ -1170,6 +1178,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   }))
                   .filter((entry): entry is { report: ApiReport; score: number } => entry.score !== null)
                   .sort((a, b) => b.score - a.score)[0] ?? null;
+                const currentQuarterSnapshot = quarter.status === "current" && quarter.snapshot.months.length > 0 && !savedQuarterReview;
 
                 if (!quarter.hasReport) {
                   const inactive = inactiveCardStyle(quarter.status);
@@ -1198,7 +1207,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       <p className="text-sm leading-relaxed" style={{ color: inactive.color }}>
                         {periodAvailabilityMessage({ kind: "quarter", label: quarter.label, status: quarter.status })}
                       </p>
-                      {quarter.status !== "future" && (
+                      {quarter.status === "past" && (
                         <button
                           type="button"
                           disabled={generatingQuarter === quarter.quarter}
@@ -1212,7 +1221,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                             "Generating…"
                           ) : (
                             <>
-                              Run AI quarterly review
+                              Generate quarterly review
                               <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
                             </>
                           )}
@@ -1223,6 +1232,56 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 }
 
                 const tone = archiveCardTone(quarter.snapshot.avgCompletion);
+                if (currentQuarterSnapshot) {
+                  return (
+                    <div
+                      key={quarter.label}
+                      className="rounded-2xl p-6"
+                      style={{ background: "rgba(0,108,74,0.04)", border: "1.5px solid rgba(0,108,74,0.12)" }}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-4">
+                        <div>
+                          <p className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>
+                            {quarter.label}
+                          </p>
+                          <p className="text-sm mt-1" style={{ color: "#6e8078" }}>
+                            {quarter.snapshot.months.map((monthReport) => monthName(monthReport.period_month)).join(", ")}
+                          </p>
+                        </div>
+                        <span
+                          className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
+                          style={{ background: "rgba(0,108,74,0.10)", color: "#006c4a" }}
+                        >
+                          Quarter in progress
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                        <div className="rounded-xl p-4" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+                            Live quarter snapshot
+                          </p>
+                          <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
+                            {quarter.snapshot.avgCompletion === null
+                              ? "Monthly snapshots are building up for this quarter."
+                              : `Average monthly completion is currently ${quarter.snapshot.avgCompletion}%.`}
+                          </p>
+                        </div>
+                        <div className="rounded-xl p-4" style={{ background: "#f7faf8" }}>
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+                            Strongest month so far
+                          </p>
+                          <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                            {strongestMonth ? `${monthName(strongestMonth.report.period_month)} (${strongestMonth.score}%)` : "-"}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+                        This quarter is still underway. We can keep surfacing the saved monthly snapshots, but the final AI quarterly review should wait until the quarter closes so it becomes one stable review instead of a moving target.
+                      </p>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={quarter.label}
@@ -1243,11 +1302,14 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                       <div className="rounded-xl p-4" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
                         <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                          Quarterly report
+                          {savedQuarterReview ? "Saved quarterly review" : "Quarter snapshot"}
                         </p>
                         <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
-                          {firstSentence(quarter.snapshot.summary) ??
-                            "A quarterly narrative has been stitched from the monthly reports in this period."}
+                          {savedQuarterReview
+                            ? firstSentence(quarterlyNarrativeFromReport(quarter.snapshot.report).summary || quarter.snapshot.summary) ??
+                              "A saved quarterly review is available for this period."
+                            : firstSentence(quarter.snapshot.summary) ??
+                              "Monthly reports exist in this quarter, but a saved AI quarterly review has not been generated yet."}
                         </p>
                       </div>
                       <div className="rounded-xl p-4" style={{ background: "#f7faf8" }}>
@@ -1260,43 +1322,44 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       </div>
                     </div>
                     <p className="text-sm leading-relaxed" style={{ color: "#5d6d67" }}>
-                      {quarter.snapshot.summary ??
-                        "Monthly reports exist in this quarter, but no stitched quarter narrative has been formed yet."}
+                      {savedQuarterReview
+                        ? quarterlyNarrativeFromReport(quarter.snapshot.report).reflection ||
+                          quarter.snapshot.summary ||
+                          "A saved quarterly review is available for this period."
+                        : "Monthly reports already exist for this quarter. Generate the quarterly AI review once to lock in a stable reflection and next-quarter focus."}
                     </p>
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                      <button
-                        type="button"
-                        disabled={generatingQuarter === quarter.quarter}
-                        onClick={() =>
-                          void handleQuarterlyGemini(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
-                        }
-                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-85 disabled:opacity-50"
-                        style={{ background: "#003d2b" }}
-                      >
-                        {generatingQuarter === quarter.quarter ? (
-                          "Generating…"
-                        ) : quarterlyNarrativeFromReport(quarter.snapshot.report).summary ? (
-                          <>
-                            Regenerate AI quarterly review
-                            <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-                          </>
-                        ) : (
-                          <>
-                            Run AI quarterly review
-                            <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-                          </>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openQuarterlyModalLocal(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
-                        }
-                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-opacity hover:opacity-85"
-                        style={{ borderColor: "rgba(0,61,43,0.35)", color: "#003d2b" }}
-                      >
-                        View quarterly review
-                      </button>
+                      {savedQuarterReview ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openQuarterlyModalLocal(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
+                          }
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-opacity hover:opacity-85"
+                          style={{ borderColor: "rgba(0,61,43,0.35)", color: "#003d2b" }}
+                        >
+                          View saved quarterly review
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={generatingQuarter === quarter.quarter}
+                          onClick={() =>
+                            void handleQuarterlyGemini(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
+                          }
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-85 disabled:opacity-50"
+                          style={{ background: "#003d2b" }}
+                        >
+                          {generatingQuarter === quarter.quarter ? (
+                            "Generating…"
+                          ) : (
+                            <>
+                              Generate quarterly review
+                              <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1340,6 +1403,16 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
 
                 const rate = monthlyCompletionRate(entry.report);
                 const tone = archiveCardTone(rate);
+                const currentMonthSnapshot = entry.status === "current";
+                const historicalMonthSnapshot = isHistoricalSnapshot(entry.report);
+                const monthlySummaryText = monthlySummary(entry.report);
+                const monthlyReflectionText = monthlyReflection(entry.report);
+                const monthlyNextFocusText = monthlyNextFocus(entry.report);
+                const monthlyMetrics = asRecord(entry.report.metrics);
+                const monthlyWeeksCount =
+                  typeof monthlyMetrics.weeks_count === "number" ? monthlyMetrics.weeks_count : null;
+                const monthlyBestWeek =
+                  typeof monthlyMetrics.best_week === "number" ? monthlyMetrics.best_week : null;
 
                 return (
                   <button
@@ -1355,35 +1428,78 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                           {monthName(entry.month)}
                         </p>
                         <p className="text-xs mt-1" style={{ color: "#8a9e97" }}>
-                          {monthlyTopPillar(entry.report) ?? "Saved monthly report"}
+                          {currentMonthSnapshot
+                            ? "Current month"
+                            : historicalMonthSnapshot
+                              ? "Historical snapshot"
+                              : monthlyTopPillar(entry.report) ?? "Saved monthly report"}
                         </p>
                       </div>
-                      {completionBadge(rate)}
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full"
+                        style={{
+                          background: currentMonthSnapshot ? "rgba(0,108,74,0.08)" : "rgba(0,108,74,0.10)",
+                          color: currentMonthSnapshot ? "#006c4a" : "#006c4a",
+                        }}
+                      >
+                        {currentMonthSnapshot ? "In progress" : rate === null ? "No score" : `${rate}%`}
+                      </span>
                     </div>
                     <div className="rounded-xl p-4 mb-3" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
                       <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                        Monthly report
+                        {currentMonthSnapshot
+                          ? "Month in progress"
+                          : historicalMonthSnapshot
+                            ? "Historical snapshot"
+                            : "Monthly review"}
                       </p>
                       <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
-                        {firstSentence(monthlySummary(entry.report)) ??
-                          "Open this month for its full report, reflection, and linked weekly archive."}
+                        {currentMonthSnapshot
+                          ? "This month is still open. The final monthly review will appear after the month closes."
+                          : historicalMonthSnapshot
+                            ? "This month was reconstructed from saved plans and execution rows, so it should be treated as a factual archive snapshot."
+                            : firstSentence(monthlySummaryText) ??
+                              "Open this month for its full report, reflection, and linked weekly archive."}
                       </p>
                     </div>
                     <p className="text-sm leading-relaxed mb-3" style={{ color: "#5d6d67" }}>
-                      {monthlySummary(entry.report) ?? "Open this month for its full report, reflection, and linked weekly archive."}
+                      {currentMonthSnapshot
+                        ? "You can review the live numbers so far, but the full reflection and next-month focus should wait until the period is complete."
+                        : historicalMonthSnapshot
+                          ? monthlySummaryText ??
+                            "Open this month to review the saved completion metrics and linked weekly archive."
+                          : monthlySummaryText ?? "Open this month for its full report, reflection, and linked weekly archive."}
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                          Reflection
+                          {currentMonthSnapshot ? "Tracked weeks" : historicalMonthSnapshot ? "Best week" : "Reflection"}
                         </p>
-                        <p style={{ color: "#1a1f1e" }}>{narrativeField(entry.report, "reflection") ?? "-"}</p>
+                        <p style={{ color: "#1a1f1e" }}>
+                          {currentMonthSnapshot
+                            ? monthlyWeeksCount === null
+                              ? "Tracking in progress"
+                              : `${monthlyWeeksCount} saved week${monthlyWeeksCount === 1 ? "" : "s"} so far`
+                            : historicalMonthSnapshot
+                              ? monthlyBestWeek === null
+                                ? "No best week yet"
+                                : `Week ${monthlyBestWeek}`
+                              : monthlyReflectionText ?? "-"}
+                        </p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                          Next focus
+                          {currentMonthSnapshot ? "Current pillar" : historicalMonthSnapshot ? "Completion" : "Next focus"}
                         </p>
-                        <p style={{ color: "#1a1f1e" }}>{narrativeField(entry.report, "next_month_focus") ?? "-"}</p>
+                        <p style={{ color: "#1a1f1e" }}>
+                          {currentMonthSnapshot
+                            ? monthlyTopPillar(entry.report) ?? "Still forming"
+                            : historicalMonthSnapshot
+                              ? rate === null
+                                ? "No saved score"
+                                : `${rate}% average weekly completion`
+                              : monthlyNextFocusText ?? "-"}
+                        </p>
                       </div>
                     </div>
                   </button>
