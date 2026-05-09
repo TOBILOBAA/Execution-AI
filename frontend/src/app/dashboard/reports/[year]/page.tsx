@@ -711,7 +711,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   );
 
   return (
-    <div className="p-6 md:p-8 max-w-6xl mx-auto w-full space-y-8">
+    <div className="w-full max-w-6xl mx-auto space-y-8 p-4 sm:p-6 md:p-8">
       <div>
         <div className="flex items-center gap-2 mb-3">
           <button
@@ -800,31 +800,129 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
         </div>
       ) : (
         <>
-          <div
-            className="rounded-2xl p-2"
-            style={{ background: "#f4f6f4", border: "1px solid rgba(0,0,0,0.05)" }}
-          >
-            <div className="flex flex-wrap gap-2">
-              {REPORT_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className="px-4 py-2 rounded-xl text-sm font-bold transition-all"
-                  style={{
-                    background: activeTab === tab.id ? "#fff" : "transparent",
-                    color: activeTab === tab.id ? "#1a1f1e" : "#6b7b74",
-                    boxShadow: activeTab === tab.id ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                  }}
+          <div className="space-y-5 md:hidden">
+            <section
+              className="rounded-[28px] p-5"
+              style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.07)", boxShadow: "0 8px 28px rgba(0,0,0,0.04)" }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
+                Mobile summary
+              </p>
+              <div className="mt-3 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-headline text-3xl font-extrabold" style={{ color: "#006c4a", lineHeight: 1 }}>
+                    {executionGrade.grade}
+                  </h2>
+                  <p className="mt-2 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                    {executionGrade.label}
+                  </p>
+                </div>
+                <span
+                  className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest"
+                  style={{ background: "rgba(0,108,74,0.10)", color: "#006c4a" }}
                 >
-                  {tab.label}
-                </button>
+                  {executionScore} / 100
+                </span>
+              </div>
+              <p className="mt-4 text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+                {diagnosis}
+              </p>
+              <div className="mt-4 rounded-2xl p-4" style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)" }}>
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                  Current emphasis
+                </p>
+                <p className="mt-2 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                  {priorityFixes.length ? priorityFixes.join(" + ") : "Execution hygiene"}
+                </p>
+                <p className="mt-2 text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+                  {topPillar ?? "The yearly pillar will appear here once enough report depth exists."}
+                </p>
+              </div>
+            </section>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {[
+                {
+                  label: "Execution Score",
+                  value: executionGrade.grade,
+                  subvalue: `${executionScore} / 100`,
+                  helper: `${executionGrade.label} · ${executionGrade.rangeLabel}`,
+                  detail: "A condensed grade blending completion, consistency, alignment, realism, and momentum.",
+                  emphasized: true,
+                  tone: "mint" as const,
+                },
+                {
+                  label: "Completion",
+                  value: `${completionRate}%`,
+                  subvalue: "planned work finished",
+                  detail: "How much of your planned work actually got completed.",
+                },
+                {
+                  label: "Consistency",
+                  value: `${consistencyScore}%`,
+                  subvalue: "regular action",
+                  detail: "How regularly you showed up and produced execution activity.",
+                },
+                {
+                  label: "Alignment",
+                  value: `${alignmentScore}%`,
+                  subvalue: "linked to goals",
+                  detail: "How much of your monthly work is clearly tied back to yearly goals.",
+                },
+              ].map((metric) => (
+                <ReportMetricCard
+                  key={metric.label}
+                  label={metric.label}
+                  value={metric.value}
+                  subvalue={metric.subvalue}
+                  detail={metric.detail}
+                  helper={metric.helper}
+                  emphasized={metric.emphasized}
+                  tone={metric.tone ?? "white"}
+                  density="compact"
+                />
               ))}
             </div>
+
+            <section
+              className="rounded-2xl p-5"
+              style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                Deeper archive
+              </p>
+              <p className="mt-3 text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+                Quarterly, monthly, weekly, and daily report breakdowns are preserved for tablet and desktop where the archive has room to stay readable and aligned.
+              </p>
+            </section>
           </div>
 
-          {activeTab === "overview" && (
-            <div className="space-y-6">
+          <div className="hidden md:block">
+            <div
+              className="rounded-2xl p-2"
+              style={{ background: "#f4f6f4", border: "1px solid rgba(0,0,0,0.05)" }}
+            >
+              <div className="flex flex-wrap gap-2">
+                {REPORT_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className="px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                    style={{
+                      background: activeTab === tab.id ? "#fff" : "transparent",
+                      color: activeTab === tab.id ? "#1a1f1e" : "#6b7b74",
+                      boxShadow: activeTab === tab.id ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {activeTab === "overview" && (
+              <div className="space-y-6">
               <section className="space-y-4">
                 <div className="flex items-center gap-2">
                   <p className="text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: "#1a1f1e" }}>
@@ -1228,9 +1326,9 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 </div>
               </section>
             </div>
-          )}
+            )}
 
-          {activeTab === "quarterly" && (
+            {activeTab === "quarterly" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {quarterArchive.map((quarter) => {
                 const savedQuarterReview = hasSavedAiReview(quarter.snapshot.report);
@@ -1428,9 +1526,9 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 );
               })}
             </div>
-          )}
+            )}
 
-          {activeTab === "monthly" && (
+            {activeTab === "monthly" && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {monthArchive.map((entry) => {
                 if (!entry.report) {
@@ -1562,9 +1660,9 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 );
               })}
             </div>
-          )}
+            )}
 
-          {activeTab === "weekly" && (
+            {activeTab === "weekly" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <p className="text-sm" style={{ color: "#6b7b74" }}>
@@ -1670,9 +1768,9 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 </div>
               )}
             </div>
-          )}
+            )}
 
-          {activeTab === "daily" && (
+            {activeTab === "daily" && (
             <div className="space-y-6">
               {dailyArchiveMonths.map((monthEntry) => {
                 const isExpanded = expandedDailyMonths.includes(monthEntry.month);
@@ -1897,7 +1995,8 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 );
               })}
             </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>
