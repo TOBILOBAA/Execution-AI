@@ -164,6 +164,23 @@ function dailyWorkLine(report: ApiReport | null) {
   return total > 0 ? `All tracked work ${completed} / ${total}` : "No tracked work saved.";
 }
 
+function dailyHeadline(report: ApiReport | null) {
+  const completed = metricCount(report, "priorities_completed");
+  const total = metricCount(report, "priorities_total");
+  if (completed === null || total === null) {
+    return narrativeField(report, "top_win") ?? "Daily reflection saved";
+  }
+  if (total === 0) return "No main goals were planned.";
+  if (completed === total) return `Completed all ${total} main goal${total === 1 ? "" : "s"}.`;
+  return `Completed ${completed} of ${total} main goal${total === 1 ? "" : "s"}.`;
+}
+
+function dailyFooterNote(report: ApiReport | null) {
+  if (!report) return "No saved daily report.";
+  if (hasSavedAiReview(report)) return "Saved daily reflection";
+  return "Historical execution snapshot";
+}
+
 function compactBullets(values: Array<string | null | undefined>, fallback: string): string[] {
   const bullets = values
     .map((value) => firstSentence(value ?? null) ?? (value?.trim() || null))
@@ -1709,41 +1726,79 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       </div>
                     </button>
                     {isExpanded && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 p-4 pt-0">
+                      <div className="space-y-4 p-4 pt-0">
+                        <div
+                          className="rounded-2xl px-4 py-3"
+                          style={{ background: "linear-gradient(135deg, rgba(0,108,74,0.05), rgba(0,108,74,0.015))", border: "1px solid rgba(0,108,74,0.08)" }}
+                        >
+                          <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+                              Daily archive works best as a clean reflection layer: one saved note for the day, plus the key execution counts that explain what happened.
+                            </p>
+                            <span
+                              className="text-[10px] font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-full"
+                              style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.10)" }}
+                            >
+                              {savedDays} saved
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {monthEntry.days.map((entry) => {
+                          const weekday = weekdayLabel(entry.date);
                           if (!entry.report) {
                             const inactive = inactiveCardStyle(entry.status);
                             return (
                               <div
                                 key={entry.date}
-                                className="rounded-xl p-3 min-h-[210px]"
+                                className="rounded-[26px] p-5 min-h-[252px] flex flex-col"
                                 style={{ background: inactive.background, border: inactive.border }}
                               >
-                                <div className="flex items-start justify-between gap-2">
-                                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: inactive.badgeColor }}>
-                                    {pad2(entry.day)}
-                                  </p>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: inactive.badgeColor }}>
+                                      {pad2(entry.day)} {weekday ? `· ${weekday}` : ""}
+                                    </p>
+                                    <p className="text-lg font-semibold mt-3" style={{ color: inactive.color }}>
+                                      {entry.status === "current"
+                                        ? "Today is still unfolding."
+                                        : entry.status === "future"
+                                          ? `${monthName(monthEntry.month)} ${entry.day} has not started yet.`
+                                          : `${monthName(monthEntry.month)} ${entry.day} has no saved daily reflection.`}
+                                    </p>
+                                  </div>
                                   <span
-                                    className="text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-full"
+                                    className="text-[9px] font-bold uppercase tracking-[0.2em] px-2.5 py-1 rounded-full"
                                     style={{ background: inactive.badgeBg, color: inactive.badgeColor }}
                                   >
                                     {dayArchiveBadge(entry.status, false)}
                                   </span>
                                 </div>
-                                <p className="text-sm font-semibold mt-3" style={{ color: inactive.color }}>
-                                  {entry.status === "current"
-                                    ? "Today is still unfolding."
-                                    : entry.status === "future"
-                                      ? `${monthName(monthEntry.month)} ${entry.day} has not started yet.`
-                                      : `${monthName(monthEntry.month)} ${entry.day} has no saved daily reflection.`}
-                                </p>
-                                <p className="text-xs mt-3 leading-relaxed" style={{ color: inactive.color }}>
+                                <p className="text-sm mt-5 leading-relaxed" style={{ color: inactive.color }}>
                                   {entry.status === "current"
                                     ? "The daily archive should fill in after the day closes."
                                     : entry.status === "future"
                                       ? "Once execution begins on this day, it will appear here automatically."
                                       : "It stays visible here so the archive remains truthful even when that day was skipped."}
                                 </p>
+                                <div className="mt-auto pt-6">
+                                  <div
+                                    className="rounded-2xl px-3 py-3"
+                                    style={{ background: "rgba(255,255,255,0.55)", border: "1px solid rgba(255,255,255,0.35)" }}
+                                  >
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: inactive.badgeColor }}>
+                                      Archive state
+                                    </p>
+                                    <p className="text-sm mt-2 leading-relaxed" style={{ color: inactive.color }}>
+                                      {entry.status === "future"
+                                        ? "Waiting for the day to happen."
+                                        : entry.status === "current"
+                                          ? "Waiting for the day to close."
+                                          : "Day was visible, but no saved reflection exists."}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
                             );
                           }
@@ -1755,50 +1810,87 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                             firstSentence(narrativeField(entry.report, "reflection")) ??
                             firstSentence(narrativeField(entry.report, "summary")) ??
                             "Saved execution snapshot.";
-                          const isHistoricalDaily = !hasSavedAiReview(entry.report);
                           return (
                             <div
                               key={entry.date}
-                              className="rounded-xl p-4 min-h-[210px]"
-                              style={{ background: "#fff", border: `1.5px solid ${tone.border}` }}
+                              className="rounded-[26px] p-5 min-h-[252px] flex flex-col"
+                              style={{
+                                background: "#fff",
+                                border: `1.5px solid ${tone.border}`,
+                                boxShadow: "0 10px 28px rgba(15,23,42,0.04)",
+                              }}
                             >
-                              <div className="flex items-start justify-between gap-2">
-                                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                                  {pad2(entry.day)}
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                                    {pad2(entry.day)} {weekday ? `· ${weekday}` : ""}
+                                  </p>
+                                  <p className="text-[11px] font-semibold mt-2" style={{ color: "#006c4a" }}>
+                                    {dailyFooterNote(entry.report)}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {completionBadge(dailyCompletion(entry.report))}
+                                </div>
+                              </div>
+
+                              <div
+                                className="mt-5 rounded-[22px] px-4 py-4"
+                                style={{ background: "linear-gradient(180deg, rgba(0,108,74,0.05), rgba(0,108,74,0.015))" }}
+                              >
+                                <p className="text-lg font-semibold leading-tight" style={{ color: "#1a1f1e" }}>
+                                  {dailyHeadline(entry.report)}
                                 </p>
-                                <span
-                                  className="text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-full"
-                                  style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                                <p
+                                  className="text-sm mt-3 leading-relaxed"
+                                  style={{
+                                    color: "#5d6d67",
+                                    display: "-webkit-box",
+                                    WebkitLineClamp: 4,
+                                    WebkitBoxOrient: "vertical",
+                                    overflow: "hidden",
+                                  }}
                                 >
-                                  {isHistoricalDaily ? "Snapshot" : "Saved"}
-                                </span>
-                              </div>
-                              <div className="mt-3 flex items-start justify-between gap-2">
-                                <p className="text-sm font-semibold leading-snug" style={{ color: "#1a1f1e" }}>
-                                  {narrativeField(entry.report, "top_win") ?? "Daily reflection saved"}
+                                  {reflectionLine}
                                 </p>
-                                {completionBadge(dailyCompletion(entry.report))}
                               </div>
-                              <p className="text-xs mt-3 leading-relaxed" style={{ color: "#5d6d67" }}>
-                                {reflectionLine}
-                              </p>
-                              <div className="mt-4 grid grid-cols-1 gap-2 text-[11px]">
-                                <div className="rounded-lg px-3 py-2" style={{ background: "#f7faf8" }}>
-                                  <p className="font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+
+                              <div className="mt-4 grid grid-cols-2 gap-3">
+                                <div
+                                  className="rounded-2xl px-3 py-3"
+                                  style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.04)" }}
+                                >
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
                                     Main goals
                                   </p>
-                                  <p className="mt-1" style={{ color: "#1a1f1e" }}>{mainGoalsLine}</p>
+                                  <p className="text-sm font-medium mt-2 leading-snug" style={{ color: "#1a1f1e" }}>
+                                    {mainGoalsLine}
+                                  </p>
                                 </div>
-                                <div className="rounded-lg px-3 py-2" style={{ background: "#f7faf8" }}>
-                                  <p className="font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                                <div
+                                  className="rounded-2xl px-3 py-3"
+                                  style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.04)" }}
+                                >
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
                                     All work
                                   </p>
-                                  <p className="mt-1" style={{ color: "#1a1f1e" }}>{allWorkLine}</p>
+                                  <p className="text-sm font-medium mt-2 leading-snug" style={{ color: "#1a1f1e" }}>
+                                    {allWorkLine}
+                                  </p>
                                 </div>
+                              </div>
+
+                              <div className="mt-auto pt-4">
+                                <p className="text-[11px] leading-relaxed" style={{ color: "#8a9e97" }}>
+                                  {narrativeField(entry.report, "top_win")
+                                    ? firstSentence(narrativeField(entry.report, "top_win")) ?? ""
+                                    : "This day is stored as part of the daily archive."}
+                                </p>
                               </div>
                             </div>
                           );
                         })}
+                        </div>
                       </div>
                     )}
                   </section>
