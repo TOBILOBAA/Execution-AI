@@ -22,6 +22,8 @@ import {
   monthlyCompletionRate,
   buildQuarterReviewNarrative,
   type QuarterReportSnapshot,
+  monthlyNextFocus,
+  monthlyReflection,
   monthlySummary,
   monthlyTopPillar,
   yearlyCompletionRate,
