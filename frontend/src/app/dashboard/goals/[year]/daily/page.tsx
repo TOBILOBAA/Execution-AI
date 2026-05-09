@@ -6,7 +6,7 @@ import { GoalsHierarchyNav } from "@/components/goals/GoalsHierarchyNav";
 import { GoalsInfoTooltip } from "@/components/goals/GoalsInfoTooltip";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
-import { dashboardApi, habitsApi, tasksApi, type ApiDailyPriority, type ApiDashboard } from "@/lib/api";
+import { dashboardApi, type ApiDailyPriority, type ApiDashboard } from "@/lib/api";
 import {
   countGoalStates,
   formatGoalDay,
@@ -102,6 +102,9 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   const openModal = useAppStore((state) => state.openModal);
   const loadDashboard = useAppStore((state) => state.loadDashboard);
   const setActiveDashboardDate = useAppStore((state) => state.setActiveDashboardDate);
+  const toggleDailyPriority = useAppStore((state) => state.toggleDailyPriority);
+  const toggleSecondaryTask = useAppStore((state) => state.toggleSecondaryTask);
+  const toggleHabitInStore = useAppStore((state) => state.toggleHabit);
   const activeModal = useAppStore((state) => state.activeModal);
   const storeDailyPriorities = useAppStore((state) => state.dailyPriorities);
   const storeSecondaryTasks = useAppStore((state) => state.secondaryTasks);
@@ -126,12 +129,20 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   const selectedDayDetail = selectedDay ? selectedDayDetailsByDate[selectedDay] ?? null : null;
 
   const liveYear = Number(today.slice(0, 4));
+  const activeYearDailyPriorities = useMemo(
+    () => storeDailyPriorities.filter((priority) => priority.date.startsWith(`${year}-`)),
+    [storeDailyPriorities, year],
+  );
   const throughDate =
     year === liveYear
       ? today
       : yearDailyPriorities.reduce((latest, item) => (item.date > latest ? item.date : latest), `${year}-12-31`);
   const daySlots = useMemo(() => listDaysForYearThroughDate(year, throughDate), [year, throughDate]);
   const selectedDayIsCurrent = selectedDay === today;
+  const secondaryTasksForYear = useMemo(
+    () => storeSecondaryTasks.filter((task) => task.date.startsWith(`${year}-`)),
+    [storeSecondaryTasks, year],
+  );
   const selectedDayStoreSnapshot = useMemo(() => {
     if (!selectedDay) return "";
 
@@ -175,8 +186,8 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     if (!selectedDay) return null;
 
     const mainPrioritiesSource = selectedDayIsCurrent
-      ? storeDailyPriorities.filter((item) => item.date === selectedDay)
-      : yearDailyPriorities.filter((item) => item.date === selectedDay);
+      ? storeDailyPriorities.filter((item) => item.date === selectedDay && item.isMain)
+      : yearDailyPriorities.filter((item) => item.date === selectedDay && item.isMain);
     const secondaryTasksSource = selectedDayIsCurrent
       ? storeSecondaryTasks.filter((item) => item.date === selectedDay)
       : [];
@@ -323,18 +334,29 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     );
   }
 
+  const prioritiesForRows = (year === liveYear ? activeYearDailyPriorities : yearDailyPriorities).filter(
+    (priority) => priority.isMain,
+  );
+
   const rows = daySlots.map((date) => {
-    const priorities = yearDailyPriorities.filter((priority) => priority.date === date);
-    const stateCounts = countGoalStates(priorities, today);
-    const completedCount = priorities.filter((priority) => priority.completed || priority.status === "completed").length;
-    const progress = priorities.length > 0 ? Math.round((completedCount / priorities.length) * 100) : 0;
+    const priorities = prioritiesForRows.filter((priority) => priority.date === date);
+    const secondaryTasks = secondaryTasksForYear.filter((task) => task.date === date);
+    const activeHabits = date === today ? storeHabits.filter((habit) => habit.active) : [];
+    const taskItems = [...priorities, ...secondaryTasks];
+    const taskStateCounts = countGoalStates(taskItems, today);
+    const completedHabits = activeHabits.filter((habit) => habit.completedToday).length;
+    const openHabits = activeHabits.length - completedHabits;
+    const completedCount =
+      taskItems.filter((item) => item.completed || item.status === "completed").length + completedHabits;
+    const totalCount = taskItems.length + activeHabits.length;
+    const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
     return {
       date,
-      prioritiesCount: priorities.length,
-      completed: stateCounts.completed,
-      inProgress: stateCounts["on-track"],
-      atRisk: stateCounts["at-risk"],
-      notStarted: stateCounts["not-started"],
+      prioritiesCount: totalCount,
+      completed: taskStateCounts.completed + completedHabits,
+      inProgress: taskStateCounts["on-track"],
+      atRisk: taskStateCounts["at-risk"],
+      notStarted: taskStateCounts["not-started"] + openHabits,
       progress,
     };
   });
@@ -371,17 +393,18 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   }
 
   async function toggleTask(task: ApiDailyPriority) {
-    if (!sessionId || !selectedDayIsCurrent) return;
-    await tasksApi.toggleStatus(sessionId, task.id, !task.completed);
-    await refreshSelectedDayDetail();
-    await loadDashboard(selectedDay ?? today);
+    if (!selectedDayIsCurrent) return;
+    if (task.is_main) {
+      toggleDailyPriority(task.id);
+      return;
+    }
+    toggleSecondaryTask(task.id);
   }
 
-  async function toggleHabit(habitId: string, completedToday: boolean) {
-    if (!sessionId || !selectedDayIsCurrent || !selectedDay) return;
-    await habitsApi.toggle(sessionId, habitId, !completedToday, selectedDay);
-    await refreshSelectedDayDetail();
-    await loadDashboard(selectedDay);
+  async function toggleHabit(habitId: string) {
+    if (!selectedDayIsCurrent || !selectedDay) return;
+    setActiveDashboardDate(selectedDay);
+    toggleHabitInStore(habitId);
   }
 
   function renderSelectedDayDetail() {
@@ -680,7 +703,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                         {selectedDayIsCurrent ? (
                           <button
                             type="button"
-                            onClick={() => void toggleHabit(habit.id, habit.completed_today)}
+                            onClick={() => void toggleHabit(habit.id)}
                             className="w-7 h-7 rounded-full flex items-center justify-center"
                             style={{
                               background: habit.completed_today ? "#006c4a" : "#f7faf8",
@@ -877,7 +900,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           <table className="min-w-full">
             <thead>
               <tr className="text-left" style={{ background: "#fbfcfb" }}>
-                {["Day", "Tasks / Goals", "Completed", "In Progress", "At Risk", "Not Started", "Progress"].map((label) => (
+                {["Day", "Goals", "Completed", "In Progress", "At Risk", "Not Started", "Progress"].map((label) => (
                   <th
                     key={label}
                     className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]"
