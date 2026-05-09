@@ -101,7 +101,7 @@ export function HabitsSection({ habits, onManage }: HabitsSectionProps) {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3
           className="font-headline font-extrabold tracking-tight"
           style={{ fontSize: "22px", color: "#1a1f1e" }}
@@ -110,7 +110,7 @@ export function HabitsSection({ habits, onManage }: HabitsSectionProps) {
         </h3>
         <button
           onClick={onManage}
-          className="flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-70"
+          className="inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
           style={{ color: "#006c4a" }}
         >
           <span className="material-symbols-outlined text-[16px]">settings</span>
@@ -119,7 +119,7 @@ export function HabitsSection({ habits, onManage }: HabitsSectionProps) {
       </div>
 
       {/* Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {visibleHabits.map((habit, i) => (
           <HabitCard
             key={habit.id}
