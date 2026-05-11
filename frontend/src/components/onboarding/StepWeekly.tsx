@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { WeeklyGoal } from "@/lib/types";
 import { getCurrentMonth, getCurrentYear, getToday } from "@/lib/mockData";
+import { getWeekNumber } from "@/lib/goalsView";
 import { AddWeeklyGoalModal } from "./AddWeeklyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
@@ -12,16 +13,6 @@ import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
 interface Props {
   onNext: () => void;
   onBack: () => void;
-}
-
-function getWeekNumberForDate(date: Date, weekStartsOn: "sunday" | "monday"): number {
-  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const day = weekStartsOn === "sunday" ? local.getDay() : (local.getDay() + 6) % 7;
-  local.setDate(local.getDate() - day);
-  const yearStart = new Date(local.getFullYear(), 0, 1);
-  const yearStartDay = weekStartsOn === "sunday" ? yearStart.getDay() : (yearStart.getDay() + 6) % 7;
-  yearStart.setDate(yearStart.getDate() - yearStartDay);
-  return Math.floor((local.getTime() - yearStart.getTime()) / 604800000) + 1;
 }
 
 // ─── Main Goal Card ────────────────────────────────────────────────────────────
@@ -355,6 +346,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
     generateWeeklyPlan,
     approveWeeklyPlan,
     syncWeeklyGoalsToServer,
+    sessionTimezone,
     sessionWeekStartsOn,
   } = useAppStore(
     useShallow((state) => ({
@@ -371,17 +363,18 @@ export function StepWeekly({ onNext, onBack }: Props) {
       generateWeeklyPlan: state.generateWeeklyPlan,
       approveWeeklyPlan: state.approveWeeklyPlan,
       syncWeeklyGoalsToServer: state.syncWeeklyGoalsToServer,
+      sessionTimezone: state.sessionTimezone,
       sessionWeekStartsOn: state.sessionWeekStartsOn,
     })),
   );
 
-  const today = getToday();
+  const today = getToday(sessionTimezone);
   const currentYear = Number(today.slice(0, 4)) || getCurrentYear();
   const currentMonth = Number(today.slice(5, 7)) || getCurrentMonth();
   const todayReference = new Date(`${today}T12:00:00`);
   const currentWeek = Number.isNaN(todayReference.getTime())
-    ? getWeekNumberForDate(new Date(), sessionWeekStartsOn)
-    : getWeekNumberForDate(todayReference, sessionWeekStartsOn);
+    ? getWeekNumber(new Date(), sessionWeekStartsOn)
+    : getWeekNumber(todayReference, sessionWeekStartsOn);
 
   const currentWeekGoals = weeklyGoals.filter(
     (g) => g.weekNumber === currentWeek && g.year === currentYear

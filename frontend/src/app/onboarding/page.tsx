@@ -30,6 +30,7 @@ export default function OnboardingPage() {
     authReady,
     backendReady,
     workspaceHydrating,
+    sessionTimezone,
     setActiveDashboardDate,
   } = useAppStore(
     useShallow((state) => ({
@@ -41,6 +42,7 @@ export default function OnboardingPage() {
       authReady: state.authReady,
       backendReady: state.backendReady,
       workspaceHydrating: state.workspaceHydrating,
+      sessionTimezone: state.sessionTimezone,
       setActiveDashboardDate: state.setActiveDashboardDate,
     })),
   );
@@ -61,13 +63,14 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (!authReady || workspaceHydrating || !currentUser || !backendReady || onboardingComplete) return;
-    setActiveDashboardDate(getToday());
+    setActiveDashboardDate(getToday(sessionTimezone));
   }, [
     authReady,
     workspaceHydrating,
     currentUser,
     backendReady,
     onboardingComplete,
+    sessionTimezone,
     setActiveDashboardDate,
   ]);
 

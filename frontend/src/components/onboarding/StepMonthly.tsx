@@ -109,6 +109,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     categories,
     yearlyGoals,
     monthlyGoals,
+    sessionTimezone,
     addMonthlyGoal,
     updateMonthlyGoal,
     removeMonthlyGoal,
@@ -124,6 +125,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       categories: state.categories,
       yearlyGoals: state.yearlyGoals,
       monthlyGoals: state.monthlyGoals,
+      sessionTimezone: state.sessionTimezone,
       addMonthlyGoal: state.addMonthlyGoal,
       updateMonthlyGoal: state.updateMonthlyGoal,
       removeMonthlyGoal: state.removeMonthlyGoal,
@@ -170,7 +172,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     return n;
   }, [aiDraft, aiRowKeys]);
 
-  const today = getToday();
+  const today = getToday(sessionTimezone);
   const currentYear = Number(today.slice(0, 4)) || getCurrentYear();
   const currentMonth = Number(today.slice(5, 7)) || getCurrentMonth();
 
