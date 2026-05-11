@@ -10,6 +10,7 @@ import { StepMonthly, MonthlyAIGuidancePanel } from "@/components/onboarding/Ste
 import { StepWeekly, WeeklyAIGuidancePanel } from "@/components/onboarding/StepWeekly";
 import { StepDaily, DailyAIGuidancePanel } from "@/components/onboarding/StepDaily";
 import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
+import { getToday } from "@/lib/mockData";
 
 const STEPS = [
   { num: 1, label: "Set yearly goals" },
@@ -29,6 +30,7 @@ export default function OnboardingPage() {
     authReady,
     backendReady,
     workspaceHydrating,
+    setActiveDashboardDate,
   } = useAppStore(
     useShallow((state) => ({
       currentUser: state.currentUser,
@@ -39,6 +41,7 @@ export default function OnboardingPage() {
       authReady: state.authReady,
       backendReady: state.backendReady,
       workspaceHydrating: state.workspaceHydrating,
+      setActiveDashboardDate: state.setActiveDashboardDate,
     })),
   );
 
@@ -55,6 +58,18 @@ export default function OnboardingPage() {
       router.replace("/dashboard");
     }
   }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
+
+  useEffect(() => {
+    if (!authReady || workspaceHydrating || !currentUser || !backendReady || onboardingComplete) return;
+    setActiveDashboardDate(getToday());
+  }, [
+    authReady,
+    workspaceHydrating,
+    currentUser,
+    backendReady,
+    onboardingComplete,
+    setActiveDashboardDate,
+  ]);
 
   if (!authReady || workspaceHydrating || !currentUser || !backendReady || onboardingComplete) {
     return (

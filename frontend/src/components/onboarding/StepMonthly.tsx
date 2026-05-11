@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { getCurrentMonth, getCurrentYear, MONTH_NAMES } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentYear, getToday, MONTH_NAMES } from "@/lib/mockData";
 import { AddMonthlyGoalModal } from "./AddMonthlyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import type { MonthlyGoal, FoundationalHabit, HabitFrequency } from "@/lib/types";
@@ -109,7 +109,6 @@ export function StepMonthly({ onNext, onBack }: Props) {
     categories,
     yearlyGoals,
     monthlyGoals,
-    activeDashboardDate,
     addMonthlyGoal,
     updateMonthlyGoal,
     removeMonthlyGoal,
@@ -125,7 +124,6 @@ export function StepMonthly({ onNext, onBack }: Props) {
       categories: state.categories,
       yearlyGoals: state.yearlyGoals,
       monthlyGoals: state.monthlyGoals,
-      activeDashboardDate: state.activeDashboardDate,
       addMonthlyGoal: state.addMonthlyGoal,
       updateMonthlyGoal: state.updateMonthlyGoal,
       removeMonthlyGoal: state.removeMonthlyGoal,
@@ -172,8 +170,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
     return n;
   }, [aiDraft, aiRowKeys]);
 
-  const currentYear = Number(activeDashboardDate.slice(0, 4)) || getCurrentYear();
-  const currentMonth = Number(activeDashboardDate.slice(5, 7)) || getCurrentMonth();
+  const today = getToday();
+  const currentYear = Number(today.slice(0, 4)) || getCurrentYear();
+  const currentMonth = Number(today.slice(5, 7)) || getCurrentMonth();
 
   const toggleAiRow = (key: string) => {
     setAiRowKeys((prev) => {
