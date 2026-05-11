@@ -24,6 +24,8 @@ type PlannerModalState =
   | { type: "task"; item?: EditableReviewItem }
   | { type: "habit"; habit?: FoundationalHabit };
 
+const MAX_MAIN_PRIORITIES = 3;
+
 function makeLocalId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -158,8 +160,19 @@ function addUniqueItem(items: EditableReviewItem[], item: ApiNextDayReviewItem, 
   return [...items, toEditableItem(item, prefix)];
 }
 
+function addUniqueMainItem(items: EditableReviewItem[], item: ApiNextDayReviewItem, prefix: string) {
+  if (items.length >= MAX_MAIN_PRIORITIES) {
+    return items;
+  }
+  return addUniqueItem(items, item, prefix);
+}
+
 function mergeUniqueItems(current: EditableReviewItem[], incoming: ApiNextDayReviewItem[], prefix: string) {
   return incoming.reduce((acc, item) => addUniqueItem(acc, item, prefix), current);
+}
+
+function mergeUniqueMainItems(current: EditableReviewItem[], incoming: ApiNextDayReviewItem[], prefix: string) {
+  return incoming.slice(0, MAX_MAIN_PRIORITIES).reduce((acc, item) => addUniqueMainItem(acc, item, prefix), current);
 }
 
 function findCategoryIdByTag(categories: Category[], tag?: string) {
@@ -338,6 +351,8 @@ function PlannerSection({
   onEdit,
   onRemove,
   onAddSuggestion,
+  addDisabled = false,
+  addDisabledCopy,
 }: {
   eyebrow: string;
   title: string;
@@ -351,6 +366,8 @@ function PlannerSection({
   onEdit: (item: EditableReviewItem) => void;
   onRemove: (localId: string) => void;
   onAddSuggestion: (item: ApiNextDayReviewItem) => void;
+  addDisabled?: boolean;
+  addDisabledCopy?: string;
 }) {
   return (
     <SectionCard eyebrow={eyebrow} title={title} description={description} tone="soft">
@@ -359,11 +376,15 @@ function PlannerSection({
           <button
             type="button"
             onClick={onAdd}
+            disabled={addDisabled}
             className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
-            style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+            style={{
+              background: addDisabled ? "rgba(0,0,0,0.06)" : "rgba(0,108,74,0.08)",
+              color: addDisabled ? "#8a9e97" : "#006c4a",
+            }}
           >
             <span className="material-symbols-outlined text-[15px]">add</span>
-            {addLabel}
+            {addDisabled ? addDisabledCopy ?? addLabel : addLabel}
           </button>
         </div>
 
@@ -413,8 +434,12 @@ function PlannerSection({
                   <button
                     type="button"
                     onClick={() => onAddSuggestion(item)}
+                    disabled={addDisabled}
                     className="shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
-                    style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                    style={{
+                      background: addDisabled ? "rgba(0,0,0,0.06)" : "rgba(0,108,74,0.08)",
+                      color: addDisabled ? "#8a9e97" : "#006c4a",
+                    }}
                   >
                     Add
                   </button>
@@ -449,9 +474,9 @@ function HabitSection({
 
   return (
     <SectionCard
-      eyebrow="Habits"
-      title="Keep the foundation visible"
-      description="Only the habits that should still show up with the next plan belong here."
+      eyebrow="Routines"
+      title="Keep routines visible"
+      description="Only the routines that should still show up with the next plan belong here."
       tone="soft"
     >
       <div className="flex justify-end">
@@ -462,7 +487,7 @@ function HabitSection({
           style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
         >
           <span className="material-symbols-outlined text-[15px]">add</span>
-          Add habit
+          Add routine
         </button>
       </div>
 
@@ -472,7 +497,7 @@ function HabitSection({
             className="rounded-2xl px-4 py-6 text-center text-sm"
             style={{ background: "white", border: "1.5px dashed rgba(0,108,74,0.2)", color: "#8a9e97" }}
           >
-            No active habits yet. Add only the ones that still matter to the next day.
+            No active routines yet. Add only the ones that still matter to the next day.
           </div>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
@@ -567,6 +592,8 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
   const [review, setReview] = useState<ApiNextDayReview | null>(null);
   const [open, setOpen] = useState(false);
   const [screen, setScreen] = useState<"review" | "plan">("review");
+  const [mobileReviewView, setMobileReviewView] = useState<"moved" | "carry">("moved");
+  const [mobilePlanView, setMobilePlanView] = useState<"priorities" | "tasks" | "habits">("priorities");
   const [priorities, setPriorities] = useState<EditableReviewItem[]>([]);
   const [tasks, setTasks] = useState<EditableReviewItem[]>([]);
   const [plannerModal, setPlannerModal] = useState<PlannerModalState>(null);
@@ -587,6 +614,8 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
         setPriorities([]);
         setTasks([]);
         setScreen("review");
+        setMobileReviewView("moved");
+        setMobilePlanView("priorities");
         setAiNote(null);
         setError(null);
         setOpen(startOpen || data.should_open);
@@ -605,6 +634,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
   const planningTomorrow = Boolean(planDate && review && review.today === planDate);
   const cleanPriorities = priorities.map(toReviewItem).filter((item) => item.title.length > 0);
   const cleanTasks = tasks.map(toReviewItem).filter((item) => item.title.length > 0);
+  const mainPriorityCapReached = priorities.length >= MAX_MAIN_PRIORITIES;
 
   const availablePrioritySuggestions = useMemo(
     () =>
@@ -637,7 +667,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     const currentReview = review;
     if (!sessionId || !currentReview) return;
     if (cleanPriorities.length === 0) {
-      setError("Add at least one main priority before saving the plan.");
+      setError("Add at least one main goal before saving the plan.");
       return;
     }
     setSaving(true);
@@ -678,7 +708,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
             : null;
         const msg =
           result.code === "no_weekly_or_habits"
-            ? "Add weekly goals or at least one active habit and sync them, then try AI again."
+            ? "Add weekly goals or at least one active routine and sync them, then try AI again."
             : result.code === "weekly_sync_failed"
               ? "Weekly goals haven’t finished syncing yet. Fix the issue above, then try again."
               : result.code === "invalid_date"
@@ -692,6 +722,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
       }
       const draft = result.draft as DailyAIDraft;
       const aiPriorities = (draft.top_priorities ?? [])
+        .slice(0, MAX_MAIN_PRIORITIES)
         .filter((item) => item.title?.trim())
         .map<EditableReviewItem>((item) => ({
           localId: makeLocalId("priority"),
@@ -717,12 +748,12 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
           priority: "medium",
           is_main: false,
         }));
-      setPriorities((current) => mergeUniqueItems(current, aiPriorities, "priority"));
+      setPriorities((current) => mergeUniqueMainItems(current, aiPriorities, "priority"));
       setTasks((current) => mergeUniqueItems(current, aiTasks, "task"));
       setAiNote(
         draft.reasoning?.trim()
           || (draft.foundational_habits?.length
-            ? `AI also surfaced these habits: ${draft.foundational_habits.join(", ")}.`
+            ? `AI also surfaced these routines: ${draft.foundational_habits.join(", ")}.`
             : "AI suggestions were added to the planner.")
           || null,
       );
@@ -739,8 +770,13 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     weeklyGoalId?: string;
     description: string;
   }) {
+    const editingPriority = plannerModal?.type === "priority" ? plannerModal.item : undefined;
+    if (!editingPriority && mainPriorityCapReached) {
+      setPlannerModal(null);
+      return;
+    }
     const nextItem: EditableReviewItem = {
-      localId: plannerModal?.type === "priority" && plannerModal.item ? plannerModal.item.localId : makeLocalId("priority"),
+      localId: editingPriority ? editingPriority.localId : makeLocalId("priority"),
       title: data.title,
       description: data.description || undefined,
       priority: "high",
@@ -750,9 +786,11 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
       is_main: true,
     };
     setPriorities((current) =>
-      plannerModal?.type === "priority" && plannerModal.item
-        ? current.map((item) => (item.localId === plannerModal.item?.localId ? nextItem : item))
-        : [...current, nextItem],
+      editingPriority
+        ? current.map((item) => (item.localId === editingPriority.localId ? nextItem : item))
+        : current.length >= MAX_MAIN_PRIORITIES
+          ? current
+          : [...current, nextItem],
     );
     setPlannerModal(null);
   }
@@ -854,9 +892,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                     title={review.proposal.weekly_objective ?? "No weekly focus set yet"}
                     description={review.proposal.monthly_context ?? "No monthly context saved yet."}
                     tone="accent"
-                  >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                      <p className="max-w-2xl text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
+                    >
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <p className="max-w-2xl text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
                         {review.reflection ?? review.insights.join(" ")}
                       </p>
                       <div className="flex flex-wrap gap-2">
@@ -864,21 +902,73 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                           {review.yesterday_summary.completion_rate}% complete
                         </span>
                         <span className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(255,255,255,0.72)", color: "#1a1f1e" }}>
-                          {review.yesterday_summary.completed_main_count + review.yesterday_summary.completed_task_count} tasks done
+                          {review.yesterday_summary.completed_main_count + review.yesterday_summary.completed_task_count} goals done
                         </span>
                       </div>
-                    </div>
-                  </SectionCard>
+                      </div>
+                    </SectionCard>
 
-                  <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+                  <div className="space-y-4 md:hidden">
+                    <div
+                      className="inline-flex rounded-full p-1"
+                      style={{ background: "#f1f5f3", border: "1px solid rgba(0,0,0,0.06)" }}
+                    >
+                      {[
+                        { id: "moved" as const, label: "What moved" },
+                        { id: "carry" as const, label: "Carry forward" },
+                      ].map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setMobileReviewView(option.id)}
+                          className="rounded-full px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.16em]"
+                          style={{
+                            background: mobileReviewView === option.id ? "#fff" : "transparent",
+                            color: mobileReviewView === option.id ? "#006c4a" : "#6f817a",
+                            boxShadow: mobileReviewView === option.id ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {mobileReviewView === "moved" ? (
+                      <ReviewSummaryCard
+                        eyebrow="Signal"
+                        title="What actually moved"
+                        description="The finished work worth carrying forward in your thinking."
+                        groups={[
+                          { label: "Main goals", items: review.yesterday_summary.completed_main_titles },
+                          { label: "Secondary goals", items: review.yesterday_summary.completed_task_titles },
+                          { label: "Routines kept", items: review.yesterday_summary.completed_habit_names },
+                        ]}
+                        emptyCopy="No completed work was recorded."
+                      />
+                    ) : (
+                      <ReviewSummaryCard
+                        eyebrow="Carry forward"
+                        title="What still needs a decision"
+                        description="Keep it only if it still deserves space in the next plan."
+                        groups={[
+                          { label: "Unfinished main goals", items: review.yesterday_summary.incomplete_main_titles },
+                          { label: "Unfinished secondary goals", items: review.yesterday_summary.incomplete_task_titles },
+                          { label: "Routines missed", items: review.yesterday_summary.missed_habit_names },
+                        ]}
+                        emptyCopy="No loose ends were carried into the next day."
+                      />
+                    )}
+                  </div>
+
+                  <div className="hidden gap-4 md:grid xl:grid-cols-[1.05fr_0.95fr]">
                     <ReviewSummaryCard
                       eyebrow="Signal"
                       title="What actually moved"
                       description="The finished work worth carrying forward in your thinking."
                       groups={[
-                        { label: "Main priorities", items: review.yesterday_summary.completed_main_titles },
-                        { label: "Supporting tasks", items: review.yesterday_summary.completed_task_titles },
-                        { label: "Habits kept", items: review.yesterday_summary.completed_habit_names },
+                        { label: "Main goals", items: review.yesterday_summary.completed_main_titles },
+                        { label: "Secondary goals", items: review.yesterday_summary.completed_task_titles },
+                        { label: "Routines kept", items: review.yesterday_summary.completed_habit_names },
                       ]}
                       emptyCopy="No completed work was recorded."
                     />
@@ -888,9 +978,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       title="What still needs a decision"
                       description="Keep it only if it still deserves space in the next plan."
                       groups={[
-                        { label: "Unfinished main priorities", items: review.yesterday_summary.incomplete_main_titles },
-                        { label: "Unfinished supporting tasks", items: review.yesterday_summary.incomplete_task_titles },
-                        { label: "Habits missed", items: review.yesterday_summary.missed_habit_names },
+                        { label: "Unfinished main goals", items: review.yesterday_summary.incomplete_main_titles },
+                        { label: "Unfinished secondary goals", items: review.yesterday_summary.incomplete_task_titles },
+                        { label: "Routines missed", items: review.yesterday_summary.missed_habit_names },
                       ]}
                       emptyCopy="No loose ends were carried into the next day."
                     />
@@ -898,7 +988,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                 </div>
               ) : (
                 <div className="space-y-5">
-                  <div className="grid gap-4 xl:grid-cols-[1.12fr_0.88fr]">
+                  <div className="space-y-4 md:hidden">
                     <SectionCard
                       eyebrow="Direction"
                       title={review.proposal.weekly_objective ?? formatReviewDateLabel(review.today)}
@@ -947,46 +1037,167 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                         )}
                       </div>
                     </SectionCard>
+
+                    <div
+                      className="inline-flex rounded-full p-1"
+                      style={{ background: "#f1f5f3", border: "1px solid rgba(0,0,0,0.06)" }}
+                    >
+                      {[
+                        { id: "priorities" as const, label: "Main" },
+                        { id: "tasks" as const, label: "Supporting" },
+                        { id: "habits" as const, label: "Routines" },
+                      ].map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setMobilePlanView(option.id)}
+                          className="rounded-full px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.16em]"
+                          style={{
+                            background: mobilePlanView === option.id ? "#fff" : "transparent",
+                            color: mobilePlanView === option.id ? "#006c4a" : "#6f817a",
+                            boxShadow: mobilePlanView === option.id ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {mobilePlanView === "priorities" ? (
+                      <PlannerSection
+                        eyebrow={priorities.length ? `${priorities.length} locked in` : "Main goals"}
+                        title="Main goals"
+                        description="The few things that make the day count."
+                        items={priorities}
+                        emptyCopy="Add the main work that deserves dashboard attention first."
+                        addLabel="Add main goal"
+                        suggestions={availablePrioritySuggestions}
+                        suggestionLabel="Worth carrying from yesterday or your weekly focus"
+                        onAdd={() => setPlannerModal({ type: "priority" })}
+                        onEdit={(item) => setPlannerModal({ type: "priority", item })}
+                        onRemove={(localId) => setPriorities((current) => current.filter((item) => item.localId !== localId))}
+                        onAddSuggestion={(item) => setPriorities((current) => addUniqueMainItem(current, { ...item, is_main: true }, "priority"))}
+                        addDisabled={mainPriorityCapReached}
+                        addDisabledCopy="Main goal cap reached"
+                      />
+                    ) : mobilePlanView === "tasks" ? (
+                      <PlannerSection
+                        eyebrow={tasks.length ? `${tasks.length} secondary` : "Secondary goals"}
+                        title="Secondary goals"
+                        description="Additional goals that still deserve space in the day."
+                        items={tasks}
+                        emptyCopy="Add only the additional goals that should travel with the plan."
+                        addLabel="Add secondary goal"
+                        suggestions={availableTaskSuggestions}
+                        suggestionLabel="Useful goals you may still want to keep"
+                        onAdd={() => setPlannerModal({ type: "task" })}
+                        onEdit={(item) => setPlannerModal({ type: "task", item })}
+                        onRemove={(localId) => setTasks((current) => current.filter((item) => item.localId !== localId))}
+                        onAddSuggestion={(item) => setTasks((current) => addUniqueItem(current, { ...item, is_main: false }, "task"))}
+                      />
+                    ) : (
+                      <HabitSection
+                        habits={activeHabits}
+                        onAdd={() => setPlannerModal({ type: "habit" })}
+                        onEdit={(habit) => setPlannerModal({ type: "habit", habit })}
+                        onRemove={removeHabit}
+                      />
+                    )}
                   </div>
 
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    <PlannerSection
-                      eyebrow={priorities.length ? `${priorities.length} locked in` : "Main priorities"}
-                      title="Main priorities"
-                      description="The few things that make the day count."
-                      items={priorities}
-                      emptyCopy="Add the main work that deserves dashboard attention first."
-                      addLabel="Add main priority"
-                      suggestions={availablePrioritySuggestions}
-                      suggestionLabel="Worth carrying from yesterday or your weekly focus"
-                      onAdd={() => setPlannerModal({ type: "priority" })}
-                      onEdit={(item) => setPlannerModal({ type: "priority", item })}
-                      onRemove={(localId) => setPriorities((current) => current.filter((item) => item.localId !== localId))}
-                      onAddSuggestion={(item) => setPriorities((current) => addUniqueItem(current, { ...item, is_main: true }, "priority"))}
-                    />
+                  <div className="hidden space-y-5 md:block">
+                    <div className="grid gap-4 xl:grid-cols-[1.12fr_0.88fr]">
+                      <SectionCard
+                        eyebrow="Direction"
+                        title={review.proposal.weekly_objective ?? formatReviewDateLabel(review.today)}
+                        description="This is the context to plan around, not more noise to process."
+                        tone="accent"
+                      >
+                        <div className="space-y-3">
+                          <div className="inline-flex rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(255,255,255,0.72)", color: "#1a1f1e" }}>
+                            {formatReviewDateLabel(review.today)}
+                          </div>
+                          <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
+                            {review.reflection ?? "Use what yesterday taught you to shape the next day intentionally."}
+                          </p>
+                          <p className="text-xs leading-relaxed" style={{ color: "#6f817a" }}>
+                            {review.proposal.monthly_context ?? "No monthly context saved yet."}
+                          </p>
+                        </div>
+                      </SectionCard>
 
-                    <PlannerSection
-                      eyebrow={tasks.length ? `${tasks.length} supporting` : "Supporting tasks"}
-                      title="Supporting tasks"
-                      description="Helpful work that backs the main priorities."
-                      items={tasks}
-                      emptyCopy="Add only the support work that should travel with the plan."
-                      addLabel="Add supporting task"
-                      suggestions={availableTaskSuggestions}
-                      suggestionLabel="Useful support work you may still want to keep"
-                      onAdd={() => setPlannerModal({ type: "task" })}
-                      onEdit={(item) => setPlannerModal({ type: "task", item })}
-                      onRemove={(localId) => setTasks((current) => current.filter((item) => item.localId !== localId))}
-                      onAddSuggestion={(item) => setTasks((current) => addUniqueItem(current, { ...item, is_main: false }, "task"))}
+                      <SectionCard
+                        eyebrow="Optional AI"
+                        title="Generate a draft only if you need one"
+                        description="AI stays out of the way until you ask. Anything generated still passes through you."
+                        tone="accent"
+                      >
+                        <div className="space-y-3">
+                          <button
+                            type="button"
+                            onClick={handleAiGenerate}
+                            disabled={aiLoading}
+                            className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60"
+                            style={{ background: "#003d2b" }}
+                          >
+                            <span className="material-symbols-outlined text-[15px]">auto_awesome</span>
+                            {aiLoading ? "Generating..." : "AI Generate"}
+                          </button>
+                          {aiNote && (
+                            <div
+                              className="rounded-2xl px-3.5 py-3"
+                              style={{ background: "rgba(255,255,255,0.72)", border: "1px solid rgba(0,108,74,0.08)" }}
+                            >
+                              <p className="max-h-28 overflow-y-auto pr-1 text-xs leading-relaxed break-words" style={{ color: "#0f766e" }}>
+                                {aiNote}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </SectionCard>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <PlannerSection
+                        eyebrow={priorities.length ? `${priorities.length} locked in` : "Main goals"}
+                        title="Main goals"
+                        description="The few things that make the day count."
+                        items={priorities}
+                        emptyCopy="Add the main work that deserves dashboard attention first."
+                        addLabel="Add main goal"
+                        suggestions={availablePrioritySuggestions}
+                        suggestionLabel="Worth carrying from yesterday or your weekly focus"
+                        onAdd={() => setPlannerModal({ type: "priority" })}
+                        onEdit={(item) => setPlannerModal({ type: "priority", item })}
+                        onRemove={(localId) => setPriorities((current) => current.filter((item) => item.localId !== localId))}
+                        onAddSuggestion={(item) => setPriorities((current) => addUniqueMainItem(current, { ...item, is_main: true }, "priority"))}
+                        addDisabled={mainPriorityCapReached}
+                        addDisabledCopy="Main goal cap reached"
+                      />
+
+                      <PlannerSection
+                        eyebrow={tasks.length ? `${tasks.length} secondary` : "Secondary goals"}
+                        title="Secondary goals"
+                        description="Additional goals that still deserve space in the day."
+                        items={tasks}
+                        emptyCopy="Add only the additional goals that should travel with the plan."
+                        addLabel="Add secondary goal"
+                        suggestions={availableTaskSuggestions}
+                        suggestionLabel="Useful goals you may still want to keep"
+                        onAdd={() => setPlannerModal({ type: "task" })}
+                        onEdit={(item) => setPlannerModal({ type: "task", item })}
+                        onRemove={(localId) => setTasks((current) => current.filter((item) => item.localId !== localId))}
+                        onAddSuggestion={(item) => setTasks((current) => addUniqueItem(current, { ...item, is_main: false }, "task"))}
+                      />
+                    </div>
+
+                    <HabitSection
+                      habits={activeHabits}
+                      onAdd={() => setPlannerModal({ type: "habit" })}
+                      onEdit={(habit) => setPlannerModal({ type: "habit", habit })}
+                      onRemove={removeHabit}
                     />
                   </div>
-
-                  <HabitSection
-                    habits={activeHabits}
-                    onAdd={() => setPlannerModal({ type: "habit" })}
-                    onEdit={(habit) => setPlannerModal({ type: "habit", habit })}
-                    onRemove={removeHabit}
-                  />
                 </div>
               )}
 
@@ -1010,19 +1221,19 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                     <button
                       type="button"
                       onClick={() => setScreen("review")}
-                      className="rounded-xl px-5 py-3 text-sm font-semibold"
+                      className="w-full rounded-xl px-5 py-3 text-sm font-semibold sm:w-auto"
                       style={{ border: "1.5px solid #e2e8e4", color: "#5a6b65", background: "white" }}
                     >
                       Back to review
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpen(false);
-                      onClose?.();
-                    }}
-                    className="rounded-xl px-5 py-3 text-sm font-semibold"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        onClose?.();
+                      }}
+                    className="w-full rounded-xl px-5 py-3 text-sm font-semibold sm:w-auto"
                     style={{ border: "1.5px solid #e2e8e4", color: "#5a6b65", background: "white" }}
                   >
                     Close for now
@@ -1035,8 +1246,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                     onClick={() => {
                       setError(null);
                       setScreen("plan");
+                      setMobilePlanView("priorities");
                     }}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white sm:w-auto"
                     style={{ background: "#003d2b", boxShadow: "0 2px 12px rgba(0,108,74,0.25)" }}
                   >
                     {planningTomorrow ? "Continue to tomorrow" : "Continue to planning"}
@@ -1047,7 +1259,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                     type="button"
                     disabled={saving}
                     onClick={handleApprove}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white disabled:opacity-60"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white disabled:opacity-60 sm:w-auto"
                     style={{ background: "#003d2b", boxShadow: "0 2px 12px rgba(0,108,74,0.25)" }}
                   >
                     {saving ? "Saving..." : planningTomorrow ? "Save tomorrow’s plan" : "Save today’s plan"}

@@ -19,6 +19,7 @@ interface Props {
     weeklyGoalId?: string;
     description: string;
   }) => void;
+  onDelete?: () => void;
   onClose: () => void;
 }
 
@@ -37,6 +38,7 @@ export function AddDailyPriorityModal({
   initialAllocation = 30,
   initialDescription = "",
   onSubmit,
+  onDelete,
   onClose,
 }: Props) {
   const isEdit = !!initialTitle;
@@ -55,7 +57,7 @@ export function AddDailyPriorityModal({
 
   const handleSubmit = () => {
     if (!title.trim()) {
-      setError("Please enter a task name.");
+      setError("Please enter a goal name.");
       return;
     }
     const mins = isCustom ? parseInt(customMins) || 30 : allocation;
@@ -82,16 +84,16 @@ export function AddDailyPriorityModal({
       >
         <div className="px-7 pt-7 pb-0">
           <h2 className="font-headline text-2xl font-bold mb-1" style={{ color: "#1a1f1e" }}>
-            {isEdit ? "Edit Priority" : "Add Daily Priority"}
+            {isEdit ? "Edit Main Goal" : "Add Daily Main Goal"}
           </h2>
           <p className="text-sm mb-6 leading-relaxed" style={{ color: "#8a9e97" }}>
             Align your daily output with your architectural pillars.
           </p>
 
-          {/* TASK NAME */}
+          {/* GOAL NAME */}
           <div className="mb-5">
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
-              Task Name
+              Main Goal
             </label>
             <input
               type="text"
@@ -245,25 +247,39 @@ export function AddDailyPriorityModal({
               Deep work sprints are most effective before 11:00 AM.
             </span>
           </p>
-          <div className="flex items-center justify-end gap-4">
-            <button
-              onClick={onClose}
-              className="text-sm font-semibold transition-colors"
-              style={{ color: "#8a9e97" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#1a1f1e")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#8a9e97")}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
-              style={{ background: "#003d2b" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
-            >
-              {isEdit ? "Save Changes" : "Add Priority"}
-            </button>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              {isEdit && onDelete ? (
+                <button
+                  onClick={onDelete}
+                  className="flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-70"
+                  style={{ color: "#ef4444" }}
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                  Delete Main Goal
+                </button>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={onClose}
+                className="text-sm font-semibold transition-colors"
+                style={{ color: "#8a9e97" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#1a1f1e")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "#8a9e97")}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                style={{ background: "#003d2b" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
+              >
+                {isEdit ? "Save Changes" : "Add Main Goal"}
+              </button>
+            </div>
           </div>
         </div>
       </div>

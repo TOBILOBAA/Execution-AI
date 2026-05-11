@@ -229,7 +229,7 @@ Monthly goals:
 Weekly goals:
 {_json_block(context.get(weekly_key, []))}
 
-Active habits:
+Active routines:
 {_json_block(context.get("active_habits", []))}
 
 ### Execution Diary (structured evidence)
@@ -274,7 +274,8 @@ def generate_monthly_plan(planning_payload: dict) -> AIMonthlyPlanOutput:
 {goals_text}
 
 ### Instructions
-Generate ONLY main_goals and secondary_goals for this month. Do NOT suggest foundational habits — users define those separately in the app.
+Generate ONLY main_goals and secondary_goals for this month. Do NOT suggest routines — users define those separately in the app.
+Never return more than {budget['max_main_goals']} main_goals or more than {budget['max_secondary_goals']} secondary_goals.
 Goals must be achievable within the remaining {ctx['days_remaining']} days.
 Each goal must set yearly_goal_ref to the exact title of a yearly goal above when possible.
 For EVERY goal, set target_date to a realistic deadline as YYYY-MM-DD within {ctx['year']}-{ctx['month']:02d} (use dates on or after today if this is the current month).
@@ -295,7 +296,7 @@ For EVERY goal, set target_date to a realistic deadline as YYYY-MM-DD within {ct
   ],
   "secondary_goals": [
     {{
-      "title": "<supporting goal>",
+      "title": "<secondary goal>",
       "description": "<1-2 sentence description>",
       "priority": "medium",
       "is_main": false,
@@ -359,7 +360,8 @@ def generate_weekly_plan(planning_payload: dict) -> AIWeeklyPlanOutput:
 {yearly_text}
 
 ### Instructions
-Generate ONLY main_goals and secondary_goals for this week. Do NOT suggest foundational habits — users define those in the app.
+Generate ONLY main_goals and secondary_goals for this week. Do NOT suggest routines — users define those in the app.
+Never return more than {budget['max_main_goals']} main_goals or more than {budget['max_secondary_goals']} secondary_goals.
 Each goal must be completable within {ctx['days_remaining']} days.
 Weekly goals must concretely advance the monthly goals above. Set yearly_goal_ref to the monthly goal title when applicable.
 
@@ -378,7 +380,7 @@ Weekly goals must concretely advance the monthly goals above. Set yearly_goal_re
   ],
   "secondary_goals": [
     {{
-      "title": "<supporting task>",
+      "title": "<secondary goal>",
       "description": "<1-2 sentences>",
       "priority": "medium",
       "is_main": false,
@@ -429,7 +431,7 @@ def generate_daily_plan(planning_payload: dict) -> AIDailyPlanOutput:
         y_rate = yesterday.get("completion_rate", "N/A")
         y_done = yesterday.get("priorities_completed", 0)
         y_total = yesterday.get("priorities_total", 0)
-        yesterday_text = f"\n### Yesterday's Completion\n- Completion rate: {y_rate}%\n- Priorities: {y_done}/{y_total}"
+        yesterday_text = f"\n### Yesterday's Completion\n- Completion rate: {y_rate}%\n- Main goals: {y_done}/{y_total}"
 
     prompt = f"""{_SYSTEM_ROLE}
 
@@ -442,14 +444,14 @@ def generate_daily_plan(planning_payload: dict) -> AIDailyPlanOutput:
 - Late in week: {ctx['is_late_in_week']}
 
 ### Workload Budget
-- Max priorities: {budget['max_daily_priorities']}
-- Max secondary tasks: {budget['max_secondary_tasks']}
+- Max main goals: {budget['max_daily_priorities']}
+- Max secondary goals: {budget['max_secondary_tasks']}
 - Workload label: {budget['workload_label']}
 - Rationale: {budget['rationale']}
 
 ### Weekly Goals (immediate parent)
 {weekly_text}
-Weekly tasks remaining: {remaining}
+Weekly goals remaining: {remaining}
 
 ### Monthly Goals (strategic context)
 {monthly_text}
@@ -458,12 +460,13 @@ Weekly tasks remaining: {remaining}
 {yearly_text}
 {yesterday_text}
 
-### Active Habits to reinforce today
+### Active Routines to reinforce today
 {habits_text}
 
 ### Instructions
-Generate a daily plan for {ctx['today']}. Priorities must be concretely achievable in one day.
-Each priority should advance a specific weekly goal. Secondary tasks are quick wins or maintenance.
+Generate a daily plan for {ctx['today']}. Main goals must be concretely achievable in one day.
+Never return more than {budget['max_daily_priorities']} top_priorities or more than {budget['max_secondary_tasks']} secondary_tasks.
+Each main goal should advance a specific weekly goal. Secondary goals are quick wins or maintenance.
 Do NOT include foundational_habits in the output — they are tracked separately in the app.
 
 ### Required JSON Output Schema
@@ -471,7 +474,7 @@ Do NOT include foundational_habits in the output — they are tracked separately
   "reasoning": "<planning rationale for today>",
   "top_priorities": [
     {{
-      "title": "<concrete task for today>",
+      "title": "<concrete goal for today>",
       "description": "<specific action>",
       "priority": "high",
       "is_main": true,
@@ -481,7 +484,7 @@ Do NOT include foundational_habits in the output — they are tracked separately
   ],
   "secondary_tasks": [
     {{
-      "title": "<quick win or maintenance task>",
+      "title": "<quick win or maintenance goal>",
       "description": null,
       "priority": "medium",
       "is_main": false,
@@ -514,9 +517,9 @@ def generate_daily_report(
 ### Date: {date_str}
 
 ### Metrics (computed by code — do not recalculate)
-- Priorities completed: {metrics['priorities_completed']} / {metrics['priorities_total']}
-- Secondary tasks completed: {metrics['secondary_tasks_completed']} / {metrics['secondary_tasks_total']}
-- Habits completed: {metrics['habits_completed']} / {metrics['habits_total']}
+- Main goals completed: {metrics['priorities_completed']} / {metrics['priorities_total']}
+- Secondary goals completed: {metrics['secondary_tasks_completed']} / {metrics['secondary_tasks_total']}
+- Routines completed: {metrics['habits_completed']} / {metrics['habits_total']}
 - Overall completion rate: {metrics['completion_rate']}%
 - Estimated minutes planned: {metrics['estimated_minutes_planned']}
 - Estimated minutes completed: {metrics['estimated_minutes_completed']}
@@ -566,9 +569,9 @@ def generate_weekly_report(
 ### Metrics (computed by code)
 - Goals completed: {metrics['goals_completed']} / {metrics['goals_total']}
 - Main goals completed: {metrics['main_goals_completed']} / {metrics['main_goals_total']}
-- Tasks completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
+- Secondary goals completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
 - Avg daily completion: {metrics['avg_daily_completion']}%
-- Habit consistency: {metrics['habit_consistency']}%
+- Routine consistency: {metrics['habit_consistency']}%
 - Days with data: {metrics['days_with_data']}
 
 {_report_context_block(
@@ -617,7 +620,7 @@ def generate_monthly_report(
 ### Metrics (computed by code)
 - Goals completed: {metrics['goals_completed']} / {metrics['goals_total']}
 - Main goals completed: {metrics['main_goals_completed']} / {metrics['main_goals_total']}
-- Tasks completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
+- Secondary goals completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
 - Avg weekly completion: {metrics['avg_weekly_completion']}%
 - Best week: Week {metrics.get('best_week', 'N/A')}
 - Weeks tracked: {metrics['weeks_count']}
@@ -640,7 +643,7 @@ def generate_monthly_report(
   "biggest_win": "<most impactful achievement>",
   "key_lesson": "<most important lesson learned>",
   "reflection": "<honest monthly reflection>",
-  "next_month_focus": "<strategic priority for next month>",
+  "next_month_focus": "<strategic focus for next month>",
   "tailored_pattern": "<specific behavioral pattern from this user's data>",
   "tailored_action": "<one concrete recommendation based on that pattern>"
 }}
@@ -667,7 +670,7 @@ def generate_quarterly_report(
 ### Quarter: {quarter_label}
 
 ### Metrics (computed by code)
-- Tasks completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
+- Goals completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
 - Avg monthly completion: {metrics['avg_monthly_completion']}%
 - Months tracked: {metrics['months_count']}
 - Completion: {metrics['completion']}%
@@ -721,7 +724,7 @@ def generate_yearly_report(
 
 ### Metrics (computed by code)
 - Months with data: {metrics['months_with_data']}
-- Tasks completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
+- Goals completed: {metrics['tasks_completed']} / {metrics['tasks_total']}
 - Avg monthly completion: {metrics['avg_monthly_completion']}%
 - Best month: {metrics.get('best_month', 'N/A')}
 - Execution streak: {metrics['execution_streak']} days

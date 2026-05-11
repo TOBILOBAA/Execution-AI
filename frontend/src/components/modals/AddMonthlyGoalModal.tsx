@@ -24,6 +24,7 @@ export function AddMonthlyGoalModal({
 }: Props) {
   const addMonthlyGoal = useAppStore((state) => state.addMonthlyGoal);
   const updateMonthlyGoal = useAppStore((state) => state.updateMonthlyGoal);
+  const removeMonthlyGoal = useAppStore((state) => state.removeMonthlyGoal);
   const yearlyGoals = useAppStore((state) => state.yearlyGoals);
   const activeDashboardDate = useAppStore((state) => state.activeDashboardDate);
   const isEdit = !!initialData;
@@ -95,6 +96,13 @@ export function AddMonthlyGoalModal({
         priority: isMain ? "high" : "medium",
       });
     }
+    onClose();
+  };
+
+  const handleDelete = () => {
+    if (!initialData) return;
+    if (!window.confirm("Delete this monthly goal? This cannot be undone.")) return;
+    removeMonthlyGoal(initialData.id);
     onClose();
   };
 
@@ -276,29 +284,53 @@ export function AddMonthlyGoalModal({
           className="px-8 py-5 flex items-center justify-between flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
-          <button
-            onClick={onClose}
-            className="text-sm font-semibold transition-opacity hover:opacity-60"
-            style={{ color: "#8a9e97" }}
-          >
-            Cancel
-          </button>
+          <div>
+            {isEdit ? (
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-70"
+                style={{ color: "#ef4444" }}
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+                Delete Goal
+              </button>
+            ) : (
+              <button
+                onClick={onClose}
+                className="text-sm font-semibold transition-opacity hover:opacity-60"
+                style={{ color: "#8a9e97" }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
 
-          <button
-            onClick={handleSave}
-            disabled={!yearlyGoalId}
-            className="px-7 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: "#006c4a", boxShadow: "0 2px 10px rgba(0,108,74,0.20)" }}
-            onMouseEnter={(e) => {
-              if (!yearlyGoalId) return;
-              e.currentTarget.style.background = "#004d38";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#006c4a";
-            }}
-          >
-            {isEdit ? "Save Changes" : "Create Monthly Goal"}
-          </button>
+          <div className="flex items-center gap-3">
+            {isEdit && (
+              <button
+                onClick={onClose}
+                className="text-sm font-semibold transition-opacity hover:opacity-60"
+                style={{ color: "#8a9e97" }}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={!yearlyGoalId}
+              className="px-7 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: "#006c4a", boxShadow: "0 2px 10px rgba(0,108,74,0.20)" }}
+              onMouseEnter={(e) => {
+                if (!yearlyGoalId) return;
+                e.currentTarget.style.background = "#004d38";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#006c4a";
+              }}
+            >
+              {isEdit ? "Save Changes" : "Create Monthly Goal"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

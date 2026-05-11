@@ -60,13 +60,13 @@ export default function DashboardHome() {
 
   return (
     <>
-      <div className="p-6 md:p-8 max-w-7xl mx-auto w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8">
+        <div className="grid grid-cols-1 gap-5 md:gap-6 lg:grid-cols-12 lg:gap-8">
           {/* ── Main Stage ── */}
-          <section className="lg:col-span-8 space-y-7">
+          <section className="space-y-5 md:space-y-7 lg:col-span-8">
             {/* Today's Focus */}
-            <div className="space-y-5">
-              <div className="flex items-end justify-between gap-4 flex-wrap">
+            <div className="space-y-4 md:space-y-5">
+              <div className="flex flex-wrap items-end justify-between gap-3 md:gap-4">
                 <div className="flex flex-col gap-2">
                   {isPreviewingAnotherDay && (
                     <span
@@ -82,10 +82,7 @@ export default function DashboardHome() {
                       <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
                         Daily Execution
                       </p>
-                      <h3
-                        className="font-headline font-extrabold tracking-tight"
-                        style={{ fontSize: "26px", color: "#1a1f1e" }}
-                      >
+                      <h3 className="font-headline text-[24px] font-extrabold tracking-tight sm:text-[26px]" style={{ color: "#1a1f1e" }}>
                         Today&apos;s Focus
                       </h3>
                     </div>
@@ -94,7 +91,7 @@ export default function DashboardHome() {
                         className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
                         style={{ background: "rgba(0,108,74,0.10)", color: "#006c4a" }}
                       >
-                        {remaining} {remaining === 1 ? "Priority" : "Priorities"} Remaining
+                        {remaining} {remaining === 1 ? "Goal" : "Goals"} Remaining
                       </span>
                     )}
                   </div>
@@ -102,13 +99,13 @@ export default function DashboardHome() {
               </div>
 
               <div
-                className="rounded-[30px] p-5 sm:p-6 space-y-5"
+                className="space-y-4 rounded-[24px] p-4 sm:rounded-[30px] sm:p-6 sm:space-y-5"
                 style={{ background: "#ffffff", border: "1.5px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 34px rgba(15, 23, 42, 0.04)" }}
               >
-                <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3 flex-wrap">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                      Main Priorities
+                      Main Goals
                     </p>
                     <span className="text-xs font-medium" style={{ color: "#8a9e97" }}>
                       {displayDateLabel}
@@ -117,20 +114,20 @@ export default function DashboardHome() {
                   <button
                     onClick={() => openModal("add-daily-priority")}
                     disabled={mainPriorityCapReached}
-                    className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold sm:w-auto"
                     style={{
                       background: mainPriorityCapReached ? "rgba(0,0,0,0.06)" : "rgba(0,108,74,0.08)",
                       color: mainPriorityCapReached ? "#8a9e97" : "#006c4a",
                     }}
                   >
                     <span className="material-symbols-outlined text-[15px]">add</span>
-                    {mainPriorityCapReached ? "Main priority cap reached" : "Add main priority"}
+                    {mainPriorityCapReached ? "Main goal cap reached" : "Add main goal"}
                   </button>
                 </div>
 
                 {todayRows.length === 0 ? (
                   showDashboardHydratingState ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                       {Array.from({ length: 3 }).map((_, index) => (
                         <div
                           key={index}
@@ -147,30 +144,30 @@ export default function DashboardHome() {
                     </div>
                   ) : (
                     <div
-                      className="rounded-2xl p-8 text-center"
+                      className="rounded-2xl p-6 text-center sm:p-8"
                       style={{ background: "#fafcfb", border: "1.5px dashed rgba(0,108,74,0.25)" }}
                     >
                       <p className="font-headline font-bold text-base mb-1" style={{ color: "#1a1f1e" }}>
-                        No main priorities saved yet
+                        No main goals saved yet
                       </p>
                       <p className="text-sm mb-5 max-w-md mx-auto" style={{ color: "#8a9e97" }}>
                         {isPreviewingAnotherDay
-                          ? `Nothing is locked in for ${displayDateLabel} yet. Add the main priorities you want the user to execute first.`
-                          : `The home screen shows the main priorities scheduled for ${displayDateLabel}. Add them during onboarding or from here.`}
+                          ? `Nothing is locked in for ${displayDateLabel} yet. Add the main goals you want the user to execute first.`
+                          : `The home screen shows the main goals scheduled for ${displayDateLabel}. Add them during onboarding or from here.`}
                       </p>
-                      <div className="flex flex-wrap items-center justify-center gap-3">
+                      <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                         <button
                           type="button"
                           onClick={() => openModal("add-daily-priority")}
-                          className="px-5 py-2.5 rounded-xl text-sm font-bold text-white"
+                          className="rounded-xl px-5 py-2.5 text-sm font-bold text-white"
                           style={{ background: "#006c4a" }}
                         >
-                          Add first main priority
+                          Add first main goal
                         </button>
                         <button
                           type="button"
                           onClick={() => router.push("/dashboard/goals")}
-                          className="px-5 py-2.5 rounded-xl text-sm font-bold"
+                          className="rounded-xl px-5 py-2.5 text-sm font-bold"
                           style={{ background: "#fff", color: "#006c4a", border: "1.5px solid rgba(0,108,74,0.25)" }}
                         >
                           View goals hub
@@ -179,7 +176,7 @@ export default function DashboardHome() {
                     </div>
                   )
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     {todayRows.map((priority, i) => (
                       <PriorityCard
                         key={priority.id}
@@ -194,27 +191,27 @@ export default function DashboardHome() {
               </div>
             </div>
 
-            {/* Secondary Tasks */}
+            {/* Secondary Goals */}
             <div
-              className="rounded-[30px]"
+              className="rounded-[24px] sm:rounded-[30px]"
               style={{ background: "#fbfcfb", border: "1.5px solid rgba(0,0,0,0.05)" }}
             >
-              <div className="flex items-center justify-between px-6 pt-5 pb-4">
+              <div className="flex flex-col gap-3 px-4 pb-4 pt-4 sm:px-6 sm:pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                    Supporting Tasks
+                    Secondary Goals
                   </p>
                   <p className="text-[11px] mt-0.5 font-medium" style={{ color: "#a8b5af" }}>
-                    Helpful work that supports the main priorities without competing with them.
+                    Additional goals for the day that still deserve attention.
                   </p>
                 </div>
                 <button
                   onClick={() => openModal("add-secondary-task")}
-                  className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold sm:w-auto"
                   style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add supporting task
+                  Add secondary goal
                 </button>
               </div>
 
@@ -238,7 +235,7 @@ export default function DashboardHome() {
                       className="text-sm text-center py-8"
                       style={{ color: "#c4d0cb" }}
                     >
-                      No supporting tasks saved for this day yet
+                      No secondary goals saved for this day yet
                     </p>
                   )
                 ) : (
@@ -257,7 +254,7 @@ export default function DashboardHome() {
           </section>
 
           {/* ── Right Sidebar ── */}
-          <section className="lg:col-span-4">
+          <section className="hidden md:block lg:col-span-4">
             <AnalyticsPanel metrics={metrics} />
           </section>
 

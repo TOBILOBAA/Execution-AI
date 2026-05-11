@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
 from uuid import uuid4
 from unittest.mock import patch
 
@@ -30,6 +30,7 @@ from app.api.routes import execution as execution_routes
 from app.db import habits as habits_db
 from app.db import reports as reports_db
 from app.db import sessions as sessions_db
+from app.services import report_service
 from app.main import (
     LOCAL_DEVELOPMENT_CORS_ORIGINS,
     app,
@@ -341,6 +342,56 @@ class BackendStabilityTests(unittest.TestCase):
             period_quarter=1,
         )
         self.assertEqual(report["id"], "report-q1")
+
+    def test_report_list_skips_stale_today_refresh_before_cutoff(self):
+        session_id = uuid4()
+        today = date(2026, 5, 7)
+        stale_today = {
+            "id": "report-daily-today",
+            "report_type": "daily",
+            "period_date": today.isoformat(),
+            "period_year": today.year,
+            "period_month": today.month,
+            "status": "stale",
+            "metrics": {},
+        }
+
+        with (
+            patch.object(report_service.reports_db, "list_reports", return_value=[stale_today]),
+            patch.object(report_service, "ensure_historical_reports", return_value=[]),
+            patch.object(report_service, "_decorate_report", side_effect=lambda db, session_id, report: report),
+            patch.object(report_service, "get_session_today", return_value=today),
+            patch.object(report_service, "generate_daily_report") as generate_daily_report,
+        ):
+            listed = report_service.list_reports(FakeDB(), session_id)
+
+        generate_daily_report.assert_not_called()
+        self.assertEqual(listed, [stale_today])
+
+    def test_can_refresh_stale_today_daily_report_only_after_cutoff(self):
+        today = date(2026, 5, 7)
+        report = {
+            "report_type": "daily",
+            "period_date": today.isoformat(),
+            "status": "stale",
+        }
+
+        self.assertFalse(
+            report_service._can_refresh_stale_daily_report(
+                report,
+                today,
+                datetime(2026, 5, 7, 7, 0, tzinfo=timezone.utc),
+                18,
+            )
+        )
+        self.assertTrue(
+            report_service._can_refresh_stale_daily_report(
+                report,
+                today,
+                datetime(2026, 5, 7, 18, 0, tzinfo=timezone.utc),
+                18,
+            )
+        )
 
     def test_create_task_auto_creates_daily_plan(self):
         client = TestClient(app)

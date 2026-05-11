@@ -35,7 +35,7 @@ export function SecondaryTaskRow({ task, onToggle, onRemove, onEdit }: Secondary
 
   return (
     <div
-      className="flex items-center gap-4 rounded-xl px-4 py-3.5 transition-all duration-150 cursor-pointer"
+      className="cursor-pointer rounded-2xl px-4 py-4 transition-all duration-150 sm:rounded-xl sm:py-3.5"
       style={{
         background: hovered ? "#fff" : "transparent",
         boxShadow: hovered ? "0 1px 8px rgba(0,0,0,0.05)" : "none",
@@ -44,77 +44,82 @@ export function SecondaryTaskRow({ task, onToggle, onRemove, onEdit }: Secondary
       onMouseLeave={() => setHovered(false)}
       onClick={onEdit}
     >
-      {/* Circle toggle — stopPropagation so row click (edit) isn't triggered */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
-        className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-150"
-        style={{
-          borderColor: task.completed ? "#006c4a" : "#d1ddd8",
-          background: task.completed ? "#006c4a" : "transparent",
-        }}
-        aria-label={`Mark "${task.title}" complete`}
-      >
-        {task.completed && (
-          <span className="material-symbols-outlined text-[11px] text-white">check</span>
-        )}
-      </button>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className="text-sm font-medium leading-snug"
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          {/* Circle toggle — stopPropagation so row click (edit) isn't triggered */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-all duration-150"
             style={{
-              color: task.completed ? "#a8b5af" : "#1a1f1e",
-              textDecoration: task.completed ? "line-through" : "none",
+              borderColor: task.completed ? "#006c4a" : "#d1ddd8",
+              background: task.completed ? "#006c4a" : "transparent",
             }}
+            aria-label={`Mark "${task.title}" complete`}
           >
-            {task.title}
-          </span>
-          <span
-            className="material-symbols-outlined text-[13px] transition-opacity"
-            style={{ color: "#a8b5af", opacity: hovered ? 1 : 0.45 }}
-          >
-            edit
-          </span>
-          {task.tag && (
-            <span
-              className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide flex-shrink-0"
-              style={getTagStyle(task.tag)}
-            >
-              {task.tag}
-            </span>
-          )}
-        </div>
-        {(task.estimatedMinutes || task.priority) && (
-          <div className="flex items-center gap-3 mt-0.5">
-            {task.estimatedMinutes && (
-              <span className="flex items-center gap-1 text-[11px]" style={{ color: "#a8b5af" }}>
-                <span className="material-symbols-outlined text-[13px]">schedule</span>
-                {task.estimatedMinutes}m
-              </span>
+            {task.completed && (
+              <span className="material-symbols-outlined text-[11px] text-white">check</span>
             )}
-            {task.priority && (
-              <span className="flex items-center gap-1 text-[11px] capitalize" style={{ color: "#a8b5af" }}>
-                <span className="material-symbols-outlined text-[13px]">flag</span>
-                {task.priority}
+          </button>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start gap-2">
+              <span
+                className="break-words text-sm font-medium leading-snug"
+                style={{
+                  color: task.completed ? "#a8b5af" : "#1a1f1e",
+                  textDecoration: task.completed ? "line-through" : "none",
+                }}
+              >
+                {task.title}
               </span>
+              <span
+                className="material-symbols-outlined hidden text-[13px] transition-opacity sm:inline"
+                style={{ color: "#a8b5af", opacity: hovered ? 1 : 0.45 }}
+              >
+                edit
+              </span>
+              {task.tag && (
+                <span
+                  className="flex-shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                  style={getTagStyle(task.tag)}
+                >
+                  {task.tag}
+                </span>
+              )}
+            </div>
+            {(task.estimatedMinutes || task.priority) && (
+              <div className="mt-1 flex flex-wrap items-center gap-3">
+                {task.estimatedMinutes && (
+                  <span className="flex items-center gap-1 text-[11px]" style={{ color: "#a8b5af" }}>
+                    <span className="material-symbols-outlined text-[13px]">schedule</span>
+                    {task.estimatedMinutes}m
+                  </span>
+                )}
+                {task.priority && (
+                  <span className="flex items-center gap-1 text-[11px] capitalize" style={{ color: "#a8b5af" }}>
+                    <span className="material-symbols-outlined text-[13px]">flag</span>
+                    {task.priority}
+                  </span>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Remove button */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-all"
-        style={{ opacity: hovered ? 1 : 0.72, color: "#c4d0cb" }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = "#fff0f0"; e.currentTarget.style.color = "#ef4444"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#c4d0cb"; }}
-        aria-label="Remove task"
-      >
-        <span className="material-symbols-outlined text-[15px]">delete</span>
-      </button>
+        {/* Remove button */}
+        <div className="flex justify-end sm:block">
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="inline-flex h-9 items-center justify-center rounded-full px-3 transition-all sm:h-7 sm:w-7 sm:px-0"
+            style={{ opacity: hovered ? 1 : 0.82, color: "#c4d0cb" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#fff0f0"; e.currentTarget.style.color = "#ef4444"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#c4d0cb"; }}
+            aria-label="Remove secondary goal"
+          >
+            <span className="material-symbols-outlined text-[15px]">delete</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -23,6 +23,7 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
   const todayIndex = getWeekdayIndex(now, weekStartsOn);
   const hasWeeklyData = metrics.weeklyConsistency.some((value) => value > 0);
   const hasWeeklyObjective = Boolean(metrics.weeklyObjective?.trim());
+  const bestStreakLabel = metrics.bestExecutionStreak === 1 ? "1 day" : `${metrics.bestExecutionStreak} days`;
 
   return (
     <div
@@ -37,10 +38,18 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
           <span className="font-headline font-extrabold" style={{ fontSize: "48px", lineHeight: 1, color: "#85f8c4" }}>
             {metrics.executionStreak}
           </span>
-          <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>Days strong</span>
+          <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>Current streak</span>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span
+            className="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ background: "rgba(133,248,196,0.08)", color: "#85f8c4", border: "1px solid rgba(133,248,196,0.15)" }}
+          >
+            Best streak {bestStreakLabel}
+          </span>
         </div>
         <p className="text-[10px] mt-1.5 font-medium leading-snug" style={{ color: "rgba(255,255,255,0.35)" }}>
-          Updates as your saved execution history grows.
+          Grows only when every main goal for the day gets finished.
         </p>
       </div>
 
@@ -69,18 +78,30 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
           {metrics.weeklyConsistency.map((val, i) => {
             const pct = Math.round((val / maxVal) * 100);
             const isToday = i === todayIndex;
+            const isFuture = i > todayIndex;
+            const isActiveDay = val > 0;
             return (
               <div
                 key={i}
                 className="flex-1 rounded-sm transition-all duration-500"
                 style={{
-                  height: `${Math.max(pct, 6)}%`,
-                  background: isToday
-                    ? "#85f8c4"
-                    : `rgba(133,248,196,${0.15 + (val / maxVal) * 0.55})`,
+                  height: `${isFuture ? 10 : Math.max(pct, 12)}%`,
+                  background: isFuture
+                    ? "rgba(255,255,255,0.08)"
+                    : isToday
+                      ? "#85f8c4"
+                      : isActiveDay
+                        ? "rgba(133,248,196,0.62)"
+                        : "rgba(255,255,255,0.14)",
                   boxShadow: isToday ? "0 0 10px rgba(133,248,196,0.35)" : undefined,
                 }}
-                title={`${dayLabels[i]}: ${val}%`}
+                title={
+                  isFuture
+                    ? `${dayLabels[i]}: upcoming`
+                    : isActiveDay
+                      ? `${dayLabels[i]}: active`
+                      : `${dayLabels[i]}: missed`
+                }
               />
             );
           })}
@@ -94,7 +115,7 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
         </div>
         {!hasWeeklyData && (
           <p className="text-[10px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.35)" }}>
-            No execution has been logged for the current week yet.
+            No meaningful action has been logged for the current week yet.
           </p>
         )}
       </div>

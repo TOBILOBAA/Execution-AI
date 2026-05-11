@@ -414,6 +414,7 @@ export const MOCK_HABITS: FoundationalHabit[] = [
 /** Fresh workspace / new user — no fabricated KPIs. */
 export const EMPTY_DASHBOARD_METRICS: DashboardMetrics = {
   executionStreak: 0,
+  bestExecutionStreak: 0,
   yesterdayCompletion: 0,
   weeklyConsistency: [0, 0, 0, 0, 0, 0, 0],
   weeklyObjective: "",
@@ -422,6 +423,7 @@ export const EMPTY_DASHBOARD_METRICS: DashboardMetrics = {
 
 export const MOCK_METRICS: DashboardMetrics = {
   executionStreak: 14,
+  bestExecutionStreak: 14,
   yesterdayCompletion: 88,
   weeklyConsistency: [60, 80, 40, 95, 100, 70, 15],
   weeklyObjective: "Ship Goals tab and modal system for Execution AI.",

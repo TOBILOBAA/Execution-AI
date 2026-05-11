@@ -315,7 +315,7 @@ function CompletionModalInner() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <div className="rounded-2xl px-4 py-3.5" style={{ background: "#f8fbf9", border: "1px solid rgba(0,0,0,0.06)" }}>
               <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                Main priorities
+                Main goals
               </p>
               <p className="mt-1.5 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
                 {todayPriorities.filter((item) => item.completed).length}/{todayPriorities.length} done
@@ -323,7 +323,7 @@ function CompletionModalInner() {
             </div>
             <div className="rounded-2xl px-4 py-3.5" style={{ background: "#f8fbf9", border: "1px solid rgba(0,0,0,0.06)" }}>
               <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                Supporting tasks
+                Secondary goals
               </p>
               <p className="mt-1.5 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
                 {todayTasks.filter((item) => item.completed).length}/{todayTasks.length} done
@@ -331,7 +331,7 @@ function CompletionModalInner() {
             </div>
             <div className="rounded-2xl px-4 py-3.5" style={{ background: "#f8fbf9", border: "1px solid rgba(0,0,0,0.06)" }}>
               <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                Habits
+                Routines
               </p>
               <p className="mt-1.5 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
                 {activeHabits.filter((habit) => habit.completedToday).length}/{activeHabits.length} done

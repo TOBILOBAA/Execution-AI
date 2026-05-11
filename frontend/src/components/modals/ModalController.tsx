@@ -76,6 +76,7 @@ function ConnectedDailyPriorityModal({
     activeDashboardDate,
     addDailyPriority,
     updateDailyPriority,
+    removeDailyPriority,
   } = useAppStore(
     useShallow((state) => ({
       categories: state.categories,
@@ -85,6 +86,7 @@ function ConnectedDailyPriorityModal({
       activeDashboardDate: state.activeDashboardDate,
       addDailyPriority: state.addDailyPriority,
       updateDailyPriority: state.updateDailyPriority,
+      removeDailyPriority: state.removeDailyPriority,
     })),
   );
   const effectiveCategories = categories.length ? categories : DEFAULT_CATEGORIES;
@@ -143,6 +145,15 @@ function ConnectedDailyPriorityModal({
         }
         onClose();
       }}
+      onDelete={
+        initialData
+          ? () => {
+              if (!window.confirm("Delete this main goal? This cannot be undone.")) return;
+              removeDailyPriority(initialData.id);
+              onClose();
+            }
+          : undefined
+      }
       onClose={onClose}
     />
   );
@@ -163,6 +174,7 @@ function ConnectedSecondaryTaskModal({
     activeDashboardDate,
     addSecondaryTask,
     updateSecondaryTask,
+    removeSecondaryTask,
   } = useAppStore(
     useShallow((state) => ({
       categories: state.categories,
@@ -172,6 +184,7 @@ function ConnectedSecondaryTaskModal({
       activeDashboardDate: state.activeDashboardDate,
       addSecondaryTask: state.addSecondaryTask,
       updateSecondaryTask: state.updateSecondaryTask,
+      removeSecondaryTask: state.removeSecondaryTask,
     })),
   );
   const effectiveCategories = categories.length ? categories : DEFAULT_CATEGORIES;
@@ -230,6 +243,15 @@ function ConnectedSecondaryTaskModal({
         }
         onClose();
       }}
+      onDelete={
+        initialData
+          ? () => {
+              if (!window.confirm("Delete this secondary goal? This cannot be undone.")) return;
+              removeSecondaryTask(initialData.id);
+              onClose();
+            }
+          : undefined
+      }
       onClose={onClose}
     />
   );

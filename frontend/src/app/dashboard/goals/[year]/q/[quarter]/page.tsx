@@ -70,7 +70,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
       <GoalsLoadingShell
         eyebrow={`Q${quarter} board`}
         title="Loading the quarter planning board"
-        detail="We are pulling the saved monthly goals and their weekly support so this quarter view only shows real planning depth."
+        detail="We are pulling the saved monthly goals and their linked weekly goals so this quarter view only shows real planning depth."
       />
     );
   }
@@ -276,7 +276,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                         {card.mainGoal?.title ?? `No main goal saved for ${card.name}`}
                       </h2>
                       <p className="text-sm mt-2 max-w-2xl leading-relaxed" style={{ color: card.mainGoal?.description ? "#5d6d67" : "#8a9e97" }}>
-                        {card.mainGoal?.description || "Create a main monthly goal so this month has a clear focal point instead of scattered tasks."}
+                        {card.mainGoal?.description || "Create a main monthly goal so this month has a clear focal point instead of scattered work."}
                       </p>
                     </div>
 
@@ -353,7 +353,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                         Linkage
                       </p>
                       <p className="text-sm mt-2 leading-relaxed" style={{ color: "#5d6d67" }}>
-                        {card.name}&apos;s main focus supports {card.yearlyGoal?.title ?? "no linked yearly goal yet"} and currently has {card.weeklyCount} weekly sprint item{card.weeklyCount === 1 ? "" : "s"} underneath it.
+                        {card.name}&apos;s main goal links to {card.yearlyGoal?.title ?? "no linked yearly goal yet"} and currently has {card.weeklyCount} weekly goal{card.weeklyCount === 1 ? "" : "s"} underneath it.
                       </p>
                     </div>
                   )}
@@ -361,7 +361,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                   <div className="mt-5">
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                        Supporting goals
+                        Secondary goals
                       </p>
                       <p className="text-xs font-semibold" style={{ color: missingWeeklyForMonth > 0 ? "#b45309" : "#6b7c75" }}>
                         {missingWeeklyForMonth > 0 ? `${missingWeeklyForMonth} missing weekly follow-through` : "All goals have some weekly support or this month is empty"}
@@ -371,7 +371,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                       <p className="text-sm leading-relaxed" style={{ color: "#8a9e97" }}>
                         {card.goals.length === 0
                           ? "No monthly goals saved for this month yet."
-                          : "No additional support goals saved. Add them only if they genuinely reduce ambiguity or execution risk."}
+                          : "No additional secondary goals are saved. Add them only if they genuinely reduce ambiguity or execution risk."}
                       </p>
                     ) : (
                       <div className="space-y-2">
@@ -442,7 +442,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
             </p>
             <div className="mt-4 space-y-3 text-sm" style={{ color: "#5d6d67" }}>
               <p>What is the main thing? {mainFocus?.title ?? "No main monthly focus yet."}</p>
-              <p>What supports it? {quarterMonthlyGoals.length > 1 ? `${quarterMonthlyGoals.length - 1} additional monthly goals` : "No support goals yet."}</p>
+              <p>What else is on the board? {quarterMonthlyGoals.length > 1 ? `${quarterMonthlyGoals.length - 1} additional monthly goals` : "No secondary goals yet."}</p>
               <p>What is done? {completedCount} completed monthly goal{completedCount === 1 ? "" : "s"}.</p>
               <p>What needs attention now? {missingWeeklyCount > 0 ? `${missingWeeklyCount} monthly goal${missingWeeklyCount === 1 ? "" : "s"} need weekly follow-through.` : "The main risk is execution consistency, not planning depth."}</p>
             </div>
@@ -481,11 +481,11 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
             style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
-              Habit pressure
+              Routine pressure
             </p>
             {activeHabits.length === 0 ? (
               <p className="text-sm mt-4 leading-relaxed" style={{ color: "#6b7c75" }}>
-                No active foundational habits are saved. If this product is meant to help execution, habits should exist where they materially support the quarter.
+                No active routines are saved. If this product is meant to help execution, routines should exist where they materially strengthen the quarter.
               </p>
             ) : (
               <div className="mt-4 space-y-3">

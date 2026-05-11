@@ -231,6 +231,7 @@ export interface ApiDashboard {
   pending_recaps?: ApiRecapQueueEntry[];
   metrics: {
     execution_streak: number;
+    best_execution_streak: number;
     yesterday_completion: number;
     weekly_consistency: number[];
     tasks_completed_today: number;
@@ -487,6 +488,9 @@ export const dailyPlanApi = {
 export const tasksApi = {
   toggleStatus: (sessionId: string, taskId: string, completed: boolean) =>
     patch<ApiDailyPriority>(`/tasks/${taskId}/status?session_id=${sessionId}&completed=${completed}`),
+
+  delete: (sessionId: string, taskId: string) =>
+    del<void>(`/tasks/${taskId}?session_id=${sessionId}`),
 
   update: (sessionId: string, taskId: string, data: Partial<{
     title: string;
