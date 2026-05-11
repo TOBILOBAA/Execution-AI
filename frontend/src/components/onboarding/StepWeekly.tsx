@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { WeeklyGoal } from "@/lib/types";
-import { getCurrentMonth, getCurrentYear } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentYear, getToday } from "@/lib/mockData";
 import { AddWeeklyGoalModal } from "./AddWeeklyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
@@ -355,7 +355,6 @@ export function StepWeekly({ onNext, onBack }: Props) {
     generateWeeklyPlan,
     approveWeeklyPlan,
     syncWeeklyGoalsToServer,
-    activeDashboardDate,
     sessionWeekStartsOn,
   } = useAppStore(
     useShallow((state) => ({
@@ -372,17 +371,17 @@ export function StepWeekly({ onNext, onBack }: Props) {
       generateWeeklyPlan: state.generateWeeklyPlan,
       approveWeeklyPlan: state.approveWeeklyPlan,
       syncWeeklyGoalsToServer: state.syncWeeklyGoalsToServer,
-      activeDashboardDate: state.activeDashboardDate,
       sessionWeekStartsOn: state.sessionWeekStartsOn,
     })),
   );
 
-  const currentYear = Number(activeDashboardDate.slice(0, 4)) || getCurrentYear();
-  const currentMonth = Number(activeDashboardDate.slice(5, 7)) || getCurrentMonth();
-  const activeDashboardReference = new Date(`${activeDashboardDate}T12:00:00`);
-  const currentWeek = Number.isNaN(activeDashboardReference.getTime())
+  const today = getToday();
+  const currentYear = Number(today.slice(0, 4)) || getCurrentYear();
+  const currentMonth = Number(today.slice(5, 7)) || getCurrentMonth();
+  const todayReference = new Date(`${today}T12:00:00`);
+  const currentWeek = Number.isNaN(todayReference.getTime())
     ? getWeekNumberForDate(new Date(), sessionWeekStartsOn)
-    : getWeekNumberForDate(activeDashboardReference, sessionWeekStartsOn);
+    : getWeekNumberForDate(todayReference, sessionWeekStartsOn);
 
   const currentWeekGoals = weeklyGoals.filter(
     (g) => g.weekNumber === currentWeek && g.year === currentYear
