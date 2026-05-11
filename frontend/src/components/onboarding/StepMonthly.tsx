@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { getCurrentMonth, getCurrentYear, getToday, MONTH_NAMES } from "@/lib/mockData";
+import { MONTHLY_MAIN_GOAL_CAP, MONTHLY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 import { AddMonthlyGoalModal } from "./AddMonthlyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import type { MonthlyGoal, FoundationalHabit, HabitFrequency } from "@/lib/types";
@@ -305,7 +306,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       setLeaveError("You need exactly one main goal for the month before continuing.");
       return;
     }
-    if (secondaryGoalsCount > 2) {
+    if (secondaryGoalsCount > MONTHLY_SECONDARY_GOAL_CAP) {
       setLeaveError("You can have at most two secondary goals for the month.");
       return;
     }
@@ -604,6 +605,19 @@ export function StepMonthly({ onNext, onBack }: Props) {
           mode={isEditMode ? ((goalModal as MonthlyGoal).isMain ? "main" : "secondary") : (addMode as "main" | "secondary")}
           categories={categories}
           yearlyGoals={yearlyGoals.filter((g) => g.year === currentYear)}
+          currentCount={
+            isEditMode
+              ? 0
+              : addMode === "main"
+                ? mainGoals.length
+                : secondaryGoals.length
+          }
+          maxCount={addMode === "main" ? MONTHLY_MAIN_GOAL_CAP : MONTHLY_SECONDARY_GOAL_CAP}
+          limitMessage={
+            addMode === "main"
+              ? "You can only save 1 main goal for this month."
+              : "You can only save up to 2 secondary goals for this month."
+          }
           initialTitle={isEditMode ? (goalModal as MonthlyGoal).title : ""}
           initialCategoryId={isEditMode ? (goalModal as MonthlyGoal).categoryId : undefined}
           initialYearlyGoalId={isEditMode ? (goalModal as MonthlyGoal).yearlyGoalId : undefined}

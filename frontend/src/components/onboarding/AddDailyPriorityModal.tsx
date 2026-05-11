@@ -6,6 +6,8 @@ import type { Category, WeeklyGoal } from "@/lib/types";
 interface Props {
   categories: Category[];
   weeklyGoals: WeeklyGoal[];
+  mainGoalCapReached?: boolean;
+  mainGoalCapMessage?: string;
   initialTitle?: string;
   initialCategoryId?: string;
   initialWeeklyGoalId?: string;
@@ -32,6 +34,8 @@ const ALLOC_OPTIONS = [
 export function AddDailyPriorityModal({
   categories,
   weeklyGoals,
+  mainGoalCapReached = false,
+  mainGoalCapMessage = "You can only save 1 main goal for this day.",
   initialTitle = "",
   initialCategoryId,
   initialWeeklyGoalId,
@@ -58,6 +62,10 @@ export function AddDailyPriorityModal({
   const handleSubmit = () => {
     if (!title.trim()) {
       setError("Please enter a goal name.");
+      return;
+    }
+    if (!isEdit && mainGoalCapReached) {
+      setError(mainGoalCapMessage);
       return;
     }
     const mins = isCustom ? parseInt(customMins) || 30 : allocation;

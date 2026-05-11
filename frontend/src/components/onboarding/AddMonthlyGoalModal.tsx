@@ -9,6 +9,9 @@ interface Props {
   mode: "main" | "secondary";
   categories: Category[];
   yearlyGoals: YearlyGoal[];
+  currentCount?: number;
+  maxCount?: number;
+  limitMessage?: string;
   monthOverride?: number;
   yearOverride?: number;
   /** Pre-fill for edit */
@@ -51,6 +54,9 @@ export function AddMonthlyGoalModal({
   mode,
   categories,
   yearlyGoals,
+  currentCount = 0,
+  maxCount,
+  limitMessage,
   monthOverride,
   yearOverride,
   initialTitle = "",
@@ -81,6 +87,10 @@ export function AddMonthlyGoalModal({
 
   const handleSubmit = () => {
     if (!title.trim()) { setError("Goal name is required."); return; }
+    if (!isEdit && typeof maxCount === "number" && currentCount >= maxCount) {
+      setError(limitMessage ?? "You have reached the limit for this goal type.");
+      return;
+    }
     onSubmit(title.trim(), categoryId, yearlyGoalId, targetDate, description.trim(), workload.trim());
   };
 

@@ -6,6 +6,9 @@ import { MonthlyGoal } from "@/lib/types";
 interface Props {
   mode: "main" | "secondary";
   monthlyGoals: MonthlyGoal[];
+  currentCount?: number;
+  maxCount?: number;
+  limitMessage?: string;
   initialTitle?: string;
   initialMonthlyGoalId?: string;
   initialTargetDay?: string;
@@ -34,6 +37,9 @@ const DAYS = [
 export function AddWeeklyGoalModal({
   mode,
   monthlyGoals,
+  currentCount = 0,
+  maxCount,
+  limitMessage,
   initialTitle = "",
   initialMonthlyGoalId,
   initialTargetDay,
@@ -57,6 +63,10 @@ export function AddWeeklyGoalModal({
   const handleSubmit = () => {
     if (!title.trim()) {
       setError("Please enter a goal name.");
+      return;
+    }
+    if (!isEdit && typeof maxCount === "number" && currentCount >= maxCount) {
+      setError(limitMessage ?? "You have reached the limit for this goal type.");
       return;
     }
     onSubmit({

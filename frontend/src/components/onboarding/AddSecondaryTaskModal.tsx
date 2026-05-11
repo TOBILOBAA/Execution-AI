@@ -6,6 +6,8 @@ import type { Category, WeeklyGoal } from "@/lib/types";
 interface Props {
   categories: Category[];
   weeklyGoals: WeeklyGoal[];
+  secondaryGoalCapReached?: boolean;
+  secondaryGoalCapMessage?: string;
   initialTitle?: string;
   initialCategoryId?: string;
   initialWeeklyGoalId?: string;
@@ -32,6 +34,8 @@ const ALLOC_OPTIONS = [
 export function AddSecondaryTaskModal({
   categories,
   weeklyGoals,
+  secondaryGoalCapReached = false,
+  secondaryGoalCapMessage = "You can only save up to 3 secondary goals for this day.",
   initialTitle = "",
   initialCategoryId,
   initialWeeklyGoalId,
@@ -54,6 +58,10 @@ export function AddSecondaryTaskModal({
   const handleSubmit = () => {
     if (!title.trim()) {
       setError("Please enter a goal name.");
+      return;
+    }
+    if (!isEdit && secondaryGoalCapReached) {
+      setError(secondaryGoalCapMessage);
       return;
     }
     const cat = categories.find((c) => c.id === categoryId);
