@@ -41,9 +41,11 @@ export function Input({
           id={inputId}
           className={cn(
             "w-full bg-[--color-surface-container-low] rounded-lg px-4 py-3 text-sm text-[--color-on-surface]",
-            "border border-transparent",
+            "border border-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]",
             "placeholder:text-[--color-on-surface-variant]/50",
-            "focus:outline-none focus:ring-2 focus:ring-[--color-primary]/20 focus:bg-white",
+            "hover:border-[--color-outline-variant]/40",
+            "focus:outline-none focus:ring-4 focus:ring-[--color-primary]/12 focus:border-[--color-primary]/30 focus:bg-white",
+            "disabled:cursor-not-allowed disabled:opacity-60",
             "transition-all duration-150",
             iconLeft && "pl-10",
             error && "ring-1 ring-red-400",
@@ -83,9 +85,11 @@ export function Textarea({ label, hint, error, className, id, ...props }: Textar
         rows={3}
         className={cn(
           "w-full bg-[--color-surface-container-low] rounded-lg px-4 py-3 text-sm text-[--color-on-surface]",
-          "border border-transparent resize-none",
+          "border border-transparent resize-none shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]",
           "placeholder:text-[--color-on-surface-variant]/50",
-          "focus:outline-none focus:ring-2 focus:ring-[--color-primary]/20 focus:bg-white",
+          "hover:border-[--color-outline-variant]/40",
+          "focus:outline-none focus:ring-4 focus:ring-[--color-primary]/12 focus:border-[--color-primary]/30 focus:bg-white",
+          "disabled:cursor-not-allowed disabled:opacity-60",
           "transition-all duration-150",
           error && "ring-1 ring-red-400",
           className

@@ -4,34 +4,27 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import type { YearlyGoal } from "@/lib/types";
-import { getCurrentYear } from "@/lib/mockData";
-
-// Per-category icon + color to match the design
-const CAT_ICON_COLORS: Record<string, { icon: string; color: string; bg: string }> = {
-  "cat-1": { icon: "self_improvement", color: "#7c3aed", bg: "rgba(124,58,237,0.10)" },
-  "cat-2": { icon: "work",             color: "#006c4a", bg: "rgba(0,108,74,0.10)"  },
-  "cat-3": { icon: "school",           color: "#d97706", bg: "rgba(217,119,6,0.10)" },
-  "cat-4": { icon: "trending_up",      color: "#2563eb", bg: "rgba(37,99,235,0.10)" },
-};
-const defaultCC = { icon: "flag", color: "#8a9e97", bg: "#f4f6f4" };
 
 interface Props {
   open: boolean;
   onClose: () => void;
   initialData?: YearlyGoal;
+  yearOverride?: number;
 }
 
-export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
-  const { categories, addYearlyGoal, updateYearlyGoal, removeYearlyGoal } = useAppStore(
+export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }: Props) {
+  const { categories, addYearlyGoal, updateYearlyGoal, removeYearlyGoal, activeDashboardDate } = useAppStore(
     useShallow((state) => ({
       categories: state.categories,
       addYearlyGoal: state.addYearlyGoal,
       updateYearlyGoal: state.updateYearlyGoal,
       removeYearlyGoal: state.removeYearlyGoal,
+      activeDashboardDate: state.activeDashboardDate,
     })),
   );
   const isEdit = !!initialData;
   const titleId = isEdit ? "yearly-goal-edit-title" : "yearly-goal-add-title";
+  const activeDashboardYear = yearOverride ?? (Number(activeDashboardDate.slice(0, 4)) || new Date().getFullYear());
 
   const [title, setCategoryTitle] = useState(initialData?.title ?? "");
   const [categoryId, setCategoryId] = useState(
@@ -40,6 +33,15 @@ export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [targetDate, setTargetDate] = useState(initialData?.targetDate ?? "");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setCategoryTitle(initialData?.title ?? "");
+    setCategoryId(initialData?.categoryId ?? categories[0]?.id ?? "");
+    setDescription(initialData?.description ?? "");
+    setTargetDate(initialData?.targetDate ?? "");
+    setError("");
+  }, [open, initialData, categories]);
 
   useEffect(() => {
     if (!open) return;
@@ -71,7 +73,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
         title: title.trim(),
         categoryId,
         ...(description.trim() ? { description: description.trim() } : {}),
-        year: getCurrentYear(),
+        year: activeDashboardYear,
         status: "active",
         progress: 0,
         targetDate: targetDate || undefined,
@@ -146,36 +148,42 @@ export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
             {error && <p className="text-xs" style={{ color: "#ef4444" }}>{error}</p>}
           </div>
 
-          {/* Category Selection — 2×2 grid */}
+          {/* Category */}
           <div className="space-y-2">
             <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              Category Selection
+              Category
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              {categories.map((cat) => {
-                const cs = CAT_ICON_COLORS[cat.id] ?? defaultCC;
-                const active = categoryId === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setCategoryId(cat.id)}
-                    className="flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all duration-150"
-                    style={{
-                      background: active ? cs.bg : "#f7f9f8",
-                      border: active ? `1.5px solid ${cs.color}` : "1.5px solid rgba(0,0,0,0.07)",
-                      color: active ? cs.color : "#6b7c75",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined text-[18px] flex-shrink-0"
-                      style={{ color: active ? cs.color : "#a8b5af" }}
-                    >
-                      {cs.icon}
-                    </span>
+            <div className="relative">
+              <span
+                className="material-symbols-outlined text-[18px] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: "#a8b5af" }}
+              >
+                category
+              </span>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full rounded-xl pl-10 pr-10 py-3 text-sm outline-none transition-all appearance-none"
+                style={{
+                  background: "#f7f9f8",
+                  border: "1.5px solid rgba(0,0,0,0.07)",
+                  color: "#1a1f1e",
+                }}
+                onFocus={(e) => (e.currentTarget.style.border = "1.5px solid #006c4a")}
+                onBlur={(e) => (e.currentTarget.style.border = "1.5px solid rgba(0,0,0,0.07)")}
+              >
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
                     {cat.name}
-                  </button>
-                );
-              })}
+                  </option>
+                ))}
+              </select>
+              <span
+                className="material-symbols-outlined text-[18px] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: "#a8b5af" }}
+              >
+                expand_more
+              </span>
             </div>
           </div>
 

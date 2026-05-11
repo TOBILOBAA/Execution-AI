@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import type { DailyPriority } from "@/lib/types";
-import { getToday } from "@/lib/mockData";
+import { getWeekNumber } from "@/lib/goalsView";
 
 const ORDINALS = ["ONE", "TWO", "THREE"];
 
@@ -16,17 +16,26 @@ interface Props {
 }
 
 export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData }: Props) {
-  const { dailyPriorities, categories, addDailyPriority, updateDailyPriority } = useAppStore(
+  const { dailyPriorities, categories, weeklyGoals, sessionWeekStartsOn, addDailyPriority, updateDailyPriority, activeDashboardDate } = useAppStore(
     useShallow((state) => ({
       dailyPriorities: state.dailyPriorities,
       categories: state.categories,
+      weeklyGoals: state.weeklyGoals,
+      sessionWeekStartsOn: state.sessionWeekStartsOn,
       addDailyPriority: state.addDailyPriority,
       updateDailyPriority: state.updateDailyPriority,
+      activeDashboardDate: state.activeDashboardDate,
     })),
   );
   const isEditMode = mode === "edit";
   const isBatchEdit = isEditMode && !initialData;
   const titleId = isBatchEdit ? "daily-priority-batch-title" : "daily-priority-single-title";
+  const referenceWeekDate = initialData?.date ?? activeDashboardDate;
+  const referenceWeekYear = Number(referenceWeekDate.slice(0, 4)) || new Date().getFullYear();
+  const referenceWeekSource = new Date(`${referenceWeekDate}T12:00:00`);
+  const referenceWeekNumber = Number.isNaN(referenceWeekSource.getTime())
+    ? getWeekNumber(new Date(), sessionWeekStartsOn)
+    : getWeekNumber(referenceWeekSource, sessionWeekStartsOn);
 
   // Batch-edit state: mirror current priorities
   const [edits, setEdits] = useState<{ id: string; title: string; tag: string }[]>(() =>
@@ -42,7 +51,13 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
   const [singleTag, setSingleTag] = useState(
     initialData?.tag ?? (categories[0]?.name ?? "")
   );
+  const [singleWeeklyGoalId, setSingleWeeklyGoalId] = useState(initialData?.weeklyGoalId ?? "");
   const [singleError, setSingleError] = useState("");
+  const availableWeeklyGoals = weeklyGoals.filter(
+    (goal) => goal.year === referenceWeekYear && goal.weekNumber === referenceWeekNumber,
+  );
+  const mainPriorityCapReached =
+    !initialData && dailyPriorities.filter((priority) => priority.date === activeDashboardDate).length >= 3;
 
   useEffect(() => {
     if (!open) return;
@@ -55,8 +70,9 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
     );
     setSingleTitle(initialData?.title ?? "");
     setSingleTag(initialData?.tag ?? (categories[0]?.name ?? ""));
+    setSingleWeeklyGoalId(initialData?.weeklyGoalId ?? availableWeeklyGoals[0]?.id ?? "");
     setSingleError("");
-  }, [open, initialData, dailyPriorities, categories]);
+  }, [open, initialData, dailyPriorities, categories, availableWeeklyGoals]);
 
   useEffect(() => {
     if (!open) return;
@@ -84,15 +100,21 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
   };
 
   const handleSaveSingle = () => {
+    if (mainPriorityCapReached) {
+      setSingleError("You can only save up to 3 main priorities for this day.");
+      return;
+    }
     if (!singleTitle.trim()) { setSingleError("Priority title is required"); return; }
+    if (!singleWeeklyGoalId) { setSingleError("Pick a weekly goal first"); return; }
     if (initialData) {
-      updateDailyPriority(initialData.id, { title: singleTitle.trim(), tag: singleTag });
+      updateDailyPriority(initialData.id, { title: singleTitle.trim(), tag: singleTag, weeklyGoalId: singleWeeklyGoalId });
     } else {
       addDailyPriority({
         title: singleTitle.trim(),
         tag: singleTag,
+        weeklyGoalId: singleWeeklyGoalId,
         isMain: true,
-        date: getToday(),
+        date: activeDashboardDate,
         status: "active",
         completed: false,
         priority: "high",
@@ -201,6 +223,40 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
             <div className="space-y-5">
               <div className="space-y-2">
                 <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                  Weekly Goal
+                </label>
+                <div className="relative">
+                  <select
+                    value={singleWeeklyGoalId}
+                    onChange={(e) => { setSingleWeeklyGoalId(e.target.value); setSingleError(""); }}
+                    className="w-full appearance-none rounded-xl px-4 py-3 text-sm outline-none cursor-pointer transition-all"
+                    style={{
+                      background: "#f7f9f8",
+                      border: singleError && !singleWeeklyGoalId ? "1.5px solid #ef4444" : "1.5px solid rgba(0,0,0,0.07)",
+                      color: "#1a1f1e",
+                    }}
+                  >
+                    {availableWeeklyGoals.length === 0 ? (
+                      <option value="">Add a weekly goal first</option>
+                    ) : (
+                      <>
+                        <option value="">Select a weekly goal</option>
+                        {availableWeeklyGoals.map((goal) => (
+                          <option key={goal.id} value={goal.id}>{goal.title}</option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  <span
+                    className="material-symbols-outlined text-[18px] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ color: "#8a9e97" }}
+                  >
+                    expand_more
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
                   Priority Title
                 </label>
                 <input
@@ -219,6 +275,11 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
                   onBlur={(e) => (e.currentTarget.style.border = singleError ? "1.5px solid #ef4444" : "1.5px solid rgba(0,0,0,0.07)")}
                 />
                 {singleError && <p className="text-xs" style={{ color: "#ef4444" }}>{singleError}</p>}
+                {mainPriorityCapReached && !singleError && (
+                  <p className="text-xs" style={{ color: "#a25a5a" }}>
+                    This day already has 3 main priorities. Remove or edit one before adding another.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
@@ -267,10 +328,24 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
           </button>
           <button
             onClick={isBatchEdit ? handleSaveBatch : handleSaveSingle}
+            disabled={!isBatchEdit && (!singleWeeklyGoalId || mainPriorityCapReached)}
             className="px-7 py-3 rounded-xl text-sm font-bold text-white transition-all"
-            style={{ background: "#006c4a", boxShadow: "0 2px 10px rgba(0,108,74,0.20)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#004d38")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#006c4a")}
+            style={{
+              background: !isBatchEdit && (!singleWeeklyGoalId || mainPriorityCapReached) ? "#8a9e97" : "#006c4a",
+              boxShadow: !isBatchEdit && (!singleWeeklyGoalId || mainPriorityCapReached)
+                ? "none"
+                : "0 2px 10px rgba(0,108,74,0.20)",
+            }}
+            onMouseEnter={(e) => {
+              if (!(!isBatchEdit && (!singleWeeklyGoalId || mainPriorityCapReached))) {
+                e.currentTarget.style.background = "#004d38";
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = !isBatchEdit && (!singleWeeklyGoalId || mainPriorityCapReached)
+                ? "#8a9e97"
+                : "#006c4a";
+            }}
           >
             {isBatchEdit ? "Save Changes" : initialData ? "Save Priority" : "Add Priority"}
           </button>

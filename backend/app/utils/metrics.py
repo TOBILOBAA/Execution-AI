@@ -1,6 +1,16 @@
 """
 Pure Python metric computations.
 No AI involved — deterministic aggregation used for reports and dashboard.
+
+Canonical §9c metric keys persisted on `report_snapshots.metrics`:
+  - completion       (0-100)
+  - consistency      (0-100, habit-completion rate average)
+  - alignment        (0-100, linked_children / total_children)
+  - realism          (0-100, capped trajectory score)
+  - momentum         (0-100, sub-period trend)
+  - execution_score  (0-100, weighted blend per §9c)
+
+The frontend never recomputes these — it reads them from the snapshot.
 """
 from datetime import date
 from typing import Any
@@ -11,6 +21,111 @@ def compute_completion_rate(completed: int, total: int) -> int:
     if total == 0:
         return 0
     return min(100, int((completed / total) * 100))
+
+
+# ─── §9c canonical metrics ────────────────────────────────────────────────────
+
+
+def _clamp_percent(value: float) -> int:
+    return max(0, min(100, round(value)))
+
+
+def _avg(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
+def compute_alignment(linked_children: int, total_children: int) -> int:
+    """
+    Alignment % = linked_children / total_children.
+    For monthly goals, "linked" means `yearly_goal_id IS NOT NULL`.
+    Same shape applies to weekly→monthly and daily→weekly linkage.
+    """
+    if total_children == 0:
+        return 0
+    return _clamp_percent((linked_children / total_children) * 100)
+
+
+def compute_realism(completion: int) -> int:
+    """
+    Realism % = min(100, completion / 80 * 100).
+    Treats 80% completion as the realism target — rewards calibrated planning.
+    """
+    return _clamp_percent((completion / 80.0) * 100)
+
+
+def compute_momentum(rates: list[int | float]) -> int:
+    """
+    Momentum % — trend slope of completion across sub-periods, normalized 0-100.
+
+    Same shape the frontend used to compute (kept identical so historical
+    snapshots and live reads agree): 60% trend signal + 40% most-recent window.
+    A flat trend lands at ~50; improvement pushes higher; regression lower.
+    """
+    clean = [float(r) for r in rates if isinstance(r, (int, float)) and r == r]
+    if not clean:
+        return 0
+    if len(clean) == 1:
+        return _clamp_percent(clean[0])
+
+    slice_size = max(1, -(-len(clean) // 3))  # ceil division
+    baseline = _avg(clean[:slice_size])
+    recent = _avg(clean[-slice_size:])
+    trend_score = _clamp_percent(50 + (recent - baseline))
+    return _clamp_percent(trend_score * 0.6 + recent * 0.4)
+
+
+def compute_execution_score(
+    completion: int,
+    consistency: int,
+    alignment: int,
+    realism: int,
+    momentum: int,
+) -> int:
+    """
+    Execution score weights per §9c:
+      30% completion + 25% consistency + 20% alignment + 10% realism + 15% momentum
+    """
+    return _clamp_percent(
+        completion * 0.30
+        + consistency * 0.25
+        + alignment * 0.20
+        + realism * 0.10
+        + momentum * 0.15
+    )
+
+
+def build_canonical_metrics(
+    *,
+    completion: int,
+    consistency: int,
+    alignment: int,
+    momentum_rates: list[int | float],
+) -> dict[str, int]:
+    """
+    Single source of truth for the six §9c keys persisted on `report_snapshots`.
+    Period-specific aggregations should call this and merge the result into
+    their existing metrics dict.
+    """
+    completion_clamped = _clamp_percent(completion)
+    consistency_clamped = _clamp_percent(consistency)
+    alignment_clamped = _clamp_percent(alignment)
+    realism = compute_realism(completion_clamped)
+    momentum = compute_momentum(momentum_rates)
+    execution_score = compute_execution_score(
+        completion=completion_clamped,
+        consistency=consistency_clamped,
+        alignment=alignment_clamped,
+        realism=realism,
+        momentum=momentum,
+    )
+    return {
+        "completion": completion_clamped,
+        "consistency": consistency_clamped,
+        "alignment": alignment_clamped,
+        "realism": realism,
+        "momentum": momentum,
+        "execution_score": execution_score,
+    }
 
 
 def compute_weighted_daily_completion(
@@ -101,6 +216,10 @@ def aggregate_daily_metrics(
     secondary_tasks: list[dict],
     habits_completed: int,
     habits_total: int,
+    *,
+    alignment_linked: int | None = None,
+    alignment_total: int | None = None,
+    momentum_rates: list[int | float] | None = None,
 ) -> dict:
     priorities_total = len(priorities)
     priorities_completed = sum(1 for p in priorities if p.get("completed"))
@@ -113,6 +232,23 @@ def aggregate_daily_metrics(
         if p.get("completed")
     )
 
+    completion_rate = compute_weighted_daily_completion(
+        priorities_completed, priorities_total,
+        secondary_completed, secondary_total,
+        habits_completed, habits_total,
+    )
+    consistency = compute_completion_rate(habits_completed, habits_total)
+    # Daily alignment defaults to priority→weekly-goal linkage if caller supplies counts.
+    align_total = priorities_total if alignment_total is None else alignment_total
+    align_linked = priorities_total if alignment_linked is None else alignment_linked
+    alignment = compute_alignment(align_linked, align_total)
+    canonical = build_canonical_metrics(
+        completion=completion_rate,
+        consistency=consistency,
+        alignment=alignment,
+        momentum_rates=momentum_rates or [completion_rate],
+    )
+
     return {
         "priorities_total": priorities_total,
         "priorities_completed": priorities_completed,
@@ -120,13 +256,10 @@ def aggregate_daily_metrics(
         "secondary_tasks_completed": secondary_completed,
         "habits_total": habits_total,
         "habits_completed": habits_completed,
-        "completion_rate": compute_weighted_daily_completion(
-            priorities_completed, priorities_total,
-            secondary_completed, secondary_total,
-            habits_completed, habits_total,
-        ),
+        "completion_rate": completion_rate,
         "estimated_minutes_planned": est_planned,
         "estimated_minutes_completed": est_completed,
+        **canonical,
     }
 
 
@@ -148,6 +281,16 @@ def aggregate_weekly_metrics(
     daily_completion_values = [d.get("completion_rate", 0) for d in daily_summaries]
     avg_daily = int(sum(daily_completion_values) / max(len(daily_completion_values), 1))
 
+    # §9c alignment for weekly: weekly goals linked to a monthly goal.
+    linked_weekly = sum(1 for g in weekly_goals if g.get("monthly_goal_id"))
+    alignment = compute_alignment(linked_weekly, goals_total)
+    canonical = build_canonical_metrics(
+        completion=avg_daily,
+        consistency=habit_consistency,
+        alignment=alignment,
+        momentum_rates=daily_completion_values,
+    )
+
     return {
         "goals_total": goals_total,
         "goals_completed": goals_completed,
@@ -158,6 +301,7 @@ def aggregate_weekly_metrics(
         "avg_daily_completion": avg_daily,
         "habit_consistency": habit_consistency,
         "days_with_data": len(daily_summaries),
+        **canonical,
     }
 
 
@@ -181,6 +325,18 @@ def aggregate_monthly_metrics(
         best = max(weekly_summaries, key=lambda w: w.get("avg_daily_completion", 0))
         best_week = best.get("week_number")
 
+    # §9c alignment for monthly: monthly goals linked to a yearly goal.
+    linked_monthly = sum(1 for g in monthly_goals if g.get("yearly_goal_id"))
+    alignment = compute_alignment(linked_monthly, goals_total)
+    consistency_values = [w.get("habit_consistency", 0) for w in weekly_summaries]
+    consistency = int(sum(consistency_values) / max(len(consistency_values), 1))
+    canonical = build_canonical_metrics(
+        completion=avg_weekly,
+        consistency=consistency,
+        alignment=alignment,
+        momentum_rates=weekly_rates,
+    )
+
     return {
         "goals_total": goals_total,
         "goals_completed": goals_completed,
@@ -191,6 +347,40 @@ def aggregate_monthly_metrics(
         "avg_weekly_completion": avg_weekly,
         "best_week": best_week,
         "weeks_count": len(weekly_summaries),
+        **canonical,
+    }
+
+
+def aggregate_quarterly_metrics(
+    monthly_summaries: list[dict],
+    yearly_goals_total: int = 0,
+    yearly_goals_linked: int = 0,
+) -> dict:
+    """
+    Aggregate three monthly summaries into a quarterly view.
+    Alignment for the quarterly view rolls up monthly→yearly linkage rates.
+    """
+    tasks_total = sum(m.get("tasks_total", 0) for m in monthly_summaries)
+    tasks_completed = sum(m.get("tasks_completed", 0) for m in monthly_summaries)
+    monthly_rates = [m.get("avg_weekly_completion", 0) for m in monthly_summaries if m.get("tasks_total", 0) > 0]
+    avg_monthly = int(sum(monthly_rates) / max(len(monthly_rates), 1))
+    consistency_values = [m.get("consistency", 0) for m in monthly_summaries]
+    consistency = int(sum(consistency_values) / max(len(consistency_values), 1))
+
+    alignment = compute_alignment(yearly_goals_linked, yearly_goals_total or 0)
+    canonical = build_canonical_metrics(
+        completion=avg_monthly,
+        consistency=consistency,
+        alignment=alignment,
+        momentum_rates=monthly_rates,
+    )
+
+    return {
+        "tasks_total": tasks_total,
+        "tasks_completed": tasks_completed,
+        "avg_monthly_completion": avg_monthly,
+        "months_count": len(monthly_summaries),
+        **canonical,
     }
 
 
@@ -214,6 +404,17 @@ def aggregate_yearly_metrics(
     if previous_year_completion is not None and previous_year_completion > 0:
         pct_change = int(((avg_monthly - previous_year_completion) / previous_year_completion) * 100)
 
+    consistency_values = [m.get("consistency", 0) for m in monthly_summaries]
+    consistency = int(sum(consistency_values) / max(len(consistency_values), 1))
+    alignment_values = [m.get("alignment", 0) for m in monthly_summaries if m.get("alignment") is not None]
+    alignment = int(sum(alignment_values) / max(len(alignment_values), 1)) if alignment_values else 0
+    canonical = build_canonical_metrics(
+        completion=avg_monthly,
+        consistency=consistency,
+        alignment=alignment,
+        momentum_rates=monthly_rates,
+    )
+
     return {
         "months_with_data": len(monthly_rates),
         "tasks_total": tasks_total,
@@ -222,4 +423,5 @@ def aggregate_yearly_metrics(
         "best_month": best_month,
         "execution_streak": execution_streak,
         "percent_change": pct_change,
+        **canonical,
     }

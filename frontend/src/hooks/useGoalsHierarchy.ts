@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   goalsApi,
   habitsApi,
@@ -22,6 +22,7 @@ import type {
   WeeklyGoal,
   YearlyGoal,
 } from "@/lib/types";
+import { getWeekNumber } from "@/lib/goalsView";
 
 type GoalsSlice = Pick<
   ReturnType<typeof useAppStore.getState>,
@@ -39,6 +40,7 @@ type GoalsSlice = Pick<
 export interface UseGoalsHierarchyResult {
   ready: boolean;
   loading: boolean;
+  hasCachedData: boolean;
   error: string | null;
   lastSyncedAt: string | null;
   year: number;
@@ -52,10 +54,13 @@ export interface UseGoalsHierarchyResult {
   yearlyGoals: YearlyGoal[];
   monthlyGoals: MonthlyGoal[];
   weeklyGoals: WeeklyGoal[];
+  yearDailyPriorities: DailyPriority[];
   selectedWeekDailyPriorities: DailyPriority[];
   habits: FoundationalHabit[];
   refresh: () => Promise<void>;
 }
+
+const pendingGoalsHierarchyLoads = new Map<string, Promise<{ hierarchy: ApiGoalsHierarchy; habits: ApiHabit[] }>>();
 
 function mapApiCategory(category: ApiCategory): Category {
   return {
@@ -77,6 +82,7 @@ function mapApiYearlyGoal(goal: ApiYearlyGoal): YearlyGoal {
     progress: goal.progress,
     targetDate: goal.target_date,
     aiSuggested: goal.ai_suggested,
+    editable: goal.editable,
   };
 }
 
@@ -96,6 +102,7 @@ function mapApiMonthlyGoal(goal: ApiMonthlyGoal): MonthlyGoal {
     priority: goal.priority as MonthlyGoal["priority"],
     isMain: goal.is_main,
     aiSuggested: goal.ai_suggested,
+    editable: goal.editable,
   };
 }
 
@@ -115,6 +122,7 @@ function mapApiWeeklyGoal(goal: ApiWeeklyGoal): WeeklyGoal {
     goalType: goal.goal_type as WeeklyGoal["goalType"],
     workload: goal.workload,
     aiSuggested: goal.ai_suggested,
+    editable: goal.editable,
   };
 }
 
@@ -132,6 +140,7 @@ function mapApiDailyPriority(priority: ApiDailyPriority): DailyPriority {
     isMain: priority.is_main,
     tag: priority.tag,
     aiSuggested: priority.ai_suggested,
+    editable: priority.editable,
   };
 }
 
@@ -153,9 +162,9 @@ function hydrateGoalsStore(snapshot: ApiGoalsHierarchy, habits: ApiHabit[]) {
   const nextYearlyGoals = snapshot.yearly_goals.map(mapApiYearlyGoal);
   const nextMonthlyGoals = snapshot.monthly_goals.map(mapApiMonthlyGoal);
   const nextWeeklyGoals = snapshot.weekly_goals.map(mapApiWeeklyGoal);
-  const nextDailyPriorities = snapshot.selected_week_daily_priorities.map(mapApiDailyPriority);
+  const nextDailyPriorities = snapshot.year_daily_priorities.map(mapApiDailyPriority);
   const nextHabits = habits.map(mapApiHabit);
-  const selectedDates = new Set(nextDailyPriorities.map((priority) => priority.date));
+  const targetYearPrefix = `${snapshot.year}-`;
 
   useAppStore.setState((state) => ({
     categories: nextCategories,
@@ -172,7 +181,7 @@ function hydrateGoalsStore(snapshot: ApiGoalsHierarchy, habits: ApiHabit[]) {
       ...nextWeeklyGoals,
     ],
     dailyPriorities: [
-      ...state.dailyPriorities.filter((priority) => !selectedDates.has(priority.date)),
+      ...state.dailyPriorities.filter((priority) => !priority.date.startsWith(targetYearPrefix)),
       ...nextDailyPriorities,
     ].sort((a, b) => {
       if (a.date === b.date) {
@@ -191,19 +200,37 @@ async function fetchGoalsHierarchy(
   year: number,
   weekNumber?: number,
 ): Promise<{ hierarchy: ApiGoalsHierarchy; habits: ApiHabit[] }> {
-  const [hierarchy, habits] = await Promise.all([
+  const requestKey = `${sessionId}:${year}:${weekNumber ?? "all"}`;
+  const existing = pendingGoalsHierarchyLoads.get(requestKey);
+  if (existing) {
+    return existing;
+  }
+
+  const request = Promise.all([
     goalsApi.hierarchy(sessionId, { year, weekNumber }),
     habitsApi.list(sessionId).catch(() => []),
-  ]);
-  hydrateGoalsStore(hierarchy, habits);
-  return { hierarchy, habits };
+  ])
+    .then(([hierarchy, habits]) => {
+      hydrateGoalsStore(hierarchy, habits);
+      return { hierarchy, habits };
+    })
+    .finally(() => {
+      if (pendingGoalsHierarchyLoads.get(requestKey) === request) {
+        pendingGoalsHierarchyLoads.delete(requestKey);
+      }
+    });
+
+  pendingGoalsHierarchyLoads.set(requestKey, request);
+  return request;
 }
 
 export function useGoalsHierarchy(
   year: number,
   opts?: { weekNumber?: number },
 ): UseGoalsHierarchyResult {
+  const requestedWeekNumber = opts?.weekNumber;
   const sessionId = useAppStore((state): GoalsSlice["sessionId"] => state.sessionId);
+  const sessionWeekStartsOn = useAppStore((state) => state.sessionWeekStartsOn);
   const backendReady = useAppStore((state): GoalsSlice["backendReady"] => state.backendReady);
   const workspaceHydrating = useAppStore((state): GoalsSlice["workspaceHydrating"] => state.workspaceHydrating);
   const storeCategories = useAppStore((state): GoalsSlice["categories"] => state.categories);
@@ -212,19 +239,37 @@ export function useGoalsHierarchy(
   const storeWeeklyGoals = useAppStore((state): GoalsSlice["weeklyGoals"] => state.weeklyGoals);
   const storeDailyPriorities = useAppStore((state): GoalsSlice["dailyPriorities"] => state.dailyPriorities);
   const storeHabits = useAppStore((state): GoalsSlice["habits"] => state.habits);
+  const activeDashboardDate = useAppStore((state) => state.activeDashboardDate);
+
+  const fallbackDate = useMemo(() => {
+    const parsed = new Date(`${activeDashboardDate}T12:00:00`);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }, [activeDashboardDate]);
 
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const [today, setToday] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth() + 1);
+  const [today, setToday] = useState<string>(activeDashboardDate);
+  const [currentMonth, setCurrentMonth] = useState<number>(fallbackDate.getMonth() + 1);
   const [currentWeekNumber, setCurrentWeekNumber] = useState<number | null>(null);
-  const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(opts?.weekNumber ?? null);
+  const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(requestedWeekNumber ?? null);
   const [selectedWeekStart, setSelectedWeekStart] = useState<string | null>(null);
   const [selectedWeekEnd, setSelectedWeekEnd] = useState<string | null>(null);
+  const yearlySnapshot = useMemo(() => storeYearlyGoals.filter((goal) => goal.year === year), [storeYearlyGoals, year]);
+  const monthlySnapshot = useMemo(() => storeMonthlyGoals.filter((goal) => goal.year === year), [storeMonthlyGoals, year]);
+  const weeklySnapshot = useMemo(() => storeWeeklyGoals.filter((goal) => goal.year === year), [storeWeeklyGoals, year]);
+  const dailySnapshot = useMemo(
+    () => storeDailyPriorities.filter((priority) => priority.date.startsWith(`${year}-`)),
+    [storeDailyPriorities, year],
+  );
+  const hasCachedData =
+    yearlySnapshot.length > 0 ||
+    monthlySnapshot.length > 0 ||
+    weeklySnapshot.length > 0 ||
+    dailySnapshot.length > 0;
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     if (Number.isNaN(year)) {
       setReady(true);
       return;
@@ -238,7 +283,7 @@ export function useGoalsHierarchy(
     setLoading(true);
     setError(null);
     try {
-      const { hierarchy } = await fetchGoalsHierarchy(sessionId, year, opts?.weekNumber);
+      const { hierarchy } = await fetchGoalsHierarchy(sessionId, year, requestedWeekNumber);
       setLastSyncedAt(hierarchy.last_synced_at);
       setToday(hierarchy.today);
       setCurrentMonth(hierarchy.current_month);
@@ -252,7 +297,7 @@ export function useGoalsHierarchy(
       setLoading(false);
       setReady(true);
     }
-  }
+  }, [backendReady, requestedWeekNumber, sessionId, workspaceHydrating, year]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,22 +311,19 @@ export function useGoalsHierarchy(
     return () => {
       cancelled = true;
     };
-  }, [sessionId, backendReady, workspaceHydrating, year, opts?.weekNumber]);
+  }, [refresh]);
 
   const currentWeekFallback = useMemo(() => {
-    const now = new Date();
-    const date = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-    return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  }, []);
+    return getWeekNumber(fallbackDate, sessionWeekStartsOn);
+  }, [fallbackDate, sessionWeekStartsOn]);
 
   const effectiveCurrentWeek = currentWeekNumber ?? currentWeekFallback;
-  const effectiveSelectedWeek = selectedWeekNumber ?? opts?.weekNumber ?? null;
+  const effectiveSelectedWeek = selectedWeekNumber ?? requestedWeekNumber ?? null;
 
   return {
     ready,
     loading,
+    hasCachedData,
     error,
     lastSyncedAt,
     year,
@@ -292,9 +334,10 @@ export function useGoalsHierarchy(
     selectedWeekStart,
     selectedWeekEnd,
     categories: storeCategories,
-    yearlyGoals: storeYearlyGoals.filter((goal) => goal.year === year),
-    monthlyGoals: storeMonthlyGoals.filter((goal) => goal.year === year),
-    weeklyGoals: storeWeeklyGoals.filter((goal) => goal.year === year),
+    yearlyGoals: yearlySnapshot,
+    monthlyGoals: monthlySnapshot,
+    weeklyGoals: weeklySnapshot,
+    yearDailyPriorities: dailySnapshot,
     selectedWeekDailyPriorities:
       selectedWeekStart && selectedWeekEnd
         ? storeDailyPriorities.filter(

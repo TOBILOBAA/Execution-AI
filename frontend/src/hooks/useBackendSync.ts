@@ -14,17 +14,17 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 
 export function useBackendSync() {
-  const { sessionId, backendReady, loadDashboard } = useAppStore(
+  const { sessionId, backendReady, loadCurrentDashboard } = useAppStore(
     useShallow((state) => ({
       sessionId: state.sessionId,
       backendReady: state.backendReady,
-      loadDashboard: state.loadDashboard,
+      loadCurrentDashboard: state.loadCurrentDashboard,
     })),
   );
 
   useEffect(() => {
     if (sessionId && backendReady) {
-      loadDashboard();
+      loadCurrentDashboard();
     }
-  }, [sessionId, backendReady, loadDashboard]);
+  }, [sessionId, backendReady, loadCurrentDashboard]);
 }

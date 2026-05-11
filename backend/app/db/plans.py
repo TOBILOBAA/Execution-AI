@@ -109,6 +109,16 @@ def delete_monthly_goals_for_plan(db: Client, monthly_plan_id: UUID) -> None:
     db.table("monthly_goals").delete().eq("monthly_plan_id", str(monthly_plan_id)).execute()
 
 
+def delete_monthly_goal(db: Client, goal_id: UUID, session_id: UUID) -> None:
+    (
+        db.table("monthly_goals")
+        .delete()
+        .eq("id", str(goal_id))
+        .eq("session_id", str(session_id))
+        .execute()
+    )
+
+
 # ─── Weekly Plans ─────────────────────────────────────────────────────────────
 
 def get_weekly_plan(db: Client, session_id: UUID, year: int, week_number: int) -> dict | None:
@@ -221,6 +231,16 @@ def update_weekly_goal(db: Client, goal_id: UUID, session_id: UUID, updates: dic
 
 def delete_weekly_goals_for_plan(db: Client, weekly_plan_id: UUID) -> None:
     db.table("weekly_goals").delete().eq("weekly_plan_id", str(weekly_plan_id)).execute()
+
+
+def delete_weekly_goal(db: Client, goal_id: UUID, session_id: UUID) -> None:
+    (
+        db.table("weekly_goals")
+        .delete()
+        .eq("id", str(goal_id))
+        .eq("session_id", str(session_id))
+        .execute()
+    )
 
 
 # ─── Daily Plans ──────────────────────────────────────────────────────────────

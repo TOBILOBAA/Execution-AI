@@ -5,6 +5,7 @@ from uuid import uuid4
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from postgrest.exceptions import APIError
 
 
 for key, value in {
@@ -29,7 +30,12 @@ from app.api.routes import execution as execution_routes
 from app.db import habits as habits_db
 from app.db import reports as reports_db
 from app.db import sessions as sessions_db
-from app.main import app, _parse_cors_origin_regex, _parse_cors_origins
+from app.main import (
+    LOCAL_DEVELOPMENT_CORS_ORIGINS,
+    app,
+    _parse_cors_origin_regex,
+    _parse_cors_origins,
+)
 
 
 class FakeResult:
@@ -38,13 +44,15 @@ class FakeResult:
 
 
 class RecordingTable:
-    def __init__(self, result_rows=None):
+    def __init__(self, result_rows=None, update_error=None):
         self.result_rows = result_rows
+        self.update_error = update_error
         self.insert_payload = None
         self.update_payload = None
         self.upsert_payload = None
         self.upsert_conflict = None
         self._maybe_single = False
+        self.update_calls = []
 
     def select(self, *args, **kwargs):
         return self
@@ -55,6 +63,7 @@ class RecordingTable:
 
     def update(self, payload):
         self.update_payload = payload
+        self.update_calls.append(payload)
         return self
 
     def upsert(self, payload, on_conflict=None):
@@ -93,6 +102,10 @@ class RecordingTable:
             if self._maybe_single and not self.result_rows:
                 return FakeResult(None)
             return FakeResult(self.result_rows)
+        if self.update_error is not None and self.update_payload is not None:
+            error = self.update_error
+            self.update_error = None
+            raise error
         if self.insert_payload is not None:
             return FakeResult([self.insert_payload])
         if self.update_payload is not None:
@@ -103,13 +116,17 @@ class RecordingTable:
 
 
 class FakeDB:
-    def __init__(self, result_rows_by_table=None):
+    def __init__(self, result_rows_by_table=None, update_error_by_table=None):
         self.result_rows_by_table = result_rows_by_table or {}
+        self.update_error_by_table = update_error_by_table or {}
         self.tables = {}
 
     def table(self, name):
         if name not in self.tables:
-            self.tables[name] = RecordingTable(self.result_rows_by_table.get(name))
+            self.tables[name] = RecordingTable(
+                self.result_rows_by_table.get(name),
+                self.update_error_by_table.get(name),
+            )
         return self.tables[name]
 
 
@@ -125,7 +142,7 @@ class BackendStabilityTests(unittest.TestCase):
             _parse_cors_origins("https://a.example, https://b.example", "production"),
             ["https://a.example", "https://b.example"],
         )
-        self.assertEqual(_parse_cors_origins("", "development"), ["*"])
+        self.assertEqual(_parse_cors_origins("", "development"), LOCAL_DEVELOPMENT_CORS_ORIGINS)
 
     def test_parse_cors_origin_regex(self):
         self.assertEqual(
@@ -140,6 +157,32 @@ class BackendStabilityTests(unittest.TestCase):
             _parse_cors_origin_regex("", "development"),
             r"^https://[a-z0-9-]+\.vercel\.app$",
         )
+
+    def test_session_update_ignores_missing_recap_columns(self):
+        session_id = uuid4()
+        db = FakeDB(
+            update_error_by_table={
+                "sessions": APIError(
+                    {
+                        "message": "Could not find the 'pending_recaps' column in the schema cache",
+                        "code": "PGRST204",
+                    }
+                )
+            }
+        )
+
+        updated = sessions_db.update_session(
+            db,
+            session_id,
+            {"timezone": "UTC", "pending_recaps": [{"type": "weekly"}], "handled_recaps": ["weekly:2026:::18"]},
+        )
+
+        self.assertEqual(updated["timezone"], "UTC")
+        self.assertEqual(updated["pending_recaps"], [])
+        self.assertEqual(updated["handled_recaps"], [])
+        self.assertEqual(len(db.tables["sessions"].update_calls), 2)
+        self.assertNotIn("pending_recaps", db.tables["sessions"].update_calls[-1])
+        self.assertNotIn("handled_recaps", db.tables["sessions"].update_calls[-1])
 
     def test_session_start_reuses_existing_auth_user_workspace(self):
         auth_user_id = "user-123"
@@ -161,7 +204,14 @@ class BackendStabilityTests(unittest.TestCase):
             auth_user_id=auth_user_id,
         )
 
-        self.assertEqual(session, existing)
+        self.assertEqual(session["id"], existing["id"])
+        self.assertEqual(session["auth_user_id"], existing["auth_user_id"])
+        self.assertEqual(session["timezone"], existing["timezone"])
+        self.assertEqual(session["device_hint"], existing["device_hint"])
+        self.assertEqual(session["onboarding_step"], existing["onboarding_step"])
+        self.assertEqual(session["onboarding_done"], existing["onboarding_done"])
+        self.assertEqual(session["created_at"], existing["created_at"])
+        self.assertEqual(session["week_starts_on"], "monday")
         self.assertIsNone(db.tables["sessions"].insert_payload)
 
     def test_session_create_persists_auth_user_id(self):
@@ -205,11 +255,11 @@ class BackendStabilityTests(unittest.TestCase):
         db = FakeDB(result_rows_by_table={"foundational_habits": []})
         self.assertIsNone(habits_db.get_habit(db, uuid4(), uuid4()))
 
-    def test_report_upsert_uses_period_specific_conflict_target(self):
+    def test_report_upsert_inserts_new_row_and_updates_existing_natural_key(self):
         session_id = uuid4()
         db = FakeDB()
 
-        reports_db.upsert_report(
+        inserted = reports_db.upsert_report(
             db,
             session_id,
             {
@@ -221,13 +271,25 @@ class BackendStabilityTests(unittest.TestCase):
                 "status": "ready",
             },
         )
-        self.assertEqual(
-            db.tables["report_snapshots"].upsert_conflict,
-            "session_id,report_type,period_date",
-        )
+        self.assertEqual(inserted["report_type"], "daily")
+        self.assertEqual(db.tables["report_snapshots"].insert_payload["period_date"], "2026-04-15")
+        self.assertIsNone(db.tables["report_snapshots"].update_payload)
 
-        reports_db.upsert_report(
-            db,
+        existing_db = FakeDB(
+            result_rows_by_table={
+                "report_snapshots": [
+                    {
+                        "id": "report-1",
+                        "report_type": "yearly",
+                        "period_year": 2026,
+                        "metrics": {"completion": 40},
+                        "status": "ready",
+                    }
+                ]
+            }
+        )
+        updated = reports_db.upsert_report(
+            existing_db,
             session_id,
             {
                 "report_type": "yearly",
@@ -236,10 +298,49 @@ class BackendStabilityTests(unittest.TestCase):
                 "status": "ready",
             },
         )
-        self.assertEqual(
-            db.tables["report_snapshots"].upsert_conflict,
-            "session_id,report_type,period_year",
+        self.assertEqual(updated["status"], "ready")
+        self.assertEqual(existing_db.tables["report_snapshots"].update_payload["period_year"], 2026)
+        self.assertIsNone(existing_db.tables["report_snapshots"].insert_payload)
+
+    def test_report_upsert_rejects_unknown_report_type(self):
+        session_id = uuid4()
+        db = FakeDB()
+
+        with self.assertRaises(ValueError):
+            reports_db.upsert_report(
+                db,
+                session_id,
+                {
+                    "report_type": "unknown",
+                    "period_year": 2026,
+                    "metrics": {},
+                    "status": "ready",
+                },
+            )
+
+    def test_report_get_supports_quarterly_natural_key(self):
+        session_id = uuid4()
+        db = FakeDB(
+            result_rows_by_table={
+                "report_snapshots": [
+                    {
+                        "id": "report-q1",
+                        "report_type": "quarterly",
+                        "period_year": 2026,
+                        "period_quarter": 1,
+                    }
+                ]
+            }
         )
+
+        report = reports_db.get_report(
+            db,
+            session_id,
+            report_type="quarterly",
+            period_year=2026,
+            period_quarter=1,
+        )
+        self.assertEqual(report["id"], "report-q1")
 
     def test_create_task_auto_creates_daily_plan(self):
         client = TestClient(app)

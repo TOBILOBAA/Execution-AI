@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
@@ -8,11 +8,13 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ModalController } from "@/components/modals/ModalController";
-import { DashboardKickoffModal } from "@/components/dashboard/DashboardKickoffModal";
-import { DashboardEveningReminder } from "@/components/dashboard/DashboardEveningReminder";
-import { DashboardNextDayReview } from "@/components/dashboard/DashboardNextDayReview";
+import { KickoffModal } from "@/components/dashboard/KickoffModal";
+import { CompletionModal } from "@/components/dashboard/CompletionModal";
+import { PlanTomorrowModal } from "@/components/dashboard/PlanTomorrowModal";
+import { DashboardPeriodReviewPrompts } from "@/components/dashboard/DashboardPeriodReviewPrompts";
 import { SyncErrorBanner } from "@/components/SyncErrorBanner";
 import { useBackendSync } from "@/hooks/useBackendSync";
+import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -30,7 +32,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useBackendSync();
 
   useEffect(() => {
-    if (!authReady || workspaceHydrating) return;
+    if (!authReady) return;
+    if (workspaceHydrating && currentUser && onboardingComplete) return;
     if (!currentUser) {
       router.replace("/auth");
       return;
@@ -45,16 +48,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
 
-  if (!authReady || workspaceHydrating || !currentUser || !backendReady || !onboardingComplete) {
+  const canRenderShell = authReady && !!currentUser && backendReady && onboardingComplete;
+
+  if (!canRenderShell) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center animate-pulse" style={{ background: "#006c4a" }}>
-            <span className="material-symbols-outlined text-[20px] text-white">bolt</span>
-          </div>
-          <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>Loading…</p>
-        </div>
-      </div>
+      <AppLoadingScreen
+        eyebrow="Loading the dashboard"
+        title="Bringing today&apos;s workspace online"
+        detail="We are reconnecting your session, syncing the latest execution data, and restoring your dashboard shell."
+      />
     );
   }
 
@@ -70,9 +72,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <BottomNav />
       </div>
       <ModalController />
-      <DashboardKickoffModal />
-      <DashboardNextDayReview />
-      <DashboardEveningReminder />
+      <KickoffModal />
+      <CompletionModal />
+      <PlanTomorrowModal />
+      <Suspense fallback={null}>
+        <DashboardPeriodReviewPrompts />
+      </Suspense>
     </div>
   );
 }

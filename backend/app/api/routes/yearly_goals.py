@@ -10,7 +10,11 @@ from app.schemas.goals import (
 )
 import app.db.categories as cat_db
 import app.db.yearly_goals as yg_db
-from app.utils.date_utils import get_temporal_context
+from app.utils.period_guards import (
+    assert_period_plannable_yearly,
+    get_session_temporal_context,
+    is_plannable_yearly_period,
+)
 
 router = APIRouter(prefix="/yearly-goals", tags=["Yearly Goals"])
 
@@ -50,8 +54,11 @@ def list_yearly_goals(
     year: int = Query(default=None),
     db: Client = Depends(get_db),
 ):
-    ctx = get_temporal_context()
-    return yg_db.list_yearly_goals(db, session_id, year or ctx.current_year)
+    ctx = get_session_temporal_context(db, session_id)
+    goals = yg_db.list_yearly_goals(db, session_id, year or ctx.current_year)
+    for goal in goals:
+        goal["editable"] = is_plannable_yearly_period(db, session_id, int(goal["year"]))
+    return goals
 
 
 @router.post("/{session_id}", response_model=YearlyGoalResponse, status_code=201)
@@ -61,6 +68,7 @@ def create_yearly_goal(
     db: Client = Depends(get_db),
 ):
     data = body.model_dump()
+    assert_period_plannable_yearly(session_id, int(data["year"]), db)
     if data.get("category_id"):
         data["category_id"] = str(data["category_id"])
     return yg_db.create_yearly_goal(db, session_id, data)
@@ -76,6 +84,7 @@ def update_yearly_goal(
     goal = yg_db.get_yearly_goal(db, goal_id, session_id)
     if not goal:
         raise NotFoundError("Yearly goal", str(goal_id))
+    assert_period_plannable_yearly(session_id, int(goal["year"]), db)
     updates = body.model_dump(exclude_none=True)
     if updates.get("category_id"):
         updates["category_id"] = str(updates["category_id"])
@@ -88,6 +97,10 @@ def delete_yearly_goal(
     goal_id: UUID,
     db: Client = Depends(get_db),
 ):
+    goal = yg_db.get_yearly_goal(db, goal_id, session_id)
+    if not goal:
+        raise NotFoundError("Yearly goal", str(goal_id))
+    assert_period_plannable_yearly(session_id, int(goal["year"]), db)
     deleted = yg_db.delete_yearly_goal(db, goal_id, session_id)
     if not deleted:
         raise NotFoundError("Yearly goal", str(goal_id))

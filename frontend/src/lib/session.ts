@@ -8,8 +8,10 @@
  * auth_user_id link so the same workspace can be recovered across browsers.
  */
 
+import type { Session } from "./api";
+
 const SESSION_KEY_PREFIX = "execution-ai-session-";
-const pendingSessionRequests = new Map<string, Promise<string>>();
+const pendingSessionRequests = new Map<string, Promise<Session>>();
 
 export function getSessionId(userId: string): string | null {
   if (typeof window === "undefined") return null;
@@ -30,7 +32,7 @@ export function clearSessionId(userId: string): void {
  * Ensure a backend session exists for this user.
  * Creates one if not found, returns the existing one if present.
  */
-export async function ensureBackendSession(userId: string): Promise<string> {
+export async function ensureBackendSession(userId: string): Promise<Session> {
   const inflight = pendingSessionRequests.get(userId);
   if (inflight) {
     return inflight;
@@ -44,10 +46,10 @@ export async function ensureBackendSession(userId: string): Promise<string> {
         const session = await sessionsApi.get(existing);
         if (!session.auth_user_id) {
           await sessionsApi.update(existing, { auth_user_id: userId });
-          return existing;
+          return { ...session, auth_user_id: userId };
         }
         if (session.auth_user_id === userId) {
-          return existing;
+          return session;
         }
       } catch {
         clearSessionId(userId);
@@ -58,7 +60,7 @@ export async function ensureBackendSession(userId: string): Promise<string> {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
     const session = await sessionsApi.create(timezone, userId);
     setSessionId(userId, session.id);
-    return session.id;
+    return session;
   })();
 
   pendingSessionRequests.set(userId, request);

@@ -10,11 +10,25 @@ from app.utils.date_utils import resolve_week_starts_on
 TABLE = "sessions"
 
 
-def _is_missing_week_starts_on_column(exc: APIError) -> bool:
+def _is_missing_column(exc: APIError, column_name: str) -> bool:
     details = str(exc)
-    return "week_starts_on" in details and (
+    return column_name in details and (
         "PGRST204" in details or "schema cache" in details
     )
+
+
+def _is_missing_week_starts_on_column(exc: APIError) -> bool:
+    return _is_missing_column(exc, "week_starts_on")
+
+
+def _drop_unsupported_session_columns(payload: dict, exc: APIError) -> dict:
+    unsupported = {
+        key for key in ("week_starts_on", "pending_recaps", "handled_recaps")
+        if key in payload and _is_missing_column(exc, key)
+    }
+    if not unsupported:
+        return payload
+    return {key: value for key, value in payload.items() if key not in unsupported}
 
 
 def _hydrate_session_defaults(session: dict | None) -> dict | None:
@@ -26,6 +40,8 @@ def _hydrate_session_defaults(session: dict | None) -> dict | None:
             session.get("week_starts_on"),
             session.get("timezone"),
         ),
+        "pending_recaps": session.get("pending_recaps") or [],
+        "handled_recaps": session.get("handled_recaps") or [],
     }
 
 
@@ -110,12 +126,12 @@ def update_session(db: Client, session_id: UUID, updates: dict) -> dict:
     try:
         updated = result.execute()
     except APIError as exc:
-        if "week_starts_on" not in payload or not _is_missing_week_starts_on_column(exc):
+        fallback_payload = _drop_unsupported_session_columns(payload, exc)
+        if fallback_payload == payload:
             raise
-        legacy_payload = {key: value for key, value in payload.items() if key != "week_starts_on"}
         updated = (
             db.table(TABLE)
-            .update(serialize_payload(legacy_payload))
+            .update(serialize_payload(fallback_payload))
             .eq("id", str(session_id))
             .execute()
         )
