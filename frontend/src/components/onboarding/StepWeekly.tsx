@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { WeeklyGoal } from "@/lib/types";
-import { getCurrentWeek, getCurrentMonth, getCurrentYear } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentYear } from "@/lib/mockData";
 import { AddWeeklyGoalModal } from "./AddWeeklyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
@@ -12,6 +12,16 @@ import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
 interface Props {
   onNext: () => void;
   onBack: () => void;
+}
+
+function getWeekNumberForDate(date: Date, weekStartsOn: "sunday" | "monday"): number {
+  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = weekStartsOn === "sunday" ? local.getDay() : (local.getDay() + 6) % 7;
+  local.setDate(local.getDate() - day);
+  const yearStart = new Date(local.getFullYear(), 0, 1);
+  const yearStartDay = weekStartsOn === "sunday" ? yearStart.getDay() : (yearStart.getDay() + 6) % 7;
+  yearStart.setDate(yearStart.getDate() - yearStartDay);
+  return Math.floor((local.getTime() - yearStart.getTime()) / 604800000) + 1;
 }
 
 // ─── Main Goal Card ────────────────────────────────────────────────────────────
@@ -345,6 +355,8 @@ export function StepWeekly({ onNext, onBack }: Props) {
     generateWeeklyPlan,
     approveWeeklyPlan,
     syncWeeklyGoalsToServer,
+    activeDashboardDate,
+    sessionWeekStartsOn,
   } = useAppStore(
     useShallow((state) => ({
       weeklyGoals: state.weeklyGoals,
@@ -360,17 +372,26 @@ export function StepWeekly({ onNext, onBack }: Props) {
       generateWeeklyPlan: state.generateWeeklyPlan,
       approveWeeklyPlan: state.approveWeeklyPlan,
       syncWeeklyGoalsToServer: state.syncWeeklyGoalsToServer,
+      activeDashboardDate: state.activeDashboardDate,
+      sessionWeekStartsOn: state.sessionWeekStartsOn,
     })),
   );
 
+  const currentYear = Number(activeDashboardDate.slice(0, 4)) || getCurrentYear();
+  const currentMonth = Number(activeDashboardDate.slice(5, 7)) || getCurrentMonth();
+  const activeDashboardReference = new Date(`${activeDashboardDate}T12:00:00`);
+  const currentWeek = Number.isNaN(activeDashboardReference.getTime())
+    ? getWeekNumberForDate(new Date(), sessionWeekStartsOn)
+    : getWeekNumberForDate(activeDashboardReference, sessionWeekStartsOn);
+
   const currentWeekGoals = weeklyGoals.filter(
-    (g) => g.weekNumber === getCurrentWeek() && g.year === getCurrentYear()
+    (g) => g.weekNumber === currentWeek && g.year === currentYear
   );
   const mainGoals = currentWeekGoals.filter((g) => g.isMain);
   const secondaryGoals = currentWeekGoals.filter((g) => !g.isMain);
 
   const currentMonthlyGoals = monthlyGoals.filter(
-    (g) => g.month === getCurrentMonth() && g.year === getCurrentYear()
+    (g) => g.month === currentMonth && g.year === currentYear
   );
 
   // Modal state
@@ -425,7 +446,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateWeeklyPlan(getCurrentYear(), getCurrentWeek());
+    const result = await generateWeeklyPlan(currentYear, currentWeek);
     if (!result.ok) {
       const banner = useAppStore.getState().syncError;
       const apiDetail =
@@ -464,7 +485,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false });
     });
     setAiAccepting(true);
-    const ok = await approveWeeklyPlan(getCurrentYear(), getCurrentWeek(), goals);
+    const ok = await approveWeeklyPlan(currentYear, currentWeek, goals);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -474,8 +495,8 @@ export function StepWeekly({ onNext, onBack }: Props) {
 
   const handleLeaveWeekly = async () => {
     setLeaveError(null);
-    const mainGoalsCount = weeklyGoals.filter(g => g.year === getCurrentYear() && g.weekNumber === getCurrentWeek() && g.isMain).length;
-    const secondaryGoalsCount = weeklyGoals.filter(g => g.year === getCurrentYear() && g.weekNumber === getCurrentWeek() && !g.isMain).length;
+    const mainGoalsCount = weeklyGoals.filter(g => g.year === currentYear && g.weekNumber === currentWeek && g.isMain).length;
+    const secondaryGoalsCount = weeklyGoals.filter(g => g.year === currentYear && g.weekNumber === currentWeek && !g.isMain).length;
     if (mainGoalsCount !== 1) {
       setLeaveError("You need exactly one main goal for the week before continuing.");
       return;
@@ -484,7 +505,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       setLeaveError("You can have at most three secondary goals for the week.");
       return;
     }
-    const ok = await syncWeeklyGoalsToServer(getCurrentYear(), getCurrentWeek());
+    const ok = await syncWeeklyGoalsToServer(currentYear, currentWeek);
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Weekly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -501,7 +522,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
           className="font-headline text-4xl font-extrabold tracking-tight"
           style={{ color: "#1a1f1e" }}
         >
-          Plan week {getCurrentWeek()}.
+          Plan week {currentWeek}.
         </h1>
         <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#8a9e97" }}>
           1 main goal, up to 3 secondary goals. Each connects to a monthly goal.
@@ -850,9 +871,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
               addWeeklyGoal({
                 ...data,
                 isMain: true,
-                weekNumber: getCurrentWeek(),
-                month: getCurrentMonth(),
-                year: getCurrentYear(),
+                weekNumber: currentWeek,
+                month: currentMonth,
+                year: currentYear,
                 status: "active",
                 progress: 0,
                 aiSuggested: false,
@@ -881,9 +902,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
               addWeeklyGoal({
                 ...data,
                 isMain: false,
-                weekNumber: getCurrentWeek(),
-                month: getCurrentMonth(),
-                year: getCurrentYear(),
+                weekNumber: currentWeek,
+                month: currentMonth,
+                year: currentYear,
                 status: "active",
                 progress: 0,
                 aiSuggested: false,

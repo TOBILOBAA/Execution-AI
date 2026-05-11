@@ -114,7 +114,7 @@ export function AddWeeklyGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.25)", backdropFilter: "blur(5px)" }}
       onClick={onClose}
       role="dialog"
@@ -122,7 +122,7 @@ export function AddWeeklyGoalModal({
       aria-labelledby={titleId}
     >
       <div
-        className="bg-white w-full max-w-[620px] max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+        className="bg-white w-full max-w-[620px] max-h-[calc(100vh-2rem)] sm:max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
         style={{ border: "1px solid rgba(0,0,0,0.07)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -287,7 +287,7 @@ export function AddWeeklyGoalModal({
         </div>
 
         <div
-          className="px-8 py-5 flex items-center justify-between"
+          className="px-8 py-5 flex items-center justify-between flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
           <div>
