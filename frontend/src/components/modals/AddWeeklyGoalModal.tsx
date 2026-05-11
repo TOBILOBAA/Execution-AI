@@ -25,7 +25,10 @@ export function AddWeeklyGoalModal({ open, onClose, initialData }: Props) {
   const [error, setError] = useState("");
 
   const handleSave = () => {
-    if (!title.trim()) { setError("Goal title is required"); return; }
+    if (!title.trim()) {
+      setError("Goal title is required");
+      return;
+    }
     if (isEdit && initialData) {
       updateWeeklyGoal(initialData.id, { title: title.trim(), description, isMain });
     } else {
@@ -74,7 +77,10 @@ export function AddWeeklyGoalModal({ open, onClose, initialData }: Props) {
           label="Goal Title"
           placeholder="e.g., Complete Goals tab UI implementation"
           value={title}
-          onChange={(e) => { setTitle(e.target.value); setError(""); }}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            setError("");
+          }}
           error={error}
         />
         <Textarea
@@ -85,7 +91,9 @@ export function AddWeeklyGoalModal({ open, onClose, initialData }: Props) {
         />
       </ModalBody>
       <ModalFooter>
-        <Button variant="ghost" size="md" onClick={onClose}>Cancel</Button>
+        <Button variant="ghost" size="md" onClick={onClose}>
+          Cancel
+        </Button>
         <Button variant="primary" size="md" onClick={handleSave}>
           {isEdit ? "Save Changes" : "Add Goal"}
         </Button>

@@ -146,7 +146,7 @@ export function ManageHabitsModal({ open, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.30)", backdropFilter: "blur(4px)" }}
       onClick={onClose}
       role="dialog"
@@ -154,7 +154,7 @@ export function ManageHabitsModal({ open, onClose }: Props) {
       aria-labelledby={titleId}
     >
       <div
-        className="bg-white w-full max-w-[500px] rounded-3xl shadow-2xl overflow-hidden"
+        className="bg-white w-full max-w-[500px] max-h-[calc(100vh-2rem)] sm:max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
         style={{ border: "1px solid rgba(0,0,0,0.07)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -184,7 +184,7 @@ export function ManageHabitsModal({ open, onClose }: Props) {
           </div>
         </div>
 
-        <div className="px-6 py-5 space-y-2 max-h-[55vh] overflow-y-auto">
+        <div className="px-6 py-5 space-y-2 overflow-y-auto">
           {draftHabits.map((habit) => (
             <HabitRow
               key={habit.id}
@@ -295,7 +295,7 @@ export function ManageHabitsModal({ open, onClose }: Props) {
         </div>
 
         <div
-          className="px-8 py-5 flex items-center justify-between"
+          className="px-8 py-5 flex items-center justify-between flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
           <button

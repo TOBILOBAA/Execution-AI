@@ -87,7 +87,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.25)", backdropFilter: "blur(5px)" }}
       onClick={onClose}
       role="dialog"
@@ -95,7 +95,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
       aria-labelledby={titleId}
     >
       <div
-        className="bg-white w-full max-w-[500px] rounded-3xl shadow-2xl overflow-hidden"
+        className="bg-white w-full max-w-[560px] max-h-[calc(100vh-2rem)] sm:max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
         style={{ border: "1px solid rgba(0,0,0,0.07)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -122,7 +122,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
         </div>
 
         {/* Body */}
-        <div className="px-8 py-7 space-y-6">
+        <div className="px-8 py-7 space-y-6 overflow-y-auto">
           {/* Goal Name */}
           <div className="space-y-2">
             <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
@@ -230,7 +230,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData }: Props) {
 
         {/* Footer */}
         <div
-          className="px-8 py-5 flex items-center justify-between"
+          className="px-8 py-5 flex items-center justify-between flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
           {/* Left: discard only in edit mode */}
