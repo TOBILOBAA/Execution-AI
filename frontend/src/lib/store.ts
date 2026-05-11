@@ -95,6 +95,7 @@ interface AppState {
 
   // ── Backend session ──────────────────────────────────────────────────────────
   sessionId: string | null;
+  sessionTimezone: string;
   sessionWeekStartsOn: WeekStartsOn;
   setSessionId: (id: string | null) => void;
   setWeekStartsOn: (value: WeekStartsOn) => Promise<void>;
@@ -493,6 +494,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   let onboardingSnapshot: {
     onboarding_step: number;
     onboarding_done: boolean;
+    timezone: string;
     week_starts_on: WeekStartsOn;
   };
   try {
@@ -501,6 +503,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
     onboardingSnapshot = {
       onboarding_step: session.onboarding_step,
       onboarding_done: session.onboarding_done,
+      timezone: session.timezone,
       week_starts_on: session.week_starts_on,
     };
     set({ sessionId: sid, backendReady: true });
@@ -538,6 +541,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
       set({
         onboardingComplete: done,
         onboardingStep: step,
+        sessionTimezone: ob.timezone,
         sessionWeekStartsOn: ob.week_starts_on,
       });
       if (done && !dashboardPromise) {
@@ -1114,6 +1118,7 @@ export const useAppStore = create<AppState>()(
 
       // ── Backend session ──────────────────────────────────────────────────────
       sessionId: null,
+      sessionTimezone: "UTC",
       sessionWeekStartsOn: "monday",
       backendReady: false,
       workspaceHydrating: false,

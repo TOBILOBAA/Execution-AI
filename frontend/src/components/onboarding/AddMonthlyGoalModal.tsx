@@ -86,13 +86,16 @@ export function AddMonthlyGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.35)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[88vh] overflow-hidden flex flex-col my-auto"
+        style={{ border: "1px solid rgba(0,0,0,0.06)" }}
+      >
         {/* Header */}
-        <div className="px-7 pt-7 pb-0">
+        <div className="px-7 pt-7 pb-0 overflow-y-auto min-h-0">
           <div className="flex items-start justify-between mb-1">
             <h2 className="font-headline text-xl font-bold" style={{ color: "#1a1f1e" }}>
               {isEdit ? "Edit Goal" : isMain ? "Add Main Goal" : "Add Secondary Goal"}
@@ -252,7 +255,7 @@ export function AddMonthlyGoalModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-7 py-5" style={{ borderTop: "1px solid #f0f3f1" }}>
+        <div className="flex items-center justify-end gap-3 px-7 py-5 flex-shrink-0" style={{ borderTop: "1px solid #f0f3f1" }}>
           <button
             onClick={onClose}
             className="px-5 py-2.5 text-sm font-semibold transition"

@@ -79,7 +79,7 @@ export function AddWeeklyGoalModal({
         style={{ border: "1px solid rgba(0,0,0,0.06)" }}
       >
         {/* Header */}
-        <div className="px-7 pt-7 pb-0 overflow-y-auto">
+        <div className="px-7 pt-7 pb-0 overflow-y-auto min-h-0">
           <div className="flex items-start justify-between mb-4">
             <div>
               <p
