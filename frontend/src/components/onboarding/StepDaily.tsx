@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { DailyPriority, FoundationalHabit, HabitFrequency } from "@/lib/types";
 import { getToday } from "@/lib/mockData";
+import { DAILY_MAIN_GOAL_CAP, DAILY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 import { AddDailyPriorityModal } from "./AddDailyPriorityModal";
 import { AddSecondaryTaskModal } from "./AddSecondaryTaskModal";
 import { AddHabitModal } from "./AddHabitModal";
@@ -453,7 +454,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       setLeaveError("You need exactly one main goal for today before continuing.");
       return;
     }
-    if (todayTasksCount > 3) {
+    if (todayTasksCount > DAILY_SECONDARY_GOAL_CAP) {
       setLeaveError("You can have at most three secondary goals for today.");
       return;
     }
@@ -785,6 +786,8 @@ export function StepDaily({ onFinish, onBack }: Props) {
         <AddDailyPriorityModal
           categories={categories}
           weeklyGoals={weeklyGoals}
+          mainGoalCapReached={!isEditingPriority && todayPriorities.length >= DAILY_MAIN_GOAL_CAP}
+          mainGoalCapMessage="You can only save 1 main goal for this day."
           initialTitle={isEditingPriority ? (priorityModal as DailyPriority).title : ""}
           initialCategoryId={
             isEditingPriority
@@ -828,6 +831,8 @@ export function StepDaily({ onFinish, onBack }: Props) {
         <AddSecondaryTaskModal
           categories={categories}
           weeklyGoals={weeklyGoals}
+          secondaryGoalCapReached={!isEditingTask && todayTasks.length >= DAILY_SECONDARY_GOAL_CAP}
+          secondaryGoalCapMessage="You can only save up to 3 secondary goals for this day."
           initialTitle={isEditingTask ? (taskModal as DailyPriority).title : ""}
           initialCategoryId={isEditingTask
             ? categories.find((c) => c.name === (taskModal as DailyPriority).tag)?.id

@@ -6,6 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 import { WeeklyGoal } from "@/lib/types";
 import { getCurrentMonth, getCurrentYear, getToday } from "@/lib/mockData";
 import { getWeekNumber } from "@/lib/goalsView";
+import { WEEKLY_MAIN_GOAL_CAP, WEEKLY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 import { AddWeeklyGoalModal } from "./AddWeeklyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
@@ -493,8 +494,8 @@ export function StepWeekly({ onNext, onBack }: Props) {
       setLeaveError("You need exactly one main goal for the week before continuing.");
       return;
     }
-    if (secondaryGoalsCount > 3) {
-      setLeaveError("You can have at most three secondary goals for the week.");
+    if (secondaryGoalsCount > WEEKLY_SECONDARY_GOAL_CAP) {
+      setLeaveError("You can have at most two secondary goals for the week.");
       return;
     }
     const ok = await syncWeeklyGoalsToServer(currentYear, currentWeek);
@@ -517,7 +518,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
           Plan week {currentWeek}.
         </h1>
         <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#8a9e97" }}>
-          1 main goal, up to 3 secondary goals. Each connects to a monthly goal.
+          1 main goal, up to 2 secondary goals. Each connects to a monthly goal.
         </p>
       </div>
 
@@ -851,6 +852,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
         <AddWeeklyGoalModal
           mode="main"
           monthlyGoals={currentMonthlyGoals}
+          currentCount={editGoal ? 0 : mainGoals.length}
+          maxCount={WEEKLY_MAIN_GOAL_CAP}
+          limitMessage="You can only save 1 main goal for this week."
           initialTitle={editGoal?.title}
           initialMonthlyGoalId={editGoal?.monthlyGoalId}
           initialTargetDay={editGoal?.targetDay}
@@ -882,6 +886,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
         <AddWeeklyGoalModal
           mode="secondary"
           monthlyGoals={currentMonthlyGoals}
+          currentCount={editGoal ? 0 : secondaryGoals.length}
+          maxCount={WEEKLY_SECONDARY_GOAL_CAP}
+          limitMessage="You can only save up to 2 secondary goals for this week."
           initialTitle={editGoal?.title}
           initialMonthlyGoalId={editGoal?.monthlyGoalId}
           initialTargetDay={editGoal?.targetDay}

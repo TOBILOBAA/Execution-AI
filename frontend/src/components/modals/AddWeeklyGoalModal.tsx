@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import type { WeeklyGoal } from "@/lib/types";
 import { getWeekNumber } from "@/lib/goalsView";
+import { WEEKLY_MAIN_GOAL_CAP, WEEKLY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 
 interface Props {
   open: boolean;
@@ -28,6 +29,7 @@ export function AddWeeklyGoalModal({
   const updateWeeklyGoal = useAppStore((state) => state.updateWeeklyGoal);
   const removeWeeklyGoal = useAppStore((state) => state.removeWeeklyGoal);
   const monthlyGoals = useAppStore((state) => state.monthlyGoals);
+  const weeklyGoals = useAppStore((state) => state.weeklyGoals);
   const sessionWeekStartsOn = useAppStore((state) => state.sessionWeekStartsOn);
   const activeDashboardDate = useAppStore((state) => state.activeDashboardDate);
   const isEdit = !!initialData;
@@ -52,6 +54,19 @@ export function AddWeeklyGoalModal({
     () => monthlyGoals.filter((goal) => goal.year === effectiveYear && goal.month === effectiveMonth),
     [effectiveMonth, effectiveYear, monthlyGoals],
   );
+  const siblingGoals = useMemo(
+    () =>
+      weeklyGoals.filter(
+        (goal) =>
+          goal.year === effectiveYear &&
+          goal.weekNumber === effectiveWeek &&
+          goal.id !== initialData?.id,
+      ),
+    [effectiveWeek, effectiveYear, initialData?.id, weeklyGoals],
+  );
+  const mainGoalCapReached = isMain && siblingGoals.filter((goal) => goal.isMain).length >= WEEKLY_MAIN_GOAL_CAP;
+  const secondaryGoalCapReached =
+    !isMain && siblingGoals.filter((goal) => !goal.isMain).length >= WEEKLY_SECONDARY_GOAL_CAP;
 
   useEffect(() => {
     if (!open) return;
@@ -85,6 +100,14 @@ export function AddWeeklyGoalModal({
     }
     if (!monthlyGoalId) {
       setError("Pick a monthly goal first");
+      return;
+    }
+    if (mainGoalCapReached) {
+      setError("You can only save 1 main goal for this week.");
+      return;
+    }
+    if (secondaryGoalCapReached) {
+      setError("You can only save up to 2 secondary goals for this week.");
       return;
     }
     if (isEdit && initialData) {
