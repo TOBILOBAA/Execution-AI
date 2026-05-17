@@ -11,7 +11,6 @@ const NAV_ITEMS = [
   { href: "/dashboard",         label: "Home",    icon: "home",          activeIcon: "home" },
   { href: "/dashboard/goals",   label: "Goals",   icon: "target",        activeIcon: "target" },
   { href: "/dashboard/reports", label: "Reports", icon: "insert_chart",  activeIcon: "insert_chart" },
-  { href: "/dashboard/analytics", label: "Analytics", icon: "monitoring", activeIcon: "monitoring" },
 ];
 
 export function Sidebar() {

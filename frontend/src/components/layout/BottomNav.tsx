@@ -8,7 +8,6 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Home", icon: "home" },
   { href: "/dashboard/goals", label: "Goals", icon: "target" },
   { href: "/dashboard/reports", label: "Reports", icon: "insert_chart" },
-  { href: "/dashboard/analytics", label: "Analytics", icon: "monitoring" },
 ];
 
 export function BottomNav() {

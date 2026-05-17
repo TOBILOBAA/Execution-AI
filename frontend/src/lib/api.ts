@@ -142,6 +142,41 @@ export interface ApiActivityOverview {
   recent_days: ApiDailyUserActivity[];
 }
 
+export interface ApiActivityWorkspaceSummary {
+  session_id: string;
+  auth_user_id?: string;
+  device_hint?: string;
+  timezone: string;
+  onboarding_done: boolean;
+  current_stage:
+    | "onboarding"
+    | "planning_foundation"
+    | "daily_planning"
+    | "executing"
+    | "reviewing"
+    | "inactive";
+  days_since_last_seen?: number;
+  last_seen_at?: string;
+  last_active_at?: string;
+  last_opened_date_local?: string;
+  onboarding_evidence_complete: boolean;
+  active_days_in_range: number;
+  absent_days_in_range: number;
+  tasks_completed_in_range: number;
+  habits_completed_in_range: number;
+  reports_opened_in_range: number;
+}
+
+export interface ApiAdminActivityOverview {
+  total_workspaces: number;
+  active_today: number;
+  onboarding_incomplete: number;
+  inactive: number;
+  executing_now: number;
+  reviewing_now: number;
+  workspaces: ApiActivityWorkspaceSummary[];
+}
+
 export interface ApiRecapQueueEntry {
   type: "weekly" | "monthly" | "quarterly" | "yearly";
   period_year: number;
@@ -408,6 +443,11 @@ export const sessionsApi = {
 export const activityApi = {
   getOverview: (sessionId: string, days = 30) =>
     get<ApiActivityOverview>(`/activity/${sessionId}?days=${days}`),
+
+  getAdminOverview: (days = 14, limit = 50) =>
+    get<ApiAdminActivityOverview>(
+      `/activity/admin/overview?days=${days}&limit=${limit}`,
+    ),
 
   touch: (
     sessionId: string,

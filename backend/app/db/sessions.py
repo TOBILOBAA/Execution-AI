@@ -152,3 +152,16 @@ def update_session(db: Client, session_id: UUID, updates: dict) -> dict:
 def get_effective_week_starts_on(db: Client, session_id: UUID) -> str:
     session = get_session(db, session_id)
     return session["week_starts_on"] if session else "monday"
+
+
+def list_sessions(db: Client, limit: int = 100) -> list[dict]:
+    result = (
+        db.table(TABLE)
+        .select("*")
+        .order("last_seen_at", desc=True)
+        .order("updated_at", desc=True)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return [_hydrate_session_defaults(row) for row in (result.data or [])]
