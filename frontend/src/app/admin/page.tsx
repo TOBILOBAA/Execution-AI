@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   activityApi,
   ApiActivityOverview,
@@ -182,16 +182,16 @@ function workspaceSecondaryLine(
 function OverviewCards({ overview }: { overview: ApiAdminActivityOverview }) {
   const cards = [
     {
-      label: "Total users",
+      label: "Auth signups",
       value: overview.total_users,
       tone: "#1a1f1e",
-      note: "Tracked workspaces in the product",
+      note: "Real users from Supabase Auth",
     },
     {
-      label: "Signed up",
+      label: "Tracked in app",
       value: overview.total_signed_up,
       tone: "#155eef",
-      note: "Auth-linked users for this MVP",
+      note: "Auth users who have actually created a workspace",
     },
     {
       label: "Completed onboarding",
@@ -692,6 +692,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, startRefresh] = useTransition();
+  const detailAnchorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -746,6 +747,16 @@ export default function AdminPage() {
       cancelled = true;
     };
   }, [range, selectedSessionId]);
+
+  useEffect(() => {
+    if (!selectedSessionId) return;
+    if (typeof window === "undefined") return;
+    if (window.innerWidth >= 1280) return;
+    const handle = window.setTimeout(() => {
+      detailAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+    return () => window.clearTimeout(handle);
+  }, [selectedSessionId]);
 
   const refresh = () => {
     startRefresh(async () => {
@@ -887,17 +898,19 @@ export default function AdminPage() {
           <>
             <OverviewCards overview={overview} />
             <StageGuide />
-            <div className="grid gap-6 2xl:grid-cols-[0.98fr_1.18fr]">
+            <div className="grid gap-6 xl:grid-cols-[0.98fr_1.18fr]">
               <WorkspaceList
                 overview={overview}
                 selectedSessionId={selectedSessionId}
                 onSelect={setSelectedSessionId}
               />
-              <DetailPanel
-                overview={detailOverview}
-                selectedWorkspace={selectedWorkspace}
-                range={range}
-              />
+              <div ref={detailAnchorRef} className="self-start xl:sticky xl:top-6">
+                <DetailPanel
+                  overview={detailOverview}
+                  selectedWorkspace={selectedWorkspace}
+                  range={range}
+                />
+              </div>
             </div>
           </>
         ) : (
