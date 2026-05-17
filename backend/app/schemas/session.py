@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 from pydantic import BaseModel, Field
 
@@ -26,6 +26,9 @@ class SessionResponse(BaseModel):
     onboarding_done: bool
     timezone: str
     week_starts_on: str
+    last_seen_at: datetime | None = None
+    last_active_at: datetime | None = None
+    last_opened_date_local: date | None = None
     device_hint: str | None = None
     auth_user_id: str | None = None
     pending_recaps: list[RecapQueueEntry] = Field(default_factory=list)

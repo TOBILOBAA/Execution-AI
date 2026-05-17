@@ -23,6 +23,7 @@ import { isUuid } from "./uuid";
 import type { DashboardMetrics } from "./types";
 import {
   ApiError,
+  activityApi,
   categoriesApi,
   yearlyGoalsApi,
   monthlyPlanApi,
@@ -507,6 +508,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
       week_starts_on: session.week_starts_on,
     };
     set({ sessionId: sid, backendReady: true });
+    void activityApi.touch(sid, { event: "app_opened" }).catch(() => undefined);
   } catch (e) {
     set({
       backendReady: false,
@@ -1089,6 +1091,7 @@ export const useAppStore = create<AppState>()(
           return;
         }
         if (sameUser && state.backendReady && state.sessionId) {
+          void activityApi.touch(state.sessionId, { event: "app_opened" }).catch(() => undefined);
           set({ authReady: true, currentUser: authUser, syncError: null });
           return;
         }

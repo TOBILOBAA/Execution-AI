@@ -23,7 +23,15 @@ def _is_missing_week_starts_on_column(exc: APIError) -> bool:
 
 def _drop_unsupported_session_columns(payload: dict, exc: APIError) -> dict:
     unsupported = {
-        key for key in ("week_starts_on", "pending_recaps", "handled_recaps")
+        key
+        for key in (
+            "week_starts_on",
+            "pending_recaps",
+            "handled_recaps",
+            "last_seen_at",
+            "last_active_at",
+            "last_opened_date_local",
+        )
         if key in payload and _is_missing_column(exc, key)
     }
     if not unsupported:
@@ -42,6 +50,9 @@ def _hydrate_session_defaults(session: dict | None) -> dict | None:
         ),
         "pending_recaps": session.get("pending_recaps") or [],
         "handled_recaps": session.get("handled_recaps") or [],
+        "last_seen_at": session.get("last_seen_at"),
+        "last_active_at": session.get("last_active_at"),
+        "last_opened_date_local": session.get("last_opened_date_local"),
     }
 
 
