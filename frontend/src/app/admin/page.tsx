@@ -96,6 +96,66 @@ function stageMeta(
   }
 }
 
+function onboardingStepMeta(
+  evidence: ApiActivityOverview["onboarding_evidence"] | undefined,
+  onboardingDone?: boolean,
+) {
+  if (!evidence) {
+    return {
+      label: "Unknown",
+      detail: "Not enough data yet to determine where the user stopped.",
+      tone: "#667085",
+      bg: "rgba(102,112,133,0.10)",
+    };
+  }
+  if (onboardingDone && evidence.complete) {
+    return {
+      label: "Completed onboarding",
+      detail: "All required setup layers exist: yearly, monthly, weekly, and daily.",
+      tone: "#006c4a",
+      bg: "rgba(0,108,74,0.10)",
+    };
+  }
+  if (!evidence.has_yearly_goals) {
+    return {
+      label: "Stopped at yearly setup",
+      detail: "The user has not created the required yearly goal layer yet.",
+      tone: "#b54708",
+      bg: "rgba(181,71,8,0.10)",
+    };
+  }
+  if (!evidence.has_monthly_goals) {
+    return {
+      label: "Stopped at monthly setup",
+      detail: "The user got through yearly setup but did not complete the monthly layer.",
+      tone: "#b54708",
+      bg: "rgba(181,71,8,0.10)",
+    };
+  }
+  if (!evidence.has_weekly_goals) {
+    return {
+      label: "Stopped at weekly setup",
+      detail: "The user reached monthly planning but did not complete weekly setup.",
+      tone: "#b54708",
+      bg: "rgba(181,71,8,0.10)",
+    };
+  }
+  if (!evidence.has_daily_plan) {
+    return {
+      label: "Stopped at daily setup",
+      detail: "The user built the yearly, monthly, and weekly layers but did not finish daily planning.",
+      tone: "#b54708",
+      bg: "rgba(181,71,8,0.10)",
+    };
+  }
+  return {
+    label: "Setup complete",
+    detail: "The required onboarding setup exists even if activity is still light.",
+    tone: "#006c4a",
+    bg: "rgba(0,108,74,0.10)",
+  };
+}
+
 function buildRecentCalendar(days: number, rows: ApiActivityOverview["recent_days"]) {
   const byDate = new Map(rows.map((row) => [row.activity_date, row]));
   const today = new Date();
@@ -369,6 +429,7 @@ function WorkspaceList({
             const stage = stageMeta(workspace.current_stage);
             const selected = workspace.session_id === selectedSessionId;
             const activeToday = workspace.days_since_last_seen === 0;
+            const onboardingLabel = workspace.onboarding_evidence_complete ? "Completed" : "Needs setup";
             return (
               <button
                 key={workspace.session_id}
@@ -418,7 +479,7 @@ function WorkspaceList({
                         className="mt-1 text-sm font-semibold"
                         style={{ color: workspace.onboarding_evidence_complete ? "#006c4a" : "#b54708" }}
                       >
-                        {workspace.onboarding_evidence_complete ? "Complete" : "Incomplete"}
+                        {onboardingLabel}
                       </p>
                     </div>
                     <div>
@@ -474,6 +535,10 @@ function DetailPanel({
   range: number;
 }) {
   const stage = overview ? stageMeta(overview.current_stage) : null;
+  const onboardingStep = onboardingStepMeta(
+    overview?.onboarding_evidence,
+    selectedWorkspace?.onboarding_done,
+  );
   const recentCalendar = useMemo(
     () => buildRecentCalendar(range, overview?.recent_days ?? []),
     [overview?.recent_days, range],
@@ -541,9 +606,9 @@ function DetailPanel({
               tone: todayRow ? "#006c4a" : "#1a1f1e",
             },
             {
-              label: "Onboarding proof",
-              value: overview?.onboarding_evidence.complete ? "Complete" : "Incomplete",
-              tone: overview?.onboarding_evidence.complete ? "#006c4a" : "#b54708",
+              label: "Onboarding stage",
+              value: onboardingStep.label,
+              tone: onboardingStep.tone,
             },
           ].map((item) => (
             <div key={item.label} className="rounded-[22px] p-4" style={{ background: "#f8faf9" }}>
@@ -572,6 +637,21 @@ function DetailPanel({
             </h3>
             <p className="mt-2 text-sm leading-relaxed" style={{ color: "#6b7c75" }}>
               This lets you verify whether the user truly completed the foundation, not just whether a flag was set.
+            </p>
+          </div>
+
+          <div
+            className="mt-5 rounded-[22px] px-4 py-4"
+            style={{ background: onboardingStep.bg }}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+              Onboarding stop point
+            </p>
+            <p className="mt-2 text-base font-bold" style={{ color: "#1a1f1e" }}>
+              {onboardingStep.label}
+            </p>
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: "#50615b" }}>
+              {onboardingStep.detail}
             </p>
           </div>
 
