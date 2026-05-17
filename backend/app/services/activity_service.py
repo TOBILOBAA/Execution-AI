@@ -28,6 +28,47 @@ _BOOLEAN_EVENT_FIELDS: dict[ActivityEvent, tuple[str, bool]] = {
 }
 
 
+def _normalize_auth_admin_user(raw_user: object) -> dict:
+    if hasattr(raw_user, "model_dump"):
+        data = raw_user.model_dump()
+    elif hasattr(raw_user, "dict"):
+        data = raw_user.dict()
+    else:
+        data = dict(raw_user)
+    user_meta = data.get("user_metadata") or {}
+    email = data.get("email")
+    display_name = user_meta.get("full_name") or user_meta.get("name")
+    if not display_name and email:
+        display_name = str(email).split("@")[0]
+    return {
+        "id": data.get("id"),
+        "email": email,
+        "name": display_name,
+    }
+
+
+def _list_auth_users(db: Client) -> list[dict]:
+    users: list[dict] = []
+    page = 1
+    while True:
+        result = db.auth.admin.list_users(page=page, per_page=200)
+        batch = getattr(result, "users", None) or getattr(result, "data", {}).get("users", [])
+        if not batch:
+            break
+        users.extend(_normalize_auth_admin_user(user) for user in batch)
+        if len(batch) < 200:
+            break
+        page += 1
+    return [user for user in users if user.get("id")]
+
+
+def _summary_sort_key(summary: dict) -> tuple[str, str]:
+    return (
+        str(summary.get("last_seen_at") or summary.get("last_active_at") or ""),
+        str(summary.get("last_opened_date_local") or ""),
+    )
+
+
 def _session_context(db: Client, session_id: UUID) -> tuple[dict, date, datetime]:
     session = sessions_db.get_session(db, session_id) or {}
     return session, get_session_today(db, session_id), get_session_now(db, session_id)
@@ -269,26 +310,42 @@ def get_admin_activity_overview(
 ) -> dict:
     effective_days = max(1, min(days, 90))
     effective_limit = max(1, min(limit, 200))
+    auth_users = _list_auth_users(db)
+    auth_user_map = {str(user["id"]): user for user in auth_users if user.get("id")}
     sessions = [
-        session for session in sessions_db.list_sessions(db, limit=None)
-        if session.get("auth_user_id")
+        session
+        for session in sessions_db.list_sessions(db, limit=None)
+        if session.get("auth_user_id") and str(session.get("auth_user_id")) in auth_user_map
     ]
-    all_workspaces = [
-        _summarize_workspace(db, session, days=effective_days)
-        for session in sessions
-    ]
+    all_session_summaries = []
+    for session in sessions:
+        summary = _summarize_workspace(db, session, days=effective_days)
+        auth_identity = auth_user_map.get(str(summary.get("auth_user_id"))) or {}
+        summary["auth_email"] = auth_identity.get("email") or summary.get("auth_email")
+        summary["auth_name"] = auth_identity.get("name") or summary.get("auth_name")
+        all_session_summaries.append(summary)
+
+    unique_users: dict[str, dict] = {}
+    for summary in all_session_summaries:
+        auth_user_id = str(summary.get("auth_user_id"))
+        current = unique_users.get(auth_user_id)
+        if current is None or _summary_sort_key(summary) > _summary_sort_key(current):
+            unique_users[auth_user_id] = summary
+
+    all_workspaces = list(unique_users.values())
+    all_workspaces.sort(key=_summary_sort_key, reverse=True)
     workspaces = all_workspaces[:effective_limit]
     completed_onboarding = sum(
         1 for item in all_workspaces if item.get("onboarding_done") and item.get("onboarding_evidence_complete")
     )
-    total_signed_up = len({item.get("auth_user_id") for item in all_workspaces if item.get("auth_user_id")})
+    total_signed_up = len(all_workspaces)
     dropped_recently = sum(1 for item in all_workspaces if item.get("current_stage") == "inactive")
 
     return {
-        "total_users": len(all_workspaces),
+        "total_users": len(auth_users),
         "total_signed_up": total_signed_up,
         "completed_onboarding": completed_onboarding,
-        "total_workspaces": len(all_workspaces),
+        "total_workspaces": len(all_session_summaries),
         "active_today": sum(1 for item in all_workspaces if item.get("days_since_last_seen") == 0),
         "onboarding_incomplete": max(len(all_workspaces) - completed_onboarding, 0),
         "inactive": dropped_recently,
