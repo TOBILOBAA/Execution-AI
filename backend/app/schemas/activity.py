@@ -54,6 +54,9 @@ class OnboardingEvidenceResponse(BaseModel):
 
 class ActivityOverviewResponse(BaseModel):
     session_id: str
+    auth_user_id: str | None = None
+    auth_name: str | None = None
+    auth_email: str | None = None
     last_seen_at: datetime | None = None
     last_active_at: datetime | None = None
     last_opened_date_local: date | None = None
@@ -73,6 +76,8 @@ class ActivityOverviewResponse(BaseModel):
 class ActivityWorkspaceSummaryResponse(BaseModel):
     session_id: str
     auth_user_id: str | None = None
+    auth_name: str | None = None
+    auth_email: str | None = None
     device_hint: str | None = None
     timezone: str
     onboarding_done: bool
@@ -97,10 +102,14 @@ class ActivityWorkspaceSummaryResponse(BaseModel):
 
 
 class AdminActivityOverviewResponse(BaseModel):
+    total_users: int
+    total_signed_up: int
+    completed_onboarding: int
     total_workspaces: int
     active_today: int
     onboarding_incomplete: int
     inactive: int
+    dropped_recently: int
     executing_now: int
     reviewing_now: int
     workspaces: list[ActivityWorkspaceSummaryResponse]
