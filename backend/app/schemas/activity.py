@@ -68,3 +68,39 @@ class ActivityOverviewResponse(BaseModel):
     days_since_last_seen: int | None = Field(default=None, ge=0)
     onboarding_evidence: OnboardingEvidenceResponse
     recent_days: list[DailyUserActivityResponse]
+
+
+class ActivityWorkspaceSummaryResponse(BaseModel):
+    session_id: str
+    auth_user_id: str | None = None
+    device_hint: str | None = None
+    timezone: str
+    onboarding_done: bool
+    current_stage: Literal[
+        "onboarding",
+        "planning_foundation",
+        "daily_planning",
+        "executing",
+        "reviewing",
+        "inactive",
+    ]
+    days_since_last_seen: int | None = Field(default=None, ge=0)
+    last_seen_at: datetime | None = None
+    last_active_at: datetime | None = None
+    last_opened_date_local: date | None = None
+    onboarding_evidence_complete: bool = False
+    active_days_in_range: int = 0
+    absent_days_in_range: int = 0
+    tasks_completed_in_range: int = 0
+    habits_completed_in_range: int = 0
+    reports_opened_in_range: int = 0
+
+
+class AdminActivityOverviewResponse(BaseModel):
+    total_workspaces: int
+    active_today: int
+    onboarding_incomplete: int
+    inactive: int
+    executing_now: int
+    reviewing_now: int
+    workspaces: list[ActivityWorkspaceSummaryResponse]

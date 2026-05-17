@@ -218,3 +218,66 @@ def get_activity_overview(db: Client, session_id: UUID, *, days: int = 30) -> di
         "onboarding_evidence": evidence,
         "recent_days": recent_days,
     }
+
+
+def _summarize_workspace(
+    db: Client,
+    session: dict,
+    *,
+    days: int,
+) -> dict:
+    session_id = UUID(str(session["id"]))
+    session_today = get_session_today(db, session_id)
+    recent_days = activity_db.list_daily_activity(db, session_id, limit=max(1, min(days, 90)))
+    evidence = get_onboarding_evidence(db, session_id)
+    stage, days_since_last_seen = _derive_stage(session, evidence, recent_days, session_today)
+    active_days = len(recent_days)
+    tasks_completed = sum(int(row.get("completed_tasks_count") or 0) for row in recent_days)
+    habits_completed = sum(int(row.get("completed_habits_count") or 0) for row in recent_days)
+    reports_opened = sum(1 for row in recent_days if row.get("opened_reports"))
+
+    return {
+        "session_id": str(session_id),
+        "auth_user_id": session.get("auth_user_id"),
+        "device_hint": session.get("device_hint"),
+        "timezone": session.get("timezone") or "UTC",
+        "onboarding_done": bool(session.get("onboarding_done")),
+        "current_stage": stage,
+        "days_since_last_seen": days_since_last_seen,
+        "last_seen_at": session.get("last_seen_at"),
+        "last_active_at": session.get("last_active_at"),
+        "last_opened_date_local": session.get("last_opened_date_local"),
+        "onboarding_evidence_complete": bool(evidence.get("complete")),
+        "active_days_in_range": active_days,
+        "absent_days_in_range": max(days - active_days, 0),
+        "tasks_completed_in_range": tasks_completed,
+        "habits_completed_in_range": habits_completed,
+        "reports_opened_in_range": reports_opened,
+    }
+
+
+def get_admin_activity_overview(
+    db: Client,
+    *,
+    days: int = 14,
+    limit: int = 50,
+) -> dict:
+    effective_days = max(1, min(days, 90))
+    sessions = [
+        session for session in sessions_db.list_sessions(db, limit=max(1, min(limit, 200)))
+        if session.get("auth_user_id")
+    ]
+    workspaces = [
+        _summarize_workspace(db, session, days=effective_days)
+        for session in sessions
+    ]
+
+    return {
+        "total_workspaces": len(workspaces),
+        "active_today": sum(1 for item in workspaces if item.get("days_since_last_seen") == 0),
+        "onboarding_incomplete": sum(1 for item in workspaces if not item.get("onboarding_done")),
+        "inactive": sum(1 for item in workspaces if item.get("current_stage") == "inactive"),
+        "executing_now": sum(1 for item in workspaces if item.get("current_stage") == "executing"),
+        "reviewing_now": sum(1 for item in workspaces if item.get("current_stage") == "reviewing"),
+        "workspaces": workspaces,
+    }
