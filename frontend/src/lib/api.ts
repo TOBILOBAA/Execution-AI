@@ -90,9 +90,56 @@ export interface Session {
   timezone: string;
   week_starts_on: "sunday" | "monday";
   created_at: string;
+  last_seen_at?: string;
+  last_active_at?: string;
+  last_opened_date_local?: string;
   auth_user_id?: string;
   pending_recaps?: ApiRecapQueueEntry[];
   handled_recaps?: string[];
+}
+
+export interface ApiDailyUserActivity {
+  session_id: string;
+  auth_user_id?: string;
+  activity_date: string;
+  timezone: string;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  opened_app: boolean;
+  completed_onboarding: boolean;
+  created_yearly_goal: boolean;
+  created_monthly_goal: boolean;
+  created_weekly_goal: boolean;
+  created_daily_plan: boolean;
+  opened_next_day_review: boolean;
+  approved_next_day_review: boolean;
+  opened_reports: boolean;
+  handled_recap: boolean;
+  completed_tasks_count: number;
+  completed_habits_count: number;
+}
+
+export interface ApiActivityOverview {
+  session_id: string;
+  last_seen_at?: string;
+  last_active_at?: string;
+  last_opened_date_local?: string;
+  current_stage:
+    | "onboarding"
+    | "planning_foundation"
+    | "daily_planning"
+    | "executing"
+    | "reviewing"
+    | "inactive";
+  days_since_last_seen?: number;
+  onboarding_evidence: {
+    has_yearly_goals: boolean;
+    has_monthly_goals: boolean;
+    has_weekly_goals: boolean;
+    has_daily_plan: boolean;
+    complete: boolean;
+  };
+  recent_days: ApiDailyUserActivity[];
 }
 
 export interface ApiRecapQueueEntry {
@@ -354,6 +401,31 @@ export const sessionsApi = {
     },
   ) =>
     patch<Session>(`/session/${sessionId}`, updates),
+};
+
+// ─── Activity ────────────────────────────────────────────────────────────────
+
+export const activityApi = {
+  getOverview: (sessionId: string, days = 30) =>
+    get<ApiActivityOverview>(`/activity/${sessionId}?days=${days}`),
+
+  touch: (
+    sessionId: string,
+    data: {
+      event:
+        | "app_opened"
+        | "onboarding_completed"
+        | "yearly_goal_created"
+        | "monthly_goal_created"
+        | "weekly_goal_created"
+        | "daily_plan_created"
+        | "next_day_review_opened"
+        | "next_day_review_approved"
+        | "reports_opened"
+        | "recap_handled";
+      activity_date?: string;
+    },
+  ) => post<ApiDailyUserActivity>(`/activity/${sessionId}/touch`, data),
 };
 
 // ─── Categories ───────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ from app.schemas.goals import (
     CategoryCreate, CategoryResponse,
     YearlyGoalCreate, YearlyGoalUpdate, YearlyGoalResponse,
 )
+from app.services import activity_service
 import app.db.categories as cat_db
 import app.db.yearly_goals as yg_db
 from app.utils.period_guards import (
@@ -71,7 +72,9 @@ def create_yearly_goal(
     assert_period_plannable_yearly(session_id, int(data["year"]), db)
     if data.get("category_id"):
         data["category_id"] = str(data["category_id"])
-    return yg_db.create_yearly_goal(db, session_id, data)
+    goal = yg_db.create_yearly_goal(db, session_id, data)
+    activity_service.mark_event(db, session_id, "yearly_goal_created")
+    return goal
 
 
 @router.patch("/{session_id}/{goal_id}", response_model=YearlyGoalResponse)
