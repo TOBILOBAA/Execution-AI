@@ -47,18 +47,42 @@ def _normalize_auth_admin_user(raw_user: object) -> dict:
     }
 
 
+def _extract_auth_users_batch(result: object) -> list[object]:
+    if result is None:
+        return []
+    users = getattr(result, "users", None)
+    if users is not None:
+        return list(users)
+    data = getattr(result, "data", None)
+    if isinstance(data, dict):
+        batch = data.get("users")
+        if batch is not None:
+            return list(batch)
+    if isinstance(result, dict):
+        batch = result.get("users")
+        if batch is not None:
+            return list(batch)
+        nested = result.get("data")
+        if isinstance(nested, dict) and nested.get("users") is not None:
+            return list(nested.get("users") or [])
+    return []
+
+
 def _list_auth_users(db: Client) -> list[dict]:
     users: list[dict] = []
     page = 1
-    while True:
-        result = db.auth.admin.list_users(page=page, per_page=200)
-        batch = getattr(result, "users", None) or getattr(result, "data", {}).get("users", [])
-        if not batch:
-            break
-        users.extend(_normalize_auth_admin_user(user) for user in batch)
-        if len(batch) < 200:
-            break
-        page += 1
+    try:
+        while True:
+            result = db.auth.admin.list_users(page=page, per_page=200)
+            batch = _extract_auth_users_batch(result)
+            if not batch:
+                break
+            users.extend(_normalize_auth_admin_user(user) for user in batch)
+            if len(batch) < 200:
+                break
+            page += 1
+    except Exception:
+        return []
     return [user for user in users if user.get("id")]
 
 
@@ -312,11 +336,20 @@ def get_admin_activity_overview(
     effective_limit = max(1, min(limit, 200))
     auth_users = _list_auth_users(db)
     auth_user_map = {str(user["id"]): user for user in auth_users if user.get("id")}
-    sessions = [
+    raw_sessions = [
         session
         for session in sessions_db.list_sessions(db, limit=None)
-        if session.get("auth_user_id") and str(session.get("auth_user_id")) in auth_user_map
+        if session.get("auth_user_id")
     ]
+    sessions = (
+        [
+            session
+            for session in raw_sessions
+            if str(session.get("auth_user_id")) in auth_user_map
+        ]
+        if auth_user_map
+        else raw_sessions
+    )
     all_session_summaries = []
     for session in sessions:
         summary = _summarize_workspace(db, session, days=effective_days)
@@ -342,7 +375,7 @@ def get_admin_activity_overview(
     dropped_recently = sum(1 for item in all_workspaces if item.get("current_stage") == "inactive")
 
     return {
-        "total_users": len(auth_users),
+        "total_users": len(auth_users) if auth_users else len({str(session.get("auth_user_id")) for session in raw_sessions if session.get("auth_user_id")}),
         "total_signed_up": total_signed_up,
         "completed_onboarding": completed_onboarding,
         "total_workspaces": len(all_session_summaries),
