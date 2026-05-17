@@ -210,6 +210,9 @@ def get_activity_overview(db: Client, session_id: UUID, *, days: int = 30) -> di
     stage, days_since_last_seen = _derive_stage(session, evidence, recent_days, session_today)
     return {
         "session_id": str(session_id),
+        "auth_user_id": session.get("auth_user_id"),
+        "auth_name": session.get("auth_name"),
+        "auth_email": session.get("auth_email"),
         "last_seen_at": session.get("last_seen_at"),
         "last_active_at": session.get("last_active_at"),
         "last_opened_date_local": session.get("last_opened_date_local"),
@@ -239,6 +242,8 @@ def _summarize_workspace(
     return {
         "session_id": str(session_id),
         "auth_user_id": session.get("auth_user_id"),
+        "auth_name": session.get("auth_name"),
+        "auth_email": session.get("auth_email"),
         "device_hint": session.get("device_hint"),
         "timezone": session.get("timezone") or "UTC",
         "onboarding_done": bool(session.get("onboarding_done")),
@@ -263,21 +268,32 @@ def get_admin_activity_overview(
     limit: int = 50,
 ) -> dict:
     effective_days = max(1, min(days, 90))
+    effective_limit = max(1, min(limit, 200))
     sessions = [
-        session for session in sessions_db.list_sessions(db, limit=max(1, min(limit, 200)))
+        session for session in sessions_db.list_sessions(db, limit=None)
         if session.get("auth_user_id")
     ]
-    workspaces = [
+    all_workspaces = [
         _summarize_workspace(db, session, days=effective_days)
         for session in sessions
     ]
+    workspaces = all_workspaces[:effective_limit]
+    completed_onboarding = sum(
+        1 for item in all_workspaces if item.get("onboarding_done") and item.get("onboarding_evidence_complete")
+    )
+    total_signed_up = len({item.get("auth_user_id") for item in all_workspaces if item.get("auth_user_id")})
+    dropped_recently = sum(1 for item in all_workspaces if item.get("current_stage") == "inactive")
 
     return {
-        "total_workspaces": len(workspaces),
-        "active_today": sum(1 for item in workspaces if item.get("days_since_last_seen") == 0),
-        "onboarding_incomplete": sum(1 for item in workspaces if not item.get("onboarding_done")),
-        "inactive": sum(1 for item in workspaces if item.get("current_stage") == "inactive"),
-        "executing_now": sum(1 for item in workspaces if item.get("current_stage") == "executing"),
-        "reviewing_now": sum(1 for item in workspaces if item.get("current_stage") == "reviewing"),
+        "total_users": len(all_workspaces),
+        "total_signed_up": total_signed_up,
+        "completed_onboarding": completed_onboarding,
+        "total_workspaces": len(all_workspaces),
+        "active_today": sum(1 for item in all_workspaces if item.get("days_since_last_seen") == 0),
+        "onboarding_incomplete": max(len(all_workspaces) - completed_onboarding, 0),
+        "inactive": dropped_recently,
+        "dropped_recently": dropped_recently,
+        "executing_now": sum(1 for item in all_workspaces if item.get("current_stage") == "executing"),
+        "reviewing_now": sum(1 for item in all_workspaces if item.get("current_stage") == "reviewing"),
         "workspaces": workspaces,
     }

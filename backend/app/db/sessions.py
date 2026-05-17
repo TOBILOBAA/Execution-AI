@@ -31,6 +31,8 @@ def _drop_unsupported_session_columns(payload: dict, exc: APIError) -> dict:
             "last_seen_at",
             "last_active_at",
             "last_opened_date_local",
+            "auth_name",
+            "auth_email",
         )
         if key in payload and _is_missing_column(exc, key)
     }
@@ -53,6 +55,8 @@ def _hydrate_session_defaults(session: dict | None) -> dict | None:
         "last_seen_at": session.get("last_seen_at"),
         "last_active_at": session.get("last_active_at"),
         "last_opened_date_local": session.get("last_opened_date_local"),
+        "auth_name": session.get("auth_name"),
+        "auth_email": session.get("auth_email"),
     }
 
 
@@ -74,22 +78,28 @@ def create_session(
     device_hint: str | None,
     timezone: str,
     auth_user_id: str | None = None,
+    auth_name: str | None = None,
+    auth_email: str | None = None,
     week_starts_on: str | None = None,
 ) -> dict:
     payload = {
         "device_hint": device_hint,
         "timezone": timezone,
         "auth_user_id": auth_user_id,
+        "auth_name": auth_name,
+        "auth_email": auth_email,
     }
     if week_starts_on is not None:
         payload["week_starts_on"] = resolve_week_starts_on(week_starts_on, timezone)
     try:
         result = db.table(TABLE).insert(serialize_payload(payload)).execute()
     except APIError as exc:
-        if "week_starts_on" not in payload or not _is_missing_week_starts_on_column(exc):
-            raise
-        legacy_payload = {key: value for key, value in payload.items() if key != "week_starts_on"}
-        result = db.table(TABLE).insert(serialize_payload(legacy_payload)).execute()
+        fallback_payload = _drop_unsupported_session_columns(payload, exc)
+        if fallback_payload == payload:
+            if "week_starts_on" not in payload or not _is_missing_week_starts_on_column(exc):
+                raise
+            fallback_payload = {key: value for key, value in payload.items() if key != "week_starts_on"}
+        result = db.table(TABLE).insert(serialize_payload(fallback_payload)).execute()
     return _hydrate_session_defaults(result.data[0])
 
 
@@ -98,6 +108,8 @@ def get_or_create_session(
     device_hint: str | None,
     timezone: str,
     auth_user_id: str | None = None,
+    auth_name: str | None = None,
+    auth_email: str | None = None,
     week_starts_on: str | None = None,
 ) -> dict:
     if auth_user_id:
@@ -109,6 +121,8 @@ def get_or_create_session(
         device_hint,
         timezone,
         auth_user_id=auth_user_id,
+        auth_name=auth_name,
+        auth_email=auth_email,
         week_starts_on=week_starts_on,
     )
 
@@ -154,14 +168,15 @@ def get_effective_week_starts_on(db: Client, session_id: UUID) -> str:
     return session["week_starts_on"] if session else "monday"
 
 
-def list_sessions(db: Client, limit: int = 100) -> list[dict]:
-    result = (
+def list_sessions(db: Client, limit: int | None = 100) -> list[dict]:
+    query = (
         db.table(TABLE)
         .select("*")
         .order("last_seen_at", desc=True)
         .order("updated_at", desc=True)
         .order("created_at", desc=True)
-        .limit(limit)
-        .execute()
     )
+    if limit is not None:
+        query = query.limit(limit)
+    result = query.execute()
     return [_hydrate_session_defaults(row) for row in (result.data or [])]

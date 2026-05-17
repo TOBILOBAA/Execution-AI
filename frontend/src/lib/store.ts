@@ -499,7 +499,12 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
     week_starts_on: WeekStartsOn;
   };
   try {
-    const session = await ensureBackendSession(userId);
+    const identity = get().currentUser;
+    const session = await ensureBackendSession({
+      id: userId,
+      name: identity?.name,
+      email: identity?.email,
+    });
     sid = session.id;
     onboardingSnapshot = {
       onboarding_step: session.onboarding_step,

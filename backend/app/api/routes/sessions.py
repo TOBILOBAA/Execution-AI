@@ -22,6 +22,8 @@ def start_session(
         body.device_hint,
         body.timezone,
         auth_user_id=body.auth_user_id,
+        auth_name=body.auth_name,
+        auth_email=body.auth_email,
         week_starts_on=body.week_starts_on,
     )
     activity_service.touch_app_open(db, session["id"])

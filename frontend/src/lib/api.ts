@@ -94,6 +94,8 @@ export interface Session {
   last_active_at?: string;
   last_opened_date_local?: string;
   auth_user_id?: string;
+  auth_name?: string;
+  auth_email?: string;
   pending_recaps?: ApiRecapQueueEntry[];
   handled_recaps?: string[];
 }
@@ -121,6 +123,9 @@ export interface ApiDailyUserActivity {
 
 export interface ApiActivityOverview {
   session_id: string;
+  auth_user_id?: string;
+  auth_name?: string;
+  auth_email?: string;
   last_seen_at?: string;
   last_active_at?: string;
   last_opened_date_local?: string;
@@ -145,6 +150,8 @@ export interface ApiActivityOverview {
 export interface ApiActivityWorkspaceSummary {
   session_id: string;
   auth_user_id?: string;
+  auth_name?: string;
+  auth_email?: string;
   device_hint?: string;
   timezone: string;
   onboarding_done: boolean;
@@ -168,10 +175,14 @@ export interface ApiActivityWorkspaceSummary {
 }
 
 export interface ApiAdminActivityOverview {
+  total_users: number;
+  total_signed_up: number;
+  completed_onboarding: number;
   total_workspaces: number;
   active_today: number;
   onboarding_incomplete: number;
   inactive: number;
+  dropped_recently: number;
   executing_now: number;
   reviewing_now: number;
   workspaces: ApiActivityWorkspaceSummary[];
@@ -410,12 +421,16 @@ export const sessionsApi = {
   create: (
     timezone = "UTC",
     authUserId?: string,
+    authName?: string,
+    authEmail?: string,
     deviceHint?: string,
     weekStartsOn?: "sunday" | "monday",
   ) =>
     post<Session>("/session/start", {
       timezone,
       auth_user_id: authUserId,
+      auth_name: authName,
+      auth_email: authEmail,
       device_hint: deviceHint,
       week_starts_on: weekStartsOn,
     }),
@@ -429,6 +444,8 @@ export const sessionsApi = {
       onboarding_step?: number;
       onboarding_done?: boolean;
       auth_user_id?: string;
+      auth_name?: string;
+      auth_email?: string;
       timezone?: string;
       week_starts_on?: "sunday" | "monday";
       pending_recaps?: ApiRecapQueueEntry[];
