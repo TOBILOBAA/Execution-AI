@@ -11,6 +11,14 @@ import app.db.sessions as sessions_db
 router = APIRouter(prefix="/session", tags=["Sessions"])
 
 
+def _touch_app_open_safe(db: Client, session_id: UUID | str) -> None:
+    """Best-effort analytics only; session bootstrap must not fail because of tracking."""
+    try:
+        activity_service.touch_app_open(db, session_id)
+    except Exception:
+        return
+
+
 @router.post("/start", response_model=SessionResponse, status_code=201)
 def start_session(
     body: SessionCreate = Body(default=SessionCreate()),
@@ -26,7 +34,7 @@ def start_session(
         auth_email=body.auth_email,
         week_starts_on=body.week_starts_on,
     )
-    activity_service.touch_app_open(db, session["id"])
+    _touch_app_open_safe(db, session["id"])
     return sessions_db.get_session(db, session["id"])
 
 
@@ -36,7 +44,7 @@ def get_session(session_id: UUID, db: Client = Depends(get_db)):
     session = sessions_db.get_session(db, session_id)
     if not session:
         raise NotFoundError("Session", str(session_id))
-    activity_service.touch_app_open(db, session_id)
+    _touch_app_open_safe(db, session_id)
     return sessions_db.get_session(db, session_id)
 
 
