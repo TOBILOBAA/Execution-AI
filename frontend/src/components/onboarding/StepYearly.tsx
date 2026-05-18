@@ -14,8 +14,6 @@ interface Props {
   onNext: () => void;
 }
 
-const UNCATEGORIZED_CATEGORY_ID = "__uncategorized__";
-
 // ── Right AI Guidance Panel ───────────────────────────────────────────────────
 export function YearlyAIGuidancePanel() {
   return (
@@ -85,9 +83,13 @@ export function StepYearly({ onNext }: Props) {
   const [leaveBusy, setLeaveBusy] = useState(false);
   const [leaveError, setLeaveError] = useState("");
 
+  const fallbackCategoryId = categories[0]?.id ?? "";
   const getGoalsForCat = (catId: string) =>
-    yearlyGoals.filter((g) => g.year === getCurrentYear() && g.categoryId === catId);
-  const uncategorizedGoals = yearlyGoals.filter((g) => g.year === getCurrentYear() && !g.categoryId);
+    yearlyGoals.filter(
+      (g) =>
+        g.year === getCurrentYear() &&
+        (g.categoryId === catId || (!g.categoryId && catId === fallbackCategoryId)),
+    );
 
   const openAddGoal = (catId: string) => {
     setModalCatId(catId);
@@ -95,7 +97,7 @@ export function StepYearly({ onNext }: Props) {
   };
 
   const openEditGoal = (goal: YearlyGoal) => {
-    setModalCatId(goal.categoryId ?? UNCATEGORIZED_CATEGORY_ID);
+    setModalCatId(goal.categoryId ?? fallbackCategoryId);
     setGoalModal(goal);
   };
 
@@ -172,21 +174,6 @@ export function StepYearly({ onNext }: Props) {
             );
           })}
 
-          {uncategorizedGoals.length > 0 && (
-            <CategoryCard
-              cat={{ id: UNCATEGORIZED_CATEGORY_ID, name: "Uncategorized", icon: "inventory_2" }}
-              goals={uncategorizedGoals}
-              isOpen={expanded === UNCATEGORIZED_CATEGORY_ID}
-              onToggle={() => setExpanded(expanded === UNCATEGORIZED_CATEGORY_ID ? "" : UNCATEGORIZED_CATEGORY_ID)}
-              onDelete={() => undefined}
-              onAddGoal={() => undefined}
-              onEditGoal={openEditGoal}
-              onRemoveGoal={removeYearlyGoal}
-              showDeleteButton={false}
-              showAddGoalButton={false}
-            />
-          )}
-
           {/* Add Custom Category */}
           <button
             onClick={() => setShowCatModal(true)}
@@ -231,11 +218,7 @@ export function StepYearly({ onNext }: Props) {
       {/* Add / Edit goal modal */}
       {goalModal !== null && (
         <AddGoalModal
-          categoryName={
-            modalCatId === UNCATEGORIZED_CATEGORY_ID
-              ? "Uncategorized"
-              : categories.find(c => c.id === modalCatId)?.name ?? ""
-          }
+          categoryName={categories.find(c => c.id === modalCatId)?.name ?? ""}
           mode={isEditMode ? "edit" : "add"}
           initialTitle={isEditMode ? (goalModal as YearlyGoal).title : ""}
           initialDate={isEditMode ? (goalModal as YearlyGoal).targetDate : undefined}
@@ -266,8 +249,6 @@ function CategoryCard({
   onAddGoal,
   onEditGoal,
   onRemoveGoal,
-  showDeleteButton = true,
-  showAddGoalButton = true,
 }: {
   cat: { id: string; name: string; icon: string };
   goals: YearlyGoal[];
@@ -277,8 +258,6 @@ function CategoryCard({
   onAddGoal: () => void;
   onEditGoal: (goal: YearlyGoal) => void;
   onRemoveGoal: (id: string) => void;
-  showDeleteButton?: boolean;
-  showAddGoalButton?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
 
@@ -327,18 +306,16 @@ function CategoryCard({
           </span>
         </button>
 
-        {showDeleteButton && (
-          <button
-            type="button"
-            onClick={onDelete}
-            className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0 transition-all"
-            style={{ color: "#c8d5d0" }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#ef4444"; (e.currentTarget as HTMLElement).style.background = "#fef2f2"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "#c8d5d0"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-          >
-            <span className="material-symbols-outlined text-[15px]">delete</span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onDelete}
+          className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0 transition-all"
+          style={{ color: "#c8d5d0" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#ef4444"; (e.currentTarget as HTMLElement).style.background = "#fef2f2"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "#c8d5d0"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+        >
+          <span className="material-symbols-outlined text-[15px]">delete</span>
+        </button>
       </div>
 
       {/* ── Expanded body ── */}
@@ -356,19 +333,17 @@ function CategoryCard({
             ))}
           </div>
 
-          {showAddGoalButton && (
-            <button
-              type="button"
-              onClick={onAddGoal}
-              className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
-              style={{ border: "2px dashed rgba(0,108,74,0.22)", color: "rgba(0,108,74,0.65)" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,108,74,0.45)"; (e.currentTarget as HTMLElement).style.background = "rgba(0,108,74,0.03)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,108,74,0.22)"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-            >
-              <span className="material-symbols-outlined text-[16px]">add</span>
-              + Add yearly goal
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onAddGoal}
+            className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
+            style={{ border: "2px dashed rgba(0,108,74,0.22)", color: "rgba(0,108,74,0.65)" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,108,74,0.45)"; (e.currentTarget as HTMLElement).style.background = "rgba(0,108,74,0.03)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,108,74,0.22)"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
+            <span className="material-symbols-outlined text-[16px]">add</span>
+            + Add yearly goal
+          </button>
         </div>
       )}
     </div>
