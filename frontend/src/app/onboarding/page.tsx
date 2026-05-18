@@ -48,33 +48,31 @@ export default function OnboardingPage() {
   );
 
   useEffect(() => {
-    if (!authReady || workspaceHydrating) return;
+    if (!authReady) return;
     if (!currentUser) {
+      if (workspaceHydrating) return;
       router.replace("/auth");
       return;
     }
-    if (!backendReady) {
-      return;
-    }
-    if (onboardingComplete) {
+    if (onboardingComplete && backendReady) {
       router.replace("/dashboard");
     }
   }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
 
   useEffect(() => {
-    if (!authReady || workspaceHydrating || !currentUser || !backendReady || onboardingComplete) return;
+    if (!authReady || !currentUser || onboardingComplete) return;
     setActiveDashboardDate(getToday(sessionTimezone));
   }, [
     authReady,
-    workspaceHydrating,
     currentUser,
-    backendReady,
     onboardingComplete,
     sessionTimezone,
     setActiveDashboardDate,
   ]);
 
-  if (!authReady || workspaceHydrating || !currentUser || !backendReady || onboardingComplete) {
+  const canRenderOnboarding = authReady && !!currentUser && !onboardingComplete;
+
+  if (!canRenderOnboarding) {
     return (
       <AppLoadingScreen
         eyebrow="Preparing onboarding"

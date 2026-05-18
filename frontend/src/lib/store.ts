@@ -273,10 +273,15 @@ const pendingWeeklyGoalCreates = new Map<string, Promise<void>>();
 const pendingDailyPriorityCreates = new Map<string, Promise<void>>();
 const pendingSecondaryTaskCreates = new Map<string, Promise<void>>();
 const pendingHabitCreates = new Map<string, Promise<void>>();
+const pendingCategoryCreates = new Map<string, Promise<void>>();
 const pendingDashboardLoads = new Map<string, Promise<void>>();
 const pendingCategoryLoads = new Map<string, Promise<void>>();
 const pendingReportsLoads = new Map<string, Promise<ApiReport[] | null>>();
 const loadedCategoriesForSession = new Set<string>();
+const localToServerCategoryIds = new Map<string, string>();
+const localToServerYearlyGoalIds = new Map<string, string>();
+const localToServerMonthlyGoalIds = new Map<string, string>();
+const localToServerWeeklyGoalIds = new Map<string, string>();
 
 function upsertReport(reports: ApiReport[], incoming: ApiReport): ApiReport[] {
   const index = reports.findIndex((report) => report.id === incoming.id);
@@ -309,6 +314,42 @@ async function waitForPendingCreates(
   if (pending.length) {
     await Promise.all(pending);
   }
+}
+
+async function resolveCategoryIdForSave(
+  categoryId: string | undefined,
+): Promise<string | undefined> {
+  if (!categoryId) return undefined;
+  if (isUuid(categoryId)) return categoryId;
+  await waitForPendingCreates(pendingCategoryCreates, [categoryId]);
+  return localToServerCategoryIds.get(categoryId);
+}
+
+async function resolveYearlyGoalIdForSave(
+  yearlyGoalId: string | undefined,
+): Promise<string | undefined> {
+  if (!yearlyGoalId) return undefined;
+  if (isUuid(yearlyGoalId)) return yearlyGoalId;
+  await waitForPendingCreates(pendingYearlyGoalCreates, [yearlyGoalId]);
+  return localToServerYearlyGoalIds.get(yearlyGoalId);
+}
+
+async function resolveMonthlyGoalIdForSave(
+  monthlyGoalId: string | undefined,
+): Promise<string | undefined> {
+  if (!monthlyGoalId) return undefined;
+  if (isUuid(monthlyGoalId)) return monthlyGoalId;
+  await waitForPendingCreates(pendingMonthlyGoalCreates, [monthlyGoalId]);
+  return localToServerMonthlyGoalIds.get(monthlyGoalId);
+}
+
+async function resolveWeeklyGoalIdForSave(
+  weeklyGoalId: string | undefined,
+): Promise<string | undefined> {
+  if (!weeklyGoalId) return undefined;
+  if (isUuid(weeklyGoalId)) return weeklyGoalId;
+  await waitForPendingCreates(pendingWeeklyGoalCreates, [weeklyGoalId]);
+  return localToServerWeeklyGoalIds.get(weeklyGoalId);
 }
 
 function applyServerCategories(
@@ -1260,15 +1301,26 @@ export const useAppStore = create<AppState>()(
         // Sync to backend (fire-and-forget)
         const { sessionId } = get();
         if (sessionId) {
-          categoriesApi
+          const request = categoriesApi
             .create(sessionId, { name: cat.name, icon: cat.icon, color: cat.color })
             .then((created) => {
+              localToServerCategoryIds.set(localId, created.id);
               set((s) => ({
                 categories: s.categories.map((c) => (c.id === localId ? { ...c, id: created.id } : c)),
+                yearlyGoals: s.yearlyGoals.map((goal) =>
+                  goal.categoryId === localId ? { ...goal, categoryId: created.id } : goal
+                ),
+                monthlyGoals: s.monthlyGoals.map((goal) =>
+                  goal.categoryId === localId ? { ...goal, categoryId: created.id } : goal
+                ),
+                habits: s.habits.map((habit) =>
+                  habit.categoryId === localId ? { ...habit, categoryId: created.id } : habit
+                ),
                 syncError: null,
               }));
             })
             .catch((e) => set({ syncError: formatApiError("Save category", e) }));
+          trackPendingCreate(pendingCategoryCreates, localId, request);
         }
       },
       removeCategory: (id) => {
@@ -1294,15 +1346,21 @@ export const useAppStore = create<AppState>()(
           ],
         }));
         if (sessionId) {
-          const request = yearlyGoalsApi
-            .create(sessionId, {
+          const request = (async () => {
+            const categoryId = await resolveCategoryIdForSave(goal.categoryId);
+            if (goal.categoryId && !categoryId) {
+              throw new Error("The selected category is still syncing. Wait a moment and try again.");
+            }
+            return yearlyGoalsApi.create(sessionId, {
               title: goal.title,
-              ...(isUuid(goal.categoryId) ? { category_id: goal.categoryId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
               description: goal.description,
               year: goal.year,
               target_date: goal.targetDate,
-            })
+            });
+          })()
             .then((created) => {
+              localToServerYearlyGoalIds.set(localId, created.id);
               set((s) => ({
                 yearlyGoals: s.yearlyGoals.map((g) =>
                   g.id === localId
@@ -1313,6 +1371,9 @@ export const useAppStore = create<AppState>()(
                         editable: created.editable ?? g.editable,
                       }
                     : g
+                ),
+                monthlyGoals: s.monthlyGoals.map((goal) =>
+                  goal.yearlyGoalId === localId ? { ...goal, yearlyGoalId: created.id } : goal
                 ),
                 syncError: null,
               }));
@@ -1360,13 +1421,18 @@ export const useAppStore = create<AppState>()(
         const pending = get().yearlyGoals.filter((g) => g.year === getCurrentYear() && !isUuid(g.id));
         for (const g of pending) {
           try {
+            const categoryId = await resolveCategoryIdForSave(g.categoryId);
+            if (g.categoryId && !categoryId) {
+              throw new Error(`The category for "${g.title}" is still syncing.`);
+            }
             const created = await yearlyGoalsApi.create(sessionId, {
               title: g.title,
-              ...(isUuid(g.categoryId) ? { category_id: g.categoryId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
               description: g.description,
               year: g.year,
               target_date: g.targetDate,
             });
+            localToServerYearlyGoalIds.set(g.id, created.id);
             set((s) => ({
               yearlyGoals: s.yearlyGoals.map((yg) =>
                 yg.id === g.id
@@ -1377,6 +1443,9 @@ export const useAppStore = create<AppState>()(
                       editable: created.editable ?? yg.editable,
                     }
                   : yg,
+              ),
+              monthlyGoals: s.monthlyGoals.map((goal) =>
+                goal.yearlyGoalId === g.id ? { ...goal, yearlyGoalId: created.id } : goal
               ),
             }));
           } catch (e) {
@@ -1427,16 +1496,25 @@ export const useAppStore = create<AppState>()(
         let success = true;
         for (const g of pending) {
           try {
+            const yearlyGoalId = await resolveYearlyGoalIdForSave(g.yearlyGoalId);
+            const categoryId = await resolveCategoryIdForSave(g.categoryId);
+            if (g.yearlyGoalId && !yearlyGoalId) {
+              throw new Error(`The linked yearly goal for "${g.title}" is still syncing.`);
+            }
+            if (g.categoryId && !categoryId) {
+              throw new Error(`The category for "${g.title}" is still syncing.`);
+            }
             const created = await monthlyPlanApi.addGoal(sessionId, year, month, {
               title: g.title,
               description: g.description,
               is_main: g.isMain,
               priority: g.priority,
-              ...(isUuid(g.yearlyGoalId) ? { yearly_goal_id: g.yearlyGoalId } : {}),
-              ...(isUuid(g.categoryId) ? { category_id: g.categoryId } : {}),
+              ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
               target_date: g.targetDate,
               workload: g.workload,
             });
+            localToServerMonthlyGoalIds.set(g.id, created.id);
             set((s) => ({
               monthlyGoals: s.monthlyGoals.map((mg) =>
                 mg.id === g.id
@@ -1444,9 +1522,13 @@ export const useAppStore = create<AppState>()(
                       ...mg,
                       id: created.id,
                       yearlyGoalId: created.yearly_goal_id ?? mg.yearlyGoalId,
+                      categoryId: created.category_id ?? mg.categoryId,
                       editable: created.editable ?? mg.editable,
                     }
                   : mg
+              ),
+              weeklyGoals: s.weeklyGoals.map((goal) =>
+                goal.monthlyGoalId === g.id ? { ...goal, monthlyGoalId: created.id } : goal
               ),
               syncError: null,
               syncStatus: "saved",
@@ -1479,15 +1561,20 @@ export const useAppStore = create<AppState>()(
         let success = true;
         for (const g of pending) {
           try {
+            const monthlyGoalId = await resolveMonthlyGoalIdForSave(g.monthlyGoalId);
+            if (g.monthlyGoalId && !monthlyGoalId) {
+              throw new Error(`The linked monthly goal for "${g.title}" is still syncing.`);
+            }
             const created = await weeklyPlanApi.addGoal(sessionId, year, weekNumber, {
               title: g.title,
               description: g.description,
               is_main: g.isMain,
-              ...(isUuid(g.monthlyGoalId) ? { monthly_goal_id: g.monthlyGoalId } : {}),
+              ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
               target_day: g.targetDay,
               goal_type: g.goalType,
               workload: g.workload,
             });
+            localToServerWeeklyGoalIds.set(g.id, created.id);
             set((s) => ({
               weeklyGoals: s.weeklyGoals.map((wg) =>
                 wg.id === g.id
@@ -1498,6 +1585,12 @@ export const useAppStore = create<AppState>()(
                       editable: created.editable ?? wg.editable,
                     }
                   : wg
+              ),
+              dailyPriorities: s.dailyPriorities.map((goal) =>
+                goal.weeklyGoalId === g.id ? { ...goal, weeklyGoalId: created.id } : goal
+              ),
+              secondaryTasks: s.secondaryTasks.map((goal) =>
+                goal.weeklyGoalId === g.id ? { ...goal, weeklyGoalId: created.id } : goal
               ),
               syncError: null,
               syncStatus: "saved",
@@ -1537,18 +1630,28 @@ export const useAppStore = create<AppState>()(
           ],
         }));
         if (sessionId) {
-          const request = monthlyPlanApi
-            .addGoal(sessionId, goal.year, goal.month, {
+          const request = (async () => {
+            const yearlyGoalId = await resolveYearlyGoalIdForSave(goal.yearlyGoalId);
+            const categoryId = await resolveCategoryIdForSave(goal.categoryId);
+            if (goal.yearlyGoalId && !yearlyGoalId) {
+              throw new Error("The linked yearly goal is still syncing. Wait a moment and try again.");
+            }
+            if (goal.categoryId && !categoryId) {
+              throw new Error("The selected category is still syncing. Wait a moment and try again.");
+            }
+            return monthlyPlanApi.addGoal(sessionId, goal.year, goal.month, {
               title: goal.title,
               description: goal.description,
               is_main: goal.isMain,
               priority: goal.priority,
-              ...(isUuid(goal.yearlyGoalId) ? { yearly_goal_id: goal.yearlyGoalId } : {}),
-              ...(isUuid(goal.categoryId) ? { category_id: goal.categoryId } : {}),
+              ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
               target_date: goal.targetDate,
               workload: goal.workload,
-            })
+            });
+          })()
             .then((created) => {
+              localToServerMonthlyGoalIds.set(localId, created.id);
               set((s) => ({
                 monthlyGoals: s.monthlyGoals.map((g) =>
                   g.id === localId
@@ -1556,9 +1659,13 @@ export const useAppStore = create<AppState>()(
                         ...g,
                         id: created.id,
                         yearlyGoalId: created.yearly_goal_id ?? g.yearlyGoalId,
+                        categoryId: created.category_id ?? g.categoryId,
                         editable: created.editable ?? g.editable,
                       }
                     : g
+                ),
+                weeklyGoals: s.weeklyGoals.map((goal) =>
+                  goal.monthlyGoalId === localId ? { ...goal, monthlyGoalId: created.id } : goal
                 ),
                 syncError: null,
               }));
@@ -1635,17 +1742,23 @@ export const useAppStore = create<AppState>()(
           ],
         }));
         if (sessionId) {
-          const request = weeklyPlanApi
-            .addGoal(sessionId, goal.year, goal.weekNumber, {
+          const request = (async () => {
+            const monthlyGoalId = await resolveMonthlyGoalIdForSave(goal.monthlyGoalId);
+            if (goal.monthlyGoalId && !monthlyGoalId) {
+              throw new Error("The linked monthly goal is still syncing. Wait a moment and try again.");
+            }
+            return weeklyPlanApi.addGoal(sessionId, goal.year, goal.weekNumber, {
               title: goal.title,
               description: goal.description,
               is_main: goal.isMain,
-              ...(isUuid(goal.monthlyGoalId) ? { monthly_goal_id: goal.monthlyGoalId } : {}),
+              ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
               target_day: goal.targetDay,
               goal_type: goal.goalType,
               workload: goal.workload,
-            })
+            });
+          })()
             .then((created) => {
+              localToServerWeeklyGoalIds.set(localId, created.id);
               set((s) => ({
                 weeklyGoals: s.weeklyGoals.map((g) =>
                   g.id === localId
@@ -1656,6 +1769,12 @@ export const useAppStore = create<AppState>()(
                         editable: created.editable ?? g.editable,
                       }
                     : g
+                ),
+                dailyPriorities: s.dailyPriorities.map((goal) =>
+                  goal.weeklyGoalId === localId ? { ...goal, weeklyGoalId: created.id } : goal
+                ),
+                secondaryTasks: s.secondaryTasks.map((goal) =>
+                  goal.weeklyGoalId === localId ? { ...goal, weeklyGoalId: created.id } : goal
                 ),
                 syncError: null,
               }));
@@ -1719,16 +1838,21 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ dailyPriorities: [...s.dailyPriorities, { ...priority, id: localId }] }));
         const { sessionId } = get();
         if (sessionId) {
-          const request = tasksApi
-            .create(sessionId, priority.date, {
+          const request = (async () => {
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(priority.weeklyGoalId);
+            if (priority.weeklyGoalId && !weeklyGoalId) {
+              throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
+            }
+            return tasksApi.create(sessionId, priority.date, {
               title: priority.title,
               description: priority.description,
               priority: priority.priority,
               is_main: priority.isMain,
               estimated_minutes: priority.estimatedMinutes,
               tag: priority.tag,
-              ...(isUuid(priority.weeklyGoalId) ? { weekly_goal_id: priority.weeklyGoalId } : {}),
-            })
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
+            });
+          })()
             .then((created) => {
               set((s) => ({
                 dailyPriorities: s.dailyPriorities.map((p) =>
@@ -1825,16 +1949,21 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ secondaryTasks: [...s.secondaryTasks, { ...task, id: localId }] }));
         const { sessionId } = get();
         if (sessionId) {
-          const request = tasksApi
-            .create(sessionId, task.date, {
+          const request = (async () => {
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(task.weeklyGoalId);
+            if (task.weeklyGoalId && !weeklyGoalId) {
+              throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
+            }
+            return tasksApi.create(sessionId, task.date, {
               title: task.title,
               description: task.description,
               priority: task.priority,
               is_main: false,
               estimated_minutes: task.estimatedMinutes,
               tag: task.tag,
-              ...(isUuid(task.weeklyGoalId) ? { weekly_goal_id: task.weeklyGoalId } : {}),
-            })
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
+            });
+          })()
             .then((created) => {
               set((s) => ({
                 secondaryTasks: s.secondaryTasks.map((t) =>
@@ -1977,13 +2106,18 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ habits: [...s.habits, { ...habit, id: localId }] }));
         const { sessionId } = get();
         if (sessionId) {
-          const request = habitsApi
-            .create(sessionId, {
+          const request = (async () => {
+            const categoryId = await resolveCategoryIdForSave(habit.categoryId);
+            if (habit.categoryId && !categoryId) {
+              throw new Error("The selected category is still syncing. Wait a moment and try again.");
+            }
+            return habitsApi.create(sessionId, {
               name: habit.name,
               icon: habit.icon,
               frequency: habit.frequency,
-              ...(isUuid(habit.categoryId) ? { category_id: habit.categoryId } : {}),
-            })
+              ...(categoryId ? { category_id: categoryId } : {}),
+            });
+          })()
             .then((created) => {
               set((s) => ({
                 habits: s.habits.map((h) =>
@@ -2036,6 +2170,10 @@ export const useAppStore = create<AppState>()(
 
         for (const p of refreshed.dailyPriorities.filter((item) => item.date === planDate && !isUuid(item.id))) {
           try {
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(p.weeklyGoalId);
+            if (p.weeklyGoalId && !weeklyGoalId) {
+              throw new Error(`The linked weekly goal for "${p.title}" is still syncing.`);
+            }
             const created = await tasksApi.create(sessionId, planDate, {
               title: p.title,
               description: p.description,
@@ -2043,7 +2181,7 @@ export const useAppStore = create<AppState>()(
               is_main: p.isMain,
               estimated_minutes: p.estimatedMinutes,
               tag: p.tag,
-              ...(isUuid(p.weeklyGoalId) ? { weekly_goal_id: p.weeklyGoalId } : {}),
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
             });
             set((s) => ({
               dailyPriorities: s.dailyPriorities.map((item) =>
@@ -2058,6 +2196,10 @@ export const useAppStore = create<AppState>()(
 
         for (const t of refreshed.secondaryTasks.filter((item) => item.date === planDate && !isUuid(item.id))) {
           try {
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(t.weeklyGoalId);
+            if (t.weeklyGoalId && !weeklyGoalId) {
+              throw new Error(`The linked weekly goal for "${t.title}" is still syncing.`);
+            }
             const created = await tasksApi.create(sessionId, planDate, {
               title: t.title,
               description: t.description,
@@ -2065,7 +2207,7 @@ export const useAppStore = create<AppState>()(
               is_main: false,
               estimated_minutes: t.estimatedMinutes,
               tag: t.tag,
-              ...(isUuid(t.weeklyGoalId) ? { weekly_goal_id: t.weeklyGoalId } : {}),
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
             });
             set((s) => ({
               secondaryTasks: s.secondaryTasks.map((item) =>
@@ -2080,11 +2222,15 @@ export const useAppStore = create<AppState>()(
 
         for (const h of refreshed.habits.filter((item) => !isUuid(item.id))) {
           try {
+            const categoryId = await resolveCategoryIdForSave(h.categoryId);
+            if (h.categoryId && !categoryId) {
+              throw new Error(`The category for "${h.name}" is still syncing.`);
+            }
             const created = await habitsApi.create(sessionId, {
               name: h.name,
               icon: h.icon,
               frequency: h.frequency,
-              ...(isUuid(h.categoryId) ? { category_id: h.categoryId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
             });
             set((s) => ({
               habits: s.habits.map((item) =>
