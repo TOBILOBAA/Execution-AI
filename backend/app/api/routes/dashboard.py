@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends
 from supabase import Client
 
 from app.api.deps import get_db
-from app.services import activity_service
 from app.services import dashboard_service
 from app.schemas.dashboard import NextDayReviewApproveRequest
 from app.utils.period_guards import get_session_today
@@ -33,12 +32,6 @@ def get_next_day_review(
     db: Client = Depends(get_db),
 ):
     """Return the persisted review payload for the requested kickoff date."""
-    activity_service.mark_event(
-        db,
-        session_id,
-        "next_day_review_opened",
-        activity_date=plan_date,
-    )
     return dashboard_service.get_next_day_review(db, session_id, plan_date)
 
 
@@ -61,11 +54,5 @@ def approve_next_day_review(
         effective_date,
         [item.model_dump() for item in body.priorities],
         [item.model_dump() for item in body.tasks],
-    )
-    activity_service.mark_event(
-        db,
-        session_id,
-        "next_day_review_approved",
-        activity_date=effective_date,
     )
     return result
