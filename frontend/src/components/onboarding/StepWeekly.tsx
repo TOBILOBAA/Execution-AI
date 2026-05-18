@@ -498,7 +498,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       setLeaveError("You can have at most two secondary goals for the week.");
       return;
     }
-    const ok = await syncWeeklyGoalsToServer(currentYear, currentWeek);
+    const ok = await syncWeeklyGoalsToServer(currentYear, currentWeek, { mode: "verify" });
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Weekly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -701,7 +701,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               goal={goal}
               supportTitle={getMonthlyTitle(goal.monthlyGoalId)}
               onEdit={() => { setEditGoal(goal); setAddMainOpen(true); }}
-              onDelete={() => removeWeeklyGoal(goal.id)}
+              onDelete={() => { void removeWeeklyGoal(goal.id, { persistMode: "blocking" }); }}
             />
           ))}
           {mainGoals.length === 0 && (
@@ -743,7 +743,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               key={goal.id}
               goal={goal}
               onEdit={() => { setEditGoal(goal); setAddSecOpen(true); }}
-              onDelete={() => removeWeeklyGoal(goal.id)}
+              onDelete={() => { void removeWeeklyGoal(goal.id, { persistMode: "blocking" }); }}
             />
           ))}
           {secondaryGoals.length === 0 && (
@@ -798,7 +798,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               key={habit.id}
               habit={habit}
               onEdit={() => setEditHabitId(habit.id)}
-              onDelete={() => removeHabit(habit.id)}
+              onDelete={() => { void removeHabit(habit.id, { persistMode: "blocking" }); }}
             />
           ))}
           {habits.length === 0 && (
@@ -860,11 +860,12 @@ export function StepWeekly({ onNext, onBack }: Props) {
           initialTargetDay={editGoal?.targetDay}
           initialDescription={editGoal?.description}
           initialWorkload={editGoal?.workload}
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
             if (editGoal) {
-              updateWeeklyGoal(editGoal.id, data);
+              const ok = await updateWeeklyGoal(editGoal.id, data, { persistMode: "blocking" });
+              if (!ok) return;
             } else {
-              addWeeklyGoal({
+              const ok = await addWeeklyGoal({
                 ...data,
                 isMain: true,
                 weekNumber: currentWeek,
@@ -873,7 +874,8 @@ export function StepWeekly({ onNext, onBack }: Props) {
                 status: "active",
                 progress: 0,
                 aiSuggested: false,
-              });
+              }, { persistMode: "blocking" });
+              if (!ok) return;
             }
             setAddMainOpen(false);
             setEditGoal(null);
@@ -894,11 +896,12 @@ export function StepWeekly({ onNext, onBack }: Props) {
           initialTargetDay={editGoal?.targetDay}
           initialDescription={editGoal?.description}
           initialWorkload={editGoal?.workload}
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
             if (editGoal) {
-              updateWeeklyGoal(editGoal.id, data);
+              const ok = await updateWeeklyGoal(editGoal.id, data, { persistMode: "blocking" });
+              if (!ok) return;
             } else {
-              addWeeklyGoal({
+              const ok = await addWeeklyGoal({
                 ...data,
                 isMain: false,
                 weekNumber: currentWeek,
@@ -907,7 +910,8 @@ export function StepWeekly({ onNext, onBack }: Props) {
                 status: "active",
                 progress: 0,
                 aiSuggested: false,
-              });
+              }, { persistMode: "blocking" });
+              if (!ok) return;
             }
             setAddSecOpen(false);
             setEditGoal(null);
@@ -923,11 +927,16 @@ export function StepWeekly({ onNext, onBack }: Props) {
           initialIcon={editHabitData?.icon}
           initialCategoryId={editHabitData?.categoryId}
           initialFrequency={editHabitData?.frequency}
-          onSubmit={(name, icon, categoryId, frequency) => {
+          onSubmit={async (name, icon, categoryId, frequency) => {
             if (editHabitId) {
-              updateHabit(editHabitId, { name, icon, categoryId, frequency });
+              const ok = await updateHabit(editHabitId, { name, icon, categoryId, frequency }, { persistMode: "blocking" });
+              if (!ok) return;
             } else {
-              addHabit({ name, icon, categoryId, frequency, active: true, completedToday: false, streak: 0 });
+              const ok = await addHabit(
+                { name, icon, categoryId, frequency, active: true, completedToday: false, streak: 0 },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             }
             setAddHabitOpen(false);
             setEditHabitId(null);

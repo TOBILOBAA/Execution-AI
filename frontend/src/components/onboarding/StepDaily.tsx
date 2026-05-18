@@ -458,7 +458,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       setLeaveError("You can have at most three secondary goals for today.");
       return;
     }
-    const ok = await syncDailySetupToServer(getToday());
+    const ok = await syncDailySetupToServer(getToday(), { mode: "verify" });
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Your daily goals and routines have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -669,7 +669,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                   index={idx}
                   isLast={idx === todayPriorities.length - 1}
                   onEdit={() => setPriorityModal(p)}
-                  onDelete={() => removeDailyPriority(p.id)}
+                  onDelete={() => { void removeDailyPriority(p.id, { persistMode: "blocking" }); }}
                 />
               ))
             )}
@@ -703,7 +703,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                   index={idx}
                   isLast={idx === todayTasks.length - 1}
                   onEdit={() => setTaskModal(t)}
-                  onDelete={() => removeSecondaryTask(t.id)}
+                  onDelete={() => { void removeSecondaryTask(t.id, { persistMode: "blocking" }); }}
                 />
               ))
             )}
@@ -725,7 +725,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 key={habit.id}
                 habit={habit}
                 onEdit={() => setHabitModal(habit)}
-                onDelete={() => removeHabit(habit.id)}
+                onDelete={() => { void removeHabit(habit.id, { persistMode: "blocking" }); }}
               />
             ))}
             {activeHabits.length === 0 && (
@@ -797,17 +797,18 @@ export function StepDaily({ onFinish, onBack }: Props) {
           initialWeeklyGoalId={isEditingPriority ? (priorityModal as DailyPriority).weeklyGoalId : undefined}
           initialAllocation={isEditingPriority ? (priorityModal as DailyPriority).estimatedMinutes : 30}
           initialDescription={isEditingPriority ? (priorityModal as DailyPriority).description : undefined}
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
             if (isEditingPriority) {
-              updateDailyPriority((priorityModal as DailyPriority).id, {
+              const ok = await updateDailyPriority((priorityModal as DailyPriority).id, {
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
                 weeklyGoalId: data.weeklyGoalId,
                 description: data.description,
-              });
+              }, { persistMode: "blocking" });
+              if (!ok) return;
             } else {
-              addDailyPriority({
+              const ok = await addDailyPriority({
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
@@ -819,7 +820,8 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 priority: "high",
                 isMain: true,
                 aiSuggested: false,
-              });
+              }, { persistMode: "blocking" });
+              if (!ok) return;
             }
             setPriorityModal(null);
           }}
@@ -840,17 +842,18 @@ export function StepDaily({ onFinish, onBack }: Props) {
           initialWeeklyGoalId={isEditingTask ? (taskModal as DailyPriority).weeklyGoalId : undefined}
           initialAllocation={isEditingTask ? (taskModal as DailyPriority).estimatedMinutes : 30}
           initialDescription={isEditingTask ? (taskModal as DailyPriority).description : undefined}
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
             if (isEditingTask) {
-              updateSecondaryTask((taskModal as DailyPriority).id, {
+              const ok = await updateSecondaryTask((taskModal as DailyPriority).id, {
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
                 weeklyGoalId: data.weeklyGoalId,
                 description: data.description,
-              });
+              }, { persistMode: "blocking" });
+              if (!ok) return;
             } else {
-              addSecondaryTask({
+              const ok = await addSecondaryTask({
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
@@ -862,7 +865,8 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 priority: "medium",
                 isMain: false,
                 aiSuggested: false,
-              });
+              }, { persistMode: "blocking" });
+              if (!ok) return;
             }
             setTaskModal(null);
           }}
@@ -877,11 +881,20 @@ export function StepDaily({ onFinish, onBack }: Props) {
           initialIcon={isEditingHabit ? (habitModal as FoundationalHabit).icon : undefined}
           initialCategoryId={isEditingHabit ? (habitModal as FoundationalHabit).categoryId : undefined}
           initialFrequency={isEditingHabit ? (habitModal as FoundationalHabit).frequency : undefined}
-          onSubmit={(name, icon, categoryId, frequency) => {
+          onSubmit={async (name, icon, categoryId, frequency) => {
             if (isEditingHabit) {
-              updateHabit((habitModal as FoundationalHabit).id, { name, icon, categoryId, frequency });
+              const ok = await updateHabit(
+                (habitModal as FoundationalHabit).id,
+                { name, icon, categoryId, frequency },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             } else {
-              addHabit({ name, icon, categoryId, frequency, active: true, completedToday: false, streak: 0 });
+              const ok = await addHabit(
+                { name, icon, categoryId, frequency, active: true, completedToday: false, streak: 0 },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             }
             setHabitModal(null);
           }}
