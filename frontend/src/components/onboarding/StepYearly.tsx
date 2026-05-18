@@ -86,8 +86,14 @@ export function StepYearly({ onNext }: Props) {
   const [leaveError, setLeaveError] = useState("");
 
   const getGoalsForCat = (catId: string) =>
-    yearlyGoals.filter((g) => g.year === getCurrentYear() && g.categoryId === catId);
-  const uncategorizedGoals = yearlyGoals.filter((g) => g.year === getCurrentYear() && !g.categoryId);
+    yearlyGoals.filter(
+      (g) =>
+        g.year === getCurrentYear() &&
+        g.categoryId === catId,
+    );
+  const uncategorizedGoals = yearlyGoals.filter(
+    (g) => g.year === getCurrentYear() && !g.categoryId,
+  );
 
   const openAddGoal = (catId: string) => {
     setModalCatId(catId);
@@ -167,6 +173,8 @@ export function StepYearly({ onNext }: Props) {
                 onAddGoal={() => openAddGoal(cat.id)}
                 onEditGoal={openEditGoal}
                 onRemoveGoal={removeYearlyGoal}
+                showDeleteButton
+                showAddGoalButton
               />
             );
           })}
@@ -176,7 +184,9 @@ export function StepYearly({ onNext }: Props) {
               cat={{ id: UNCATEGORIZED_CATEGORY_ID, name: "Uncategorized", icon: "inventory_2" }}
               goals={uncategorizedGoals}
               isOpen={expanded === UNCATEGORIZED_CATEGORY_ID}
-              onToggle={() => setExpanded(expanded === UNCATEGORIZED_CATEGORY_ID ? "" : UNCATEGORIZED_CATEGORY_ID)}
+              onToggle={() =>
+                setExpanded(expanded === UNCATEGORIZED_CATEGORY_ID ? "" : UNCATEGORIZED_CATEGORY_ID)
+              }
               onDelete={() => undefined}
               onAddGoal={() => undefined}
               onEditGoal={openEditGoal}
