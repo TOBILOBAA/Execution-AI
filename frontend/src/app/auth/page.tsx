@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAppStore, LOCAL_TEST_SIGNIN_HINTS } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { OtpCodeInput } from "@/components/OtpCodeInput";
+import { describeSyncError } from "@/lib/apiErrors";
 import { isAuthLocalOnly, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
 
 type Mode = "signin" | "signup" | "forgot";
@@ -30,9 +31,12 @@ export default function AuthPage() {
     sendEmailOtp,
     verifyEmailOtp,
     sendPasswordReset,
+    hydrateAuthFromSupabase,
     onboardingComplete,
     authReady,
+    backendReady,
     workspaceHydrating,
+    syncError,
   } = useAppStore(
     useShallow((state) => ({
       currentUser: state.currentUser,
@@ -41,9 +45,12 @@ export default function AuthPage() {
       sendEmailOtp: state.sendEmailOtp,
       verifyEmailOtp: state.verifyEmailOtp,
       sendPasswordReset: state.sendPasswordReset,
+      hydrateAuthFromSupabase: state.hydrateAuthFromSupabase,
       onboardingComplete: state.onboardingComplete,
       authReady: state.authReady,
+      backendReady: state.backendReady,
       workspaceHydrating: state.workspaceHydrating,
+      syncError: state.syncError,
     })),
   );
   const [mode, setMode] = useState<Mode>("signin");
@@ -58,15 +65,24 @@ export default function AuthPage() {
   const [otpAwaitingCode, setOtpAwaitingCode] = useState(false);
   const [otpDigits, setOtpDigits] = useState("");
   const [resendIn, setResendIn] = useState(0);
+  const [retryingWorkspace, setRetryingWorkspace] = useState(false);
+  const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
+  const backendAttachFailed =
+    Boolean(currentUser) &&
+    serverPersistenceRequired &&
+    !workspaceHydrating &&
+    !backendReady &&
+    Boolean(syncError);
 
   useEffect(() => {
     if (!authReady || workspaceHydrating || !currentUser) {
       return;
     }
-    if (currentUser) {
-      router.replace(onboardingComplete ? "/dashboard" : "/onboarding");
+    if (serverPersistenceRequired && !backendReady) {
+      return;
     }
-  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, router]);
+    router.replace(onboardingComplete ? "/dashboard" : "/onboarding");
+  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router, serverPersistenceRequired]);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -75,6 +91,52 @@ export default function AuthPage() {
   }, [resendIn]);
 
   const handingOffToWorkspace = Boolean(currentUser);
+
+  const retryWorkspaceConnection = async () => {
+    setRetryingWorkspace(true);
+    try {
+      await hydrateAuthFromSupabase();
+    } finally {
+      setRetryingWorkspace(false);
+    }
+  };
+
+  if (backendAttachFailed) {
+    const { title, message, footer } = describeSyncError(syncError ?? "");
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ background: "#f4f6f4" }}>
+        <div
+          className="w-full max-w-md rounded-3xl px-7 py-8 bg-white"
+          style={{ boxShadow: "0 24px 70px rgba(15, 23, 42, 0.08)" }}
+        >
+          <p
+            className="text-[10px] uppercase tracking-widest font-bold mb-3"
+            style={{ color: "#a8b5af" }}
+          >
+            Workspace connection
+          </p>
+          <h1 className="font-headline text-3xl font-extrabold tracking-tight mb-3" style={{ color: "#1a1f1e" }}>
+            {title}
+          </h1>
+          <p className="text-sm leading-relaxed mb-2" style={{ color: "#475569" }}>
+            {message}
+          </p>
+          <p className="text-xs leading-relaxed mb-6" style={{ color: "#64748b" }}>
+            {footer}
+          </p>
+          <button
+            type="button"
+            onClick={() => void retryWorkspaceConnection()}
+            disabled={retryingWorkspace}
+            className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
+            style={{ background: "#006c4a" }}
+          >
+            {retryingWorkspace ? "Retrying…" : "Retry connection"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!authReady || workspaceHydrating || handingOffToWorkspace) {
     return (

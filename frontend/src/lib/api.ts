@@ -91,6 +91,8 @@ export interface Session {
   week_starts_on: "sunday" | "monday";
   created_at: string;
   auth_user_id?: string;
+  auth_name?: string;
+  auth_email?: string;
   pending_recaps?: ApiRecapQueueEntry[];
   handled_recaps?: string[];
 }
@@ -328,12 +330,16 @@ export const sessionsApi = {
   create: (
     timezone = "UTC",
     authUserId?: string,
+    authName?: string,
+    authEmail?: string,
     deviceHint?: string,
     weekStartsOn?: "sunday" | "monday",
   ) =>
     post<Session>("/session/start", {
       timezone,
       auth_user_id: authUserId,
+      auth_name: authName,
+      auth_email: authEmail,
       device_hint: deviceHint,
       week_starts_on: weekStartsOn,
     }),
@@ -347,6 +353,8 @@ export const sessionsApi = {
       onboarding_step?: number;
       onboarding_done?: boolean;
       auth_user_id?: string;
+      auth_name?: string;
+      auth_email?: string;
       timezone?: string;
       week_starts_on?: "sunday" | "monday";
       pending_recaps?: ApiRecapQueueEntry[];
