@@ -60,15 +60,11 @@ export default function AuthPage() {
   const [resendIn, setResendIn] = useState(0);
 
   useEffect(() => {
-    if (!authReady || !currentUser) {
+    if (!authReady || workspaceHydrating || !currentUser) {
       return;
     }
-    if (!onboardingComplete) {
-      router.replace("/onboarding");
-      return;
-    }
-    if (!workspaceHydrating) {
-      router.replace("/dashboard");
+    if (currentUser) {
+      router.replace(onboardingComplete ? "/dashboard" : "/onboarding");
     }
   }, [authReady, workspaceHydrating, currentUser, onboardingComplete, router]);
 
