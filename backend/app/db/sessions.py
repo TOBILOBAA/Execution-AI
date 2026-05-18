@@ -28,11 +28,6 @@ def _drop_unsupported_session_columns(payload: dict, exc: APIError) -> dict:
             "week_starts_on",
             "pending_recaps",
             "handled_recaps",
-            "last_seen_at",
-            "last_active_at",
-            "last_opened_date_local",
-            "auth_name",
-            "auth_email",
         )
         if key in payload and _is_missing_column(exc, key)
     }
@@ -52,11 +47,6 @@ def _hydrate_session_defaults(session: dict | None) -> dict | None:
         ),
         "pending_recaps": session.get("pending_recaps") or [],
         "handled_recaps": session.get("handled_recaps") or [],
-        "last_seen_at": session.get("last_seen_at"),
-        "last_active_at": session.get("last_active_at"),
-        "last_opened_date_local": session.get("last_opened_date_local"),
-        "auth_name": session.get("auth_name"),
-        "auth_email": session.get("auth_email"),
     }
 
 
@@ -78,16 +68,12 @@ def create_session(
     device_hint: str | None,
     timezone: str,
     auth_user_id: str | None = None,
-    auth_name: str | None = None,
-    auth_email: str | None = None,
     week_starts_on: str | None = None,
 ) -> dict:
     payload = {
         "device_hint": device_hint,
         "timezone": timezone,
         "auth_user_id": auth_user_id,
-        "auth_name": auth_name,
-        "auth_email": auth_email,
     }
     if week_starts_on is not None:
         payload["week_starts_on"] = resolve_week_starts_on(week_starts_on, timezone)
@@ -108,8 +94,6 @@ def get_or_create_session(
     device_hint: str | None,
     timezone: str,
     auth_user_id: str | None = None,
-    auth_name: str | None = None,
-    auth_email: str | None = None,
     week_starts_on: str | None = None,
 ) -> dict:
     if auth_user_id:
@@ -121,8 +105,6 @@ def get_or_create_session(
         device_hint,
         timezone,
         auth_user_id=auth_user_id,
-        auth_name=auth_name,
-        auth_email=auth_email,
         week_starts_on=week_starts_on,
     )
 
@@ -172,7 +154,6 @@ def list_sessions(db: Client, limit: int | None = 100) -> list[dict]:
     query = (
         db.table(TABLE)
         .select("*")
-        .order("last_seen_at", desc=True)
         .order("updated_at", desc=True)
         .order("created_at", desc=True)
     )
