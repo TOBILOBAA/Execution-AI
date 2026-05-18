@@ -14,7 +14,7 @@ from app.schemas.reports import (
     QuarterlyReportRequest,
     YearlyReportRequest,
 )
-from app.services import report_service
+from app.services import activity_service, report_service
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -22,6 +22,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 @router.get("/{session_id}")
 def list_reports(session_id: UUID, db: Client = Depends(get_db)):
     """List all generated reports for a session."""
+    activity_service.mark_event(db, session_id, "reports_opened")
     return report_service.list_reports(db, session_id)
 
 

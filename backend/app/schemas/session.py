@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,8 @@ class RecapQueueEntry(BaseModel):
 class SessionCreate(BaseModel):
     device_hint: str | None = None
     auth_user_id: str | None = None
+    auth_name: str | None = None
+    auth_email: str | None = None
     timezone: str = "UTC"
     week_starts_on: str | None = Field(default=None, pattern="^(sunday|monday)$")
 
@@ -26,8 +28,13 @@ class SessionResponse(BaseModel):
     onboarding_done: bool
     timezone: str
     week_starts_on: str
+    last_seen_at: datetime | None = None
+    last_active_at: datetime | None = None
+    last_opened_date_local: date | None = None
     device_hint: str | None = None
     auth_user_id: str | None = None
+    auth_name: str | None = None
+    auth_email: str | None = None
     pending_recaps: list[RecapQueueEntry] = Field(default_factory=list)
     handled_recaps: list[str] = Field(default_factory=list)
 
@@ -37,6 +44,8 @@ class SessionUpdate(BaseModel):
     onboarding_done: bool | None = None
     timezone: str | None = None
     auth_user_id: str | None = None
+    auth_name: str | None = None
+    auth_email: str | None = None
     week_starts_on: str | None = Field(default=None, pattern="^(sunday|monday)$")
     pending_recaps: list[RecapQueueEntry] | None = None
     handled_recaps: list[str] | None = None

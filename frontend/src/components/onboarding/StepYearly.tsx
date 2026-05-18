@@ -149,11 +149,10 @@ export function StepYearly({ onNext }: Props) {
         {/* Heading */}
         <div className="text-center mb-8">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight mb-2.5" style={{ color: "#1a1f1e" }}>
-            Set your yearly goals.
+            Start with 1 area of life you want to improve.
           </h1>
           <p className="text-sm leading-relaxed max-w-md mx-auto" style={{ color: "#6b7b74" }}>
-            What do you want to accomplish in {getCurrentYear()}? Group them by category. Your monthly, weekly, and daily
-            plans flow from these.
+            Not sure where to start? Pick 1 category. You can always add more later, and Execution AI will help structure the rest.
           </p>
         </div>
 

@@ -14,6 +14,7 @@ from supabase import Client
 
 from app.core.exceptions import NotFoundError, PlanLockedError
 from app.core.logging import logger
+from app.services import activity_service
 import app.db.plans as plans_db
 import app.db.habits as habits_db
 import app.db.reports as reports_db
@@ -41,6 +42,11 @@ def toggle_daily_priority(
 
     result = plans_db.update_daily_priority(db, priority_id, session_id, updates)
     reports_db.mark_daily_report_stale(db, session_id, date.fromisoformat(item["date"]))
+    activity_service.sync_daily_execution_counts(
+        db,
+        session_id,
+        activity_date=date.fromisoformat(item["date"]),
+    )
     logger.info(
         "priority_toggled",
         session_id=str(session_id),
@@ -82,6 +88,7 @@ def toggle_habit(
     log_date = log_date or get_session_today(db, session_id)
     assert_period_current_daily(session_id, log_date, db)
     result = habits_db.upsert_habit_log(db, habit_id, session_id, log_date, completed)
+    activity_service.sync_daily_execution_counts(db, session_id, activity_date=log_date)
 
     logger.info(
         "habit_toggled",

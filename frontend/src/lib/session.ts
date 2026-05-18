@@ -85,7 +85,6 @@ export async function ensureBackendSession(user: SessionIdentity): Promise<Sessi
     pendingSessionRequests.delete(userId);
   }
 }
-
 type SessionIdentity = {
   id: string;
   name?: string | null;
