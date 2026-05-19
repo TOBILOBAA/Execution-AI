@@ -86,14 +86,8 @@ export function StepYearly({ onNext }: Props) {
   const [leaveError, setLeaveError] = useState("");
 
   const getGoalsForCat = (catId: string) =>
-    yearlyGoals.filter(
-      (g) =>
-        g.year === getCurrentYear() &&
-        g.categoryId === catId,
-    );
-  const uncategorizedGoals = yearlyGoals.filter(
-    (g) => g.year === getCurrentYear() && !g.categoryId,
-  );
+    yearlyGoals.filter((g) => g.year === getCurrentYear() && g.categoryId === catId);
+  const uncategorizedGoals = yearlyGoals.filter((g) => g.year === getCurrentYear() && !g.categoryId);
 
   const openAddGoal = (catId: string) => {
     setModalCatId(catId);
@@ -105,10 +99,10 @@ export function StepYearly({ onNext }: Props) {
     setGoalModal(goal);
   };
 
-  const handleModalSubmit = (title: string, targetDate: string, description: string) => {
+  const handleModalSubmit = async (title: string, targetDate: string, description: string) => {
     if (typeof goalModal === "string") {
       // "new" → add
-      addYearlyGoal({
+      const ok = await addYearlyGoal({
         title,
         categoryId: modalCatId,
         ...(description ? { description } : {}),
@@ -116,10 +110,16 @@ export function StepYearly({ onNext }: Props) {
         status: "active",
         progress: 0,
         targetDate,
-      });
+      }, { persistMode: "blocking" });
+      if (!ok) return;
     } else if (goalModal) {
       // YearlyGoal object → edit
-      updateYearlyGoal(goalModal.id, { title, description: description || undefined, targetDate });
+      const ok = await updateYearlyGoal(
+        goalModal.id,
+        { title, description: description || undefined, targetDate },
+        { persistMode: "blocking" },
+      );
+      if (!ok) return;
     }
     setGoalModal(null);
   };
@@ -133,7 +133,7 @@ export function StepYearly({ onNext }: Props) {
     }
     setLeaveError("");
     setLeaveBusy(true);
-    const ok = await syncYearlyGoalsToServer();
+    const ok = await syncYearlyGoalsToServer({ mode: "verify" });
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveBusy(false);
@@ -169,12 +169,13 @@ export function StepYearly({ onNext }: Props) {
                 goals={goals}
                 isOpen={isOpen}
                 onToggle={() => setExpanded(isOpen ? "" : cat.id)}
-                onDelete={() => { removeCategory(cat.id); if (expanded === cat.id) setExpanded(""); }}
+                onDelete={async () => {
+                  const ok = await removeCategory(cat.id, { persistMode: "blocking" });
+                  if (ok && expanded === cat.id) setExpanded("");
+                }}
                 onAddGoal={() => openAddGoal(cat.id)}
                 onEditGoal={openEditGoal}
-                onRemoveGoal={removeYearlyGoal}
-                showDeleteButton
-                showAddGoalButton
+                onRemoveGoal={(id) => { void removeYearlyGoal(id, { persistMode: "blocking" }); }}
               />
             );
           })}
@@ -184,13 +185,11 @@ export function StepYearly({ onNext }: Props) {
               cat={{ id: UNCATEGORIZED_CATEGORY_ID, name: "Uncategorized", icon: "inventory_2" }}
               goals={uncategorizedGoals}
               isOpen={expanded === UNCATEGORIZED_CATEGORY_ID}
-              onToggle={() =>
-                setExpanded(expanded === UNCATEGORIZED_CATEGORY_ID ? "" : UNCATEGORIZED_CATEGORY_ID)
-              }
+              onToggle={() => setExpanded(expanded === UNCATEGORIZED_CATEGORY_ID ? "" : UNCATEGORIZED_CATEGORY_ID)}
               onDelete={() => undefined}
               onAddGoal={() => undefined}
               onEditGoal={openEditGoal}
-              onRemoveGoal={removeYearlyGoal}
+              onRemoveGoal={(id) => { void removeYearlyGoal(id, { persistMode: "blocking" }); }}
               showDeleteButton={false}
               showAddGoalButton={false}
             />
@@ -257,7 +256,10 @@ export function StepYearly({ onNext }: Props) {
       {/* New category modal */}
       {showCatModal && (
         <AddCategoryModal
-          onAdd={(name, icon) => { addCategory({ name, icon }); setShowCatModal(false); }}
+          onAdd={async (name, icon) => {
+            const ok = await addCategory({ name, icon }, { persistMode: "blocking" });
+            if (ok) setShowCatModal(false);
+          }}
           onClose={() => setShowCatModal(false)}
         />
       )}

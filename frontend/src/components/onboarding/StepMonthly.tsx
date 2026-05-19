@@ -243,7 +243,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
   const isEditMode = goalModal !== null && typeof goalModal === "object";
   const addMode = typeof goalModal === "string" ? goalModal : null;
 
-  const handleGoalSubmit = (
+  const handleGoalSubmit = async (
     title: string,
     categoryId: string,
     yearlyGoalId: string,
@@ -255,16 +255,17 @@ export function StepMonthly({ onNext, onBack }: Props) {
     const wl = workload.trim();
     if (isEditMode && goalModal) {
       const g = goalModal as MonthlyGoal;
-      updateMonthlyGoal(g.id, {
+      const ok = await updateMonthlyGoal(g.id, {
         title,
         categoryId,
         yearlyGoalId: yearlyGoalId || undefined,
         targetDate,
         description: desc,
         workload: wl,
-      });
+      }, { persistMode: "blocking" });
+      if (!ok) return;
     } else if (addMode) {
-      addMonthlyGoal({
+      const ok = await addMonthlyGoal({
         title,
         categoryId,
         yearlyGoalId: yearlyGoalId || undefined,
@@ -278,19 +279,25 @@ export function StepMonthly({ onNext, onBack }: Props) {
         progress: 0,
         priority: addMode === "main" ? "high" : "medium",
         aiSuggested: false,
-      });
+      }, { persistMode: "blocking" });
+      if (!ok) return;
     }
     setGoalModal(null);
   };
 
   const isEditingHabit = habitModal !== null && habitModal !== true;
 
-  const handleHabitSubmit = (name: string, icon: string, categoryId: string, frequency: HabitFrequency) => {
+  const handleHabitSubmit = async (name: string, icon: string, categoryId: string, frequency: HabitFrequency) => {
     if (isEditingHabit && habitModal) {
       const h = habitModal as FoundationalHabit;
-      updateHabit(h.id, { name, icon, categoryId, frequency });
+      const ok = await updateHabit(h.id, { name, icon, categoryId, frequency }, { persistMode: "blocking" });
+      if (!ok) return;
     } else {
-      addHabit({ name, icon, categoryId, frequency, completedToday: false, streak: 0, active: true });
+      const ok = await addHabit(
+        { name, icon, categoryId, frequency, completedToday: false, streak: 0, active: true },
+        { persistMode: "blocking" },
+      );
+      if (!ok) return;
     }
     setHabitModal(null);
   };
@@ -310,7 +317,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       setLeaveError("You can have at most two secondary goals for the month.");
       return;
     }
-    const ok = await syncMonthlyGoalsToServer(currentYear, currentMonth);
+    const ok = await syncMonthlyGoalsToServer(currentYear, currentMonth, { mode: "verify" });
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Monthly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -521,7 +528,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 goal={goal}
                 categoryName={getCategoryName(goal.categoryId)}
                 onEdit={() => setGoalModal(goal)}
-                onDelete={() => removeMonthlyGoal(goal.id)}
+                onDelete={() => { void removeMonthlyGoal(goal.id, { persistMode: "blocking" }); }}
               />
             ))}
             {mainGoals.length === 0 && (
@@ -539,7 +546,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 key={goal.id}
                 goal={goal}
                 onEdit={() => setGoalModal(goal)}
-                onDelete={() => removeMonthlyGoal(goal.id)}
+                onDelete={() => { void removeMonthlyGoal(goal.id, { persistMode: "blocking" }); }}
               />
             ))}
             {secondaryGoals.length === 0 && (
@@ -561,7 +568,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 categoryName={getCategoryName(habit.categoryId)}
                 freqLabel={FREQ_LABELS[habit.frequency]}
                 onEdit={() => setHabitModal(habit)}
-                onDelete={() => removeHabit(habit.id)}
+                onDelete={() => { void removeHabit(habit.id, { persistMode: "blocking" }); }}
               />
             ))}
             {activeHabits.length === 0 && (
