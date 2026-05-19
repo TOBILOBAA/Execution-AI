@@ -701,7 +701,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               goal={goal}
               supportTitle={getMonthlyTitle(goal.monthlyGoalId)}
               onEdit={() => { setEditGoal(goal); setAddMainOpen(true); }}
-              onDelete={() => { void removeWeeklyGoal(goal.id, { persistMode: "blocking" }); }}
+              onDelete={async () => { await removeWeeklyGoal(goal.id, { persistMode: "blocking" }); }}
             />
           ))}
           {mainGoals.length === 0 && (
@@ -743,7 +743,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               key={goal.id}
               goal={goal}
               onEdit={() => { setEditGoal(goal); setAddSecOpen(true); }}
-              onDelete={() => { void removeWeeklyGoal(goal.id, { persistMode: "blocking" }); }}
+              onDelete={async () => { await removeWeeklyGoal(goal.id, { persistMode: "blocking" }); }}
             />
           ))}
           {secondaryGoals.length === 0 && (
@@ -798,7 +798,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               key={habit.id}
               habit={habit}
               onEdit={() => setEditHabitId(habit.id)}
-              onDelete={() => { void removeHabit(habit.id, { persistMode: "blocking" }); }}
+              onDelete={async () => { await removeHabit(habit.id, { persistMode: "blocking" }); }}
             />
           ))}
           {habits.length === 0 && (

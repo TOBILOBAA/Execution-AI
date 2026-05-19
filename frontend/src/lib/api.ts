@@ -47,7 +47,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         "Request timed out. The server took too long to respond (often the AI step). Try again, or set GEMINI_MODEL to a supported Gemini model like gemini-2.5-flash on the backend.",
       );
     }
-    if (process.env.NODE_ENV !== "production") {
+    if (typeof console !== "undefined") {
       console.error("[api network error]", {
         method,
         path,
@@ -75,7 +75,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     } catch {
       /* ignore */
     }
-    if (process.env.NODE_ENV !== "production") {
+    if (typeof console !== "undefined") {
       console.error("[api request failed]", {
         method,
         path,

@@ -8,7 +8,7 @@ export function formatApiError(context: string, error: unknown): string {
   } else if (error instanceof Error) {
     detail = error.message || detail;
   }
-  if (process.env.NODE_ENV !== "production") {
+  if (typeof console !== "undefined") {
     console.error(`[sync error] ${context}`, error);
   }
   return `${context}: ${detail}`;
@@ -77,6 +77,22 @@ export function describeSyncError(syncError: string): UserFacingSyncError {
     };
   }
 
+  if (/http 409|conflict|already exists|duplicate/i.test(detail)) {
+    return {
+      title: "This is out of sync",
+      message: "The server already has a conflicting version of this change.",
+      footer: "Refresh the page, then try again.",
+    };
+  }
+
+  if (/still syncing|still saving|wait a moment and try again/i.test(detail)) {
+    return {
+      title: "Still finishing your last change",
+      message: "The previous step is still saving to the server.",
+      footer: "Wait a moment, then try again.",
+    };
+  }
+
   if (isTimeoutDetail(detail)) {
     return {
       title: lowerContext.startsWith("load ") ? "This is taking too long" : "Couldn't finish that yet",
@@ -117,9 +133,11 @@ export function describeSyncError(syncError: string): UserFacingSyncError {
     };
   }
 
+  const canShowDetail = detail.length > 0 && detail !== "Request failed" && !/^HTTP \d+$/i.test(detail);
+
   return {
     title: "Couldn't save your changes",
-    message: "Something unexpected happened.",
-    footer: "Try again. If it keeps happening, contact support.",
+    message: canShowDetail ? detail : "Something unexpected happened.",
+    footer: canShowDetail ? "Check this step and try again." : "Try again. If it keeps happening, contact support.",
   };
 }
