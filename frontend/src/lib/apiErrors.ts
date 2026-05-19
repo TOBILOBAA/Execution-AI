@@ -8,6 +8,9 @@ export function formatApiError(context: string, error: unknown): string {
   } else if (error instanceof Error) {
     detail = error.message || detail;
   }
+  if (process.env.NODE_ENV !== "production") {
+    console.error(`[sync error] ${context}`, error);
+  }
   return `${context}: ${detail}`;
 }
 

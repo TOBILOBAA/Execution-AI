@@ -22,6 +22,7 @@ type RequestOptions = RequestInit & { timeoutMs?: number };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { timeoutMs, signal: outerSignal, ...fetchOpts } = options;
+  const method = fetchOpts.method ?? "GET";
   const controller = typeof timeoutMs === "number" ? new AbortController() : null;
   const timeoutId =
     controller && timeoutMs
@@ -46,6 +47,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         "Request timed out. The server took too long to respond (often the AI step). Try again, or set GEMINI_MODEL to a supported Gemini model like gemini-2.5-flash on the backend.",
       );
     }
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[api network error]", {
+        method,
+        path,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
     throw e;
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
@@ -53,11 +61,28 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
+    let rawBody = "";
     try {
-      const body = await res.json();
-      detail = body?.detail ?? detail;
+      rawBody = await res.text();
+      if (rawBody) {
+        try {
+          const body = JSON.parse(rawBody);
+          detail = body?.detail ?? body?.message ?? rawBody;
+        } catch {
+          detail = rawBody;
+        }
+      }
     } catch {
       /* ignore */
+    }
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[api request failed]", {
+        method,
+        path,
+        status: res.status,
+        detail,
+        body: rawBody ? rawBody.slice(0, 800) : "",
+      });
     }
     throw new ApiError(res.status, detail);
   }
