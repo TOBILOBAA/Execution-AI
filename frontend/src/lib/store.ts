@@ -354,7 +354,7 @@ async function resolveWeeklyGoalIdForSave(
 
 function applyServerCategories(
   categories: Awaited<ReturnType<typeof categoriesApi.list>>,
-  set: (partial: Partial<AppState>) => void,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
 ) {
   const state = get();
@@ -366,9 +366,100 @@ function applyServerCategories(
   });
 }
 
+function categoryIdentityKey(cat: Pick<Category, "name" | "icon">): string {
+  return `${cat.name.trim().toLowerCase()}::${cat.icon}`;
+}
+
+function remapLocalCategoryIds(
+  mappings: Array<{ localId: string; serverId: string }>,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+): void {
+  if (mappings.length === 0) return;
+  for (const { localId, serverId } of mappings) {
+    localToServerCategoryIds.set(localId, serverId);
+  }
+  set((state) => ({
+    categories: state.categories.map((category) => {
+      const match = mappings.find((mapping) => mapping.localId === category.id);
+      return match ? { ...category, id: match.serverId } : category;
+    }),
+    yearlyGoals: state.yearlyGoals.map((goal) => {
+      const match = mappings.find((mapping) => mapping.localId === goal.categoryId);
+      return match ? { ...goal, categoryId: match.serverId } : goal;
+    }),
+    monthlyGoals: state.monthlyGoals.map((goal) => {
+      const match = mappings.find((mapping) => mapping.localId === goal.categoryId);
+      return match ? { ...goal, categoryId: match.serverId } : goal;
+    }),
+    habits: state.habits.map((habit) => {
+      const match = mappings.find((mapping) => mapping.localId === habit.categoryId);
+      return match ? { ...habit, categoryId: match.serverId } : habit;
+    }),
+  }));
+}
+
+async function reconcileOnboardingCategories(
+  sessionId: string,
+  serverCategories: Awaited<ReturnType<typeof categoriesApi.list>>,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+  get: () => AppState,
+): Promise<Awaited<ReturnType<typeof categoriesApi.list>>> {
+  const state = get();
+  if (state.onboardingComplete) {
+    return serverCategories;
+  }
+
+  const localPlaceholderCategories = state.categories.filter((category) => !isUuid(category.id));
+  if (localPlaceholderCategories.length === 0) {
+    return serverCategories;
+  }
+
+  const serverByIdentity = new Map(
+    serverCategories.map((category) => [categoryIdentityKey(category), category] as const),
+  );
+
+  const alreadyMapped = localPlaceholderCategories.flatMap((localCategory) => {
+    const match = serverByIdentity.get(categoryIdentityKey(localCategory));
+    return match ? [{ localId: localCategory.id, serverId: match.id }] : [];
+  });
+  remapLocalCategoryIds(alreadyMapped, set);
+
+  const missingLocalCategories = localPlaceholderCategories.filter(
+    (localCategory) => !serverByIdentity.has(categoryIdentityKey(localCategory)),
+  );
+  if (missingLocalCategories.length === 0) {
+    return serverCategories;
+  }
+
+  const createEntries = missingLocalCategories.map((localCategory) => {
+    const request = categoriesApi
+      .create(sessionId, {
+        name: localCategory.name,
+        icon: localCategory.icon,
+        color: localCategory.color,
+      })
+      .then((created) => {
+        remapLocalCategoryIds([{ localId: localCategory.id, serverId: created.id }], set);
+        return created;
+      });
+    trackPendingCreate(pendingCategoryCreates, localCategory.id, request);
+    return { localCategory, request };
+  });
+
+  const createdCategories = await Promise.all(
+    createEntries.map(async ({ localCategory, request }) => {
+      const created = await request;
+      serverByIdentity.set(categoryIdentityKey(localCategory), created);
+      return created;
+    }),
+  );
+
+  return [...serverCategories, ...createdCategories];
+}
+
 async function loadCategoriesOnce(
   sessionId: string,
-  set: (partial: Partial<AppState>) => void,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
   opts?: { force?: boolean },
 ): Promise<void> {
@@ -383,8 +474,9 @@ async function loadCategoriesOnce(
 
   const request = categoriesApi
     .list(sessionId)
-    .then((categories) => {
-      applyServerCategories(categories, set, get);
+    .then(async (categories) => {
+      const reconciledCategories = await reconcileOnboardingCategories(sessionId, categories, set, get);
+      applyServerCategories(reconciledCategories, set, get);
       loadedCategoriesForSession.add(sessionId);
     })
     .catch((e) => {
@@ -500,7 +592,11 @@ function mergeSeededRegistryUsers(set: (partial: Partial<AppState>) => void, get
  * If only dashboard load fails → keep backendReady true so POST/PATCH saves
  * can still succeed; the failure surfaces via syncError.
  */
-async function attachBackendAfterAuth(userId: string, get: () => AppState, set: (p: Partial<AppState>) => void) {
+async function attachBackendAfterAuth(
+  userId: string,
+  get: () => AppState,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+) {
   set({ workspaceHydrating: true });
   const prevOwner = get().workspaceOwnerId ?? null;
   /** Snapshot before any reset — after a full reset `get().onboardingComplete` would wrongly read false. */
@@ -594,6 +690,9 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
       if (done && !dashboardPromise) {
         dashboardPromise = get().loadCurrentDashboard();
       }
+      if (!done) {
+        await categoriesPromise;
+      }
       if (done && !ob.onboarding_done) {
         void sessionsApi
           .update(sid, { onboarding_done: true, onboarding_step: 4 })
@@ -622,7 +721,7 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
 
 async function ensureWritableSession(
   get: () => AppState,
-  set: (partial: Partial<AppState>) => void,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   context: string,
 ): Promise<string | null> {
   const current = get();
