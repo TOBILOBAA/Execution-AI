@@ -1301,13 +1301,14 @@ export const useAppStore = create<AppState>()(
         const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
         if (shouldBlock) {
-          if (!sessionId) {
-            set({ syncError: "Save category: Backend session is not ready.", syncStatus: "failed" });
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save category"));
+          if (!writableSessionId) {
             return false;
           }
           set({ syncStatus: "saving" });
           try {
-            const created = await categoriesApi.create(sessionId, { name: cat.name, icon: cat.icon, color: cat.color });
+            const created = await categoriesApi.create(writableSessionId, { name: cat.name, icon: cat.icon, color: cat.color });
             set((s) => ({
               categories: [...s.categories, { ...cat, id: created.id }],
               syncError: null,
@@ -1322,10 +1323,15 @@ export const useAppStore = create<AppState>()(
         const localId = genId("cat");
         set((s) => ({ categories: [...s.categories, { ...cat, id: localId }] }));
         // Sync to backend (fire-and-forget)
-        if (sessionId) {
-          const request = categoriesApi
-            .create(sessionId, { name: cat.name, icon: cat.icon, color: cat.color })
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save category")
+            .then((writableSessionId) => {
+              if (!writableSessionId) return null;
+              return categoriesApi.create(writableSessionId, { name: cat.name, icon: cat.icon, color: cat.color });
+            })
             .then((created) => {
+              if (!created) return;
               localToServerCategoryIds.set(localId, created.id);
               set((s) => ({
                 categories: s.categories.map((c) => (c.id === localId ? { ...c, id: created.id } : c)),
@@ -1378,8 +1384,9 @@ export const useAppStore = create<AppState>()(
         const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId, activeDashboardDate } = get();
         if (shouldBlock) {
-          if (!sessionId) {
-            set({ syncError: "Save yearly goal: Backend session is not ready.", syncStatus: "failed" });
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save yearly goal"));
+          if (!writableSessionId) {
             return false;
           }
           set({ syncStatus: "saving" });
@@ -1388,7 +1395,7 @@ export const useAppStore = create<AppState>()(
             if (goal.categoryId && !categoryId) {
               throw new Error("The selected category is still syncing. Wait a moment and try again.");
             }
-            const created = await yearlyGoalsApi.create(sessionId, {
+            const created = await yearlyGoalsApi.create(writableSessionId, {
               title: goal.title,
               ...(categoryId ? { category_id: categoryId } : {}),
               description: goal.description,
@@ -1425,21 +1432,25 @@ export const useAppStore = create<AppState>()(
             },
           ],
         }));
-        if (sessionId) {
-          const request = (async () => {
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save yearly goal")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
             const categoryId = await resolveCategoryIdForSave(goal.categoryId);
             if (goal.categoryId && !categoryId) {
               throw new Error("The selected category is still syncing. Wait a moment and try again.");
             }
-            return yearlyGoalsApi.create(sessionId, {
+              return yearlyGoalsApi.create(writableSessionId, {
               title: goal.title,
               ...(categoryId ? { category_id: categoryId } : {}),
               description: goal.description,
               year: goal.year,
               target_date: goal.targetDate,
             });
-          })()
+            })
             .then((created) => {
+              if (!created) return;
               localToServerYearlyGoalIds.set(localId, created.id);
               set((s) => ({
                 yearlyGoals: s.yearlyGoals.map((g) =>
@@ -1509,12 +1520,15 @@ export const useAppStore = create<AppState>()(
       },
       syncYearlyGoalsToServer: async (options) => {
         const mode = options?.mode ?? "sync";
-        const { sessionId, yearlyGoals } = get();
+        const { yearlyGoals } = get();
+        let sessionId = get().sessionId;
         if (!sessionId) {
           if (requiresServerPersistence()) {
-            set({ syncError: "Sync yearly goals: Backend session is not ready.", syncStatus: "failed" });
-            return false;
+            sessionId = await ensureWritableSession(get, set, "Sync yearly goals");
+            if (!sessionId) return false;
           }
+        }
+        if (!sessionId) {
           return true;
         }
         set({ syncStatus: "saving" });
@@ -1591,12 +1605,15 @@ export const useAppStore = create<AppState>()(
 
       syncMonthlyGoalsToServer: async (year, month, options) => {
         const mode = options?.mode ?? "sync";
-        const { sessionId, monthlyGoals } = get();
+        const { monthlyGoals } = get();
+        let sessionId = get().sessionId;
         if (!sessionId) {
           if (requiresServerPersistence()) {
-            set({ syncError: "Sync monthly goals: Backend session is not ready.", syncStatus: "failed" });
-            return false;
+            sessionId = await ensureWritableSession(get, set, "Sync monthly goals");
+            if (!sessionId) return false;
           }
+        }
+        if (!sessionId) {
           return true;
         }
         set({ syncStatus: "saving" });
@@ -1664,12 +1681,15 @@ export const useAppStore = create<AppState>()(
 
       syncWeeklyGoalsToServer: async (year, weekNumber, options) => {
         const mode = options?.mode ?? "sync";
-        const { sessionId, weeklyGoals } = get();
+        const { weeklyGoals } = get();
+        let sessionId = get().sessionId;
         if (!sessionId) {
           if (requiresServerPersistence()) {
-            set({ syncError: "Sync weekly goals: Backend session is not ready.", syncStatus: "failed" });
-            return false;
+            sessionId = await ensureWritableSession(get, set, "Sync weekly goals");
+            if (!sessionId) return false;
           }
+        }
+        if (!sessionId) {
           return true;
         }
         set({ syncStatus: "saving" });
@@ -1766,8 +1786,9 @@ export const useAppStore = create<AppState>()(
         const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId, activeDashboardDate } = get();
         if (shouldBlock) {
-          if (!sessionId) {
-            set({ syncError: "Save monthly goal: Backend session is not ready.", syncStatus: "failed" });
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save monthly goal"));
+          if (!writableSessionId) {
             return false;
           }
           set({ syncStatus: "saving" });
@@ -1780,7 +1801,7 @@ export const useAppStore = create<AppState>()(
             if (goal.categoryId && !categoryId) {
               throw new Error("The selected category is still syncing. Wait a moment and try again.");
             }
-            const created = await monthlyPlanApi.addGoal(sessionId, goal.year, goal.month, {
+            const created = await monthlyPlanApi.addGoal(writableSessionId, goal.year, goal.month, {
               title: goal.title,
               description: goal.description,
               is_main: goal.isMain,
@@ -1821,8 +1842,11 @@ export const useAppStore = create<AppState>()(
             },
           ],
         }));
-        if (sessionId) {
-          const request = (async () => {
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save monthly goal")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
             const yearlyGoalId = await resolveYearlyGoalIdForSave(goal.yearlyGoalId);
             const categoryId = await resolveCategoryIdForSave(goal.categoryId);
             if (goal.yearlyGoalId && !yearlyGoalId) {
@@ -1831,7 +1855,7 @@ export const useAppStore = create<AppState>()(
             if (goal.categoryId && !categoryId) {
               throw new Error("The selected category is still syncing. Wait a moment and try again.");
             }
-            return monthlyPlanApi.addGoal(sessionId, goal.year, goal.month, {
+              return monthlyPlanApi.addGoal(writableSessionId, goal.year, goal.month, {
               title: goal.title,
               description: goal.description,
               is_main: goal.isMain,
@@ -1841,8 +1865,9 @@ export const useAppStore = create<AppState>()(
               target_date: goal.targetDate,
               workload: goal.workload,
             });
-          })()
+            })
             .then((created) => {
+              if (!created) return;
               localToServerMonthlyGoalIds.set(localId, created.id);
               set((s) => ({
                 monthlyGoals: s.monthlyGoals.map((g) =>
@@ -1972,8 +1997,9 @@ export const useAppStore = create<AppState>()(
         const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId, activeDashboardDate, sessionWeekStartsOn } = get();
         if (shouldBlock) {
-          if (!sessionId) {
-            set({ syncError: "Save weekly goal: Backend session is not ready.", syncStatus: "failed" });
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save weekly goal"));
+          if (!writableSessionId) {
             return false;
           }
           set({ syncStatus: "saving" });
@@ -1982,7 +2008,7 @@ export const useAppStore = create<AppState>()(
             if (goal.monthlyGoalId && !monthlyGoalId) {
               throw new Error("The linked monthly goal is still syncing. Wait a moment and try again.");
             }
-            const created = await weeklyPlanApi.addGoal(sessionId, goal.year, goal.weekNumber, {
+            const created = await weeklyPlanApi.addGoal(writableSessionId, goal.year, goal.weekNumber, {
               title: goal.title,
               description: goal.description,
               is_main: goal.isMain,
@@ -2021,13 +2047,16 @@ export const useAppStore = create<AppState>()(
             },
           ],
         }));
-        if (sessionId) {
-          const request = (async () => {
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save weekly goal")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
             const monthlyGoalId = await resolveMonthlyGoalIdForSave(goal.monthlyGoalId);
             if (goal.monthlyGoalId && !monthlyGoalId) {
               throw new Error("The linked monthly goal is still syncing. Wait a moment and try again.");
             }
-            return weeklyPlanApi.addGoal(sessionId, goal.year, goal.weekNumber, {
+              return weeklyPlanApi.addGoal(writableSessionId, goal.year, goal.weekNumber, {
               title: goal.title,
               description: goal.description,
               is_main: goal.isMain,
@@ -2036,8 +2065,9 @@ export const useAppStore = create<AppState>()(
               goal_type: goal.goalType,
               workload: goal.workload,
             });
-          })()
+            })
             .then((created) => {
+              if (!created) return;
               localToServerWeeklyGoalIds.set(localId, created.id);
               set((s) => ({
                 weeklyGoals: s.weeklyGoals.map((g) =>
@@ -2165,8 +2195,9 @@ export const useAppStore = create<AppState>()(
         const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
         if (shouldBlock) {
-          if (!sessionId) {
-            set({ syncError: "Save daily priority: Backend session is not ready.", syncStatus: "failed" });
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save daily priority"));
+          if (!writableSessionId) {
             return false;
           }
           set({ syncStatus: "saving" });
@@ -2175,7 +2206,7 @@ export const useAppStore = create<AppState>()(
             if (priority.weeklyGoalId && !weeklyGoalId) {
               throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
             }
-            const created = await tasksApi.create(sessionId, priority.date, {
+            const created = await tasksApi.create(writableSessionId, priority.date, {
               title: priority.title,
               description: priority.description,
               priority: priority.priority,
@@ -2200,13 +2231,16 @@ export const useAppStore = create<AppState>()(
         }
         const localId = genId("dp");
         set((s) => ({ dailyPriorities: [...s.dailyPriorities, { ...priority, id: localId }] }));
-        if (sessionId) {
-          const request = (async () => {
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save daily priority")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
             const weeklyGoalId = await resolveWeeklyGoalIdForSave(priority.weeklyGoalId);
             if (priority.weeklyGoalId && !weeklyGoalId) {
               throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
             }
-            return tasksApi.create(sessionId, priority.date, {
+              return tasksApi.create(writableSessionId, priority.date, {
               title: priority.title,
               description: priority.description,
               priority: priority.priority,
@@ -2215,8 +2249,9 @@ export const useAppStore = create<AppState>()(
               tag: priority.tag,
               ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
             });
-          })()
+            })
             .then((created) => {
+              if (!created) return;
               set((s) => ({
                 dailyPriorities: s.dailyPriorities.map((p) =>
                   p.id === localId ? { ...p, id: created.id, weeklyGoalId: created.weekly_goal_id ?? p.weeklyGoalId } : p
@@ -2354,8 +2389,9 @@ export const useAppStore = create<AppState>()(
         const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
         if (shouldBlock) {
-          if (!sessionId) {
-            set({ syncError: "Save secondary task: Backend session is not ready.", syncStatus: "failed" });
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save secondary task"));
+          if (!writableSessionId) {
             return false;
           }
           set({ syncStatus: "saving" });
@@ -2364,7 +2400,7 @@ export const useAppStore = create<AppState>()(
             if (task.weeklyGoalId && !weeklyGoalId) {
               throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
             }
-            const created = await tasksApi.create(sessionId, task.date, {
+            const created = await tasksApi.create(writableSessionId, task.date, {
               title: task.title,
               description: task.description,
               priority: task.priority,
@@ -2389,13 +2425,16 @@ export const useAppStore = create<AppState>()(
         }
         const localId = genId("st");
         set((s) => ({ secondaryTasks: [...s.secondaryTasks, { ...task, id: localId }] }));
-        if (sessionId) {
-          const request = (async () => {
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save secondary task")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
             const weeklyGoalId = await resolveWeeklyGoalIdForSave(task.weeklyGoalId);
             if (task.weeklyGoalId && !weeklyGoalId) {
               throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
             }
-            return tasksApi.create(sessionId, task.date, {
+              return tasksApi.create(writableSessionId, task.date, {
               title: task.title,
               description: task.description,
               priority: task.priority,
@@ -2404,8 +2443,9 @@ export const useAppStore = create<AppState>()(
               tag: task.tag,
               ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
             });
-          })()
+            })
             .then((created) => {
+              if (!created) return;
               set((s) => ({
                 secondaryTasks: s.secondaryTasks.map((t) =>
                   t.id === localId ? { ...t, id: created.id, weeklyGoalId: created.weekly_goal_id ?? t.weeklyGoalId } : t
@@ -2609,8 +2649,9 @@ export const useAppStore = create<AppState>()(
         const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
         if (shouldBlock) {
-          if (!sessionId) {
-            set({ syncError: "Save habit: Backend session is not ready.", syncStatus: "failed" });
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save habit"));
+          if (!writableSessionId) {
             return false;
           }
           set({ syncStatus: "saving" });
@@ -2619,7 +2660,7 @@ export const useAppStore = create<AppState>()(
             if (habit.categoryId && !categoryId) {
               throw new Error("The selected category is still syncing. Wait a moment and try again.");
             }
-            const created = await habitsApi.create(sessionId, {
+            const created = await habitsApi.create(writableSessionId, {
               name: habit.name,
               icon: habit.icon,
               frequency: habit.frequency,
@@ -2641,20 +2682,24 @@ export const useAppStore = create<AppState>()(
         }
         const localId = genId("hab");
         set((s) => ({ habits: [...s.habits, { ...habit, id: localId }] }));
-        if (sessionId) {
-          const request = (async () => {
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save habit")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
             const categoryId = await resolveCategoryIdForSave(habit.categoryId);
             if (habit.categoryId && !categoryId) {
               throw new Error("The selected category is still syncing. Wait a moment and try again.");
             }
-            return habitsApi.create(sessionId, {
+              return habitsApi.create(writableSessionId, {
               name: habit.name,
               icon: habit.icon,
               frequency: habit.frequency,
               ...(categoryId ? { category_id: categoryId } : {}),
             });
-          })()
+            })
             .then((created) => {
+              if (!created) return;
               set((s) => ({
                 habits: s.habits.map((h) =>
                   h.id === localId
@@ -2700,12 +2745,15 @@ export const useAppStore = create<AppState>()(
 
       syncDailySetupToServer: async (planDate, options) => {
         const mode = options?.mode ?? "sync";
-        const { sessionId, dailyPriorities, secondaryTasks, habits } = get();
+        let sessionId = get().sessionId;
+        const { dailyPriorities, secondaryTasks, habits } = get();
         if (!sessionId) {
           if (requiresServerPersistence()) {
-            set({ syncError: "Sync daily setup: Backend session is not ready." });
-            return false;
+            sessionId = await ensureWritableSession(get, set, "Sync daily setup");
+            if (!sessionId) return false;
           }
+        }
+        if (!sessionId) {
           return true;
         }
 

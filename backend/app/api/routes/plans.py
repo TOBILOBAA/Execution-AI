@@ -14,7 +14,7 @@ from app.schemas.plans import (
     DailyPlanGenerateRequest, DailyPlanApproveRequest,
 )
 from app.schemas.goals import MonthlyGoalCreate, MonthlyGoalUpdate, WeeklyGoalCreate, WeeklyGoalUpdate
-from app.services import activity_service, planning_service
+from app.services import planning_service
 import app.db.plans as plans_db
 import app.db.sessions as sessions_db
 from app.utils.date_utils import get_week_boundaries
@@ -125,11 +125,9 @@ def approve_monthly_plan(
 ):
     """Approve a monthly plan draft. Persists monthly goals."""
     assert_period_plannable_monthly(session_id, year, month, db)
-    plan = planning_service.approve_monthly_plan(
+    return planning_service.approve_monthly_plan(
         db, session_id, year, month, body.goals
     )
-    activity_service.mark_event(db, session_id, "monthly_goal_created")
-    return plan
 
 
 @router.get("/monthly-plan/{session_id}")
@@ -185,9 +183,7 @@ def add_monthly_goal(
     }
     if data.get("yearly_goal_id"):
         data["yearly_goal_id"] = str(data["yearly_goal_id"])
-    goal = plans_db.create_monthly_goal(db, data)
-    activity_service.mark_event(db, session_id, "monthly_goal_created")
-    return goal
+    return plans_db.create_monthly_goal(db, data)
 
 
 @router.patch("/monthly-goals/{goal_id}")
@@ -255,11 +251,9 @@ def approve_weekly_plan(
 ):
     """Approve a weekly plan draft. Persists weekly goals."""
     assert_period_plannable_weekly(session_id, year, week_number, db)
-    plan = planning_service.approve_weekly_plan(
+    return planning_service.approve_weekly_plan(
         db, session_id, year, week_number, body.goals
     )
-    activity_service.mark_event(db, session_id, "weekly_goal_created")
-    return plan
 
 
 @router.get("/weekly-plan/{session_id}")
@@ -317,9 +311,7 @@ def add_weekly_goal(
     }
     if data.get("monthly_goal_id"):
         data["monthly_goal_id"] = str(data["monthly_goal_id"])
-    goal = plans_db.create_weekly_goal(db, data)
-    activity_service.mark_event(db, session_id, "weekly_goal_created")
-    return goal
+    return plans_db.create_weekly_goal(db, data)
 
 
 @router.patch("/weekly-goals/{goal_id}")
@@ -384,9 +376,7 @@ def approve_daily_plan(
 ):
     """Approve a daily plan draft. Persists daily priorities."""
     assert_period_current_daily(session_id, plan_date, db)
-    plan = planning_service.approve_daily_plan(db, session_id, plan_date, body.priorities)
-    activity_service.mark_event(db, session_id, "daily_plan_created", activity_date=plan_date)
-    return plan
+    return planning_service.approve_daily_plan(db, session_id, plan_date, body.priorities)
 
 
 @router.get("/daily-plan/{session_id}")
