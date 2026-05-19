@@ -134,6 +134,18 @@ export function StepYearly({ onNext }: Props) {
       setLeaveError("Add at least one yearly goal before continuing.");
       return;
     }
+    const emptyCategories = categories.filter((category) => getGoalsForCat(category.id).length === 0);
+    if (emptyCategories.length > 0) {
+      const [firstEmptyCategory] = emptyCategories;
+      setExpanded(firstEmptyCategory.id);
+      const categoryNames = emptyCategories.map((category) => category.name).join(", ");
+      setLeaveError(
+        emptyCategories.length === 1
+          ? `${firstEmptyCategory.name} does not have a goal yet. Add a goal or delete the category before continuing.`
+          : `${categoryNames} do not have goals yet. Add a goal to each one or delete the empty categories before continuing.`,
+      );
+      return;
+    }
     setLeaveError("");
     setLeaveBusy(true);
     const ok = await syncYearlyGoalsToServer({ mode: "verify" });
