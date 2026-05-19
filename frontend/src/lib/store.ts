@@ -23,7 +23,6 @@ import { isUuid } from "./uuid";
 import type { DashboardMetrics } from "./types";
 import {
   ApiError,
-  activityApi,
   categoriesApi,
   yearlyGoalsApi,
   monthlyPlanApi,
@@ -555,7 +554,6 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
       week_starts_on: session.week_starts_on,
     };
     set({ sessionId: sid, backendReady: true });
-    void activityApi.touch(sid, { event: "app_opened" }).catch(() => undefined);
   } catch (e) {
     set({
       backendReady: false,
@@ -620,6 +618,33 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   }
 
   void categoriesPromise;
+}
+
+async function ensureWritableSession(
+  get: () => AppState,
+  set: (partial: Partial<AppState>) => void,
+  context: string,
+): Promise<string | null> {
+  const current = get();
+  if (current.sessionId && current.backendReady) {
+    return current.sessionId;
+  }
+
+  const authUserId = current.currentUser?.id;
+  if (!authUserId) {
+    set({ syncError: `${context}: Sign in again to continue.` });
+    return null;
+  }
+
+  await attachBackendAfterAuth(authUserId, get, set);
+  const refreshed = get();
+  if (refreshed.sessionId && refreshed.backendReady) {
+    return refreshed.sessionId;
+  }
+  if (!refreshed.syncError) {
+    set({ syncError: `${context}: Backend session is not ready.` });
+  }
+  return null;
 }
 
 // ─── Mapper helpers: API response → frontend types ────────────────────────────
@@ -1138,7 +1163,6 @@ export const useAppStore = create<AppState>()(
           return;
         }
         if (sameUser && state.backendReady && state.sessionId) {
-          void activityApi.touch(state.sessionId, { event: "app_opened" }).catch(() => undefined);
           set({ authReady: true, currentUser: authUser, syncError: null });
           return;
         }
