@@ -119,7 +119,7 @@ interface AppState {
   onboardingStep: number;
   onboardingComplete: boolean;
   kickoffPending: boolean;
-  setOnboardingStep: (step: number) => void;
+  setOnboardingStep: (step: number) => Promise<boolean>;
   completeOnboarding: () => Promise<boolean>;
   dismissKickoff: () => void;
 
@@ -1325,15 +1325,25 @@ export const useAppStore = create<AppState>()(
       onboardingStep: 1,
       onboardingComplete: false,
       kickoffPending: false,
-      setOnboardingStep: (step) => {
-        set({ onboardingStep: step });
+      setOnboardingStep: async (step) => {
         const { sessionId, backendReady } = get();
         if (sessionId && backendReady) {
-          void sessionsApi
-            .update(sessionId, { onboarding_step: step })
-            .then(() => set({ syncError: null }))
-            .catch((e) => set({ syncError: formatApiError("Save onboarding step", e) }));
+          set({ syncStatus: "saving" });
+          try {
+            await sessionsApi.update(sessionId, { onboarding_step: step });
+            set({ onboardingStep: step, syncError: null, syncStatus: "saved" });
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Save onboarding step", e), syncStatus: "failed" });
+            return false;
+          }
         }
+        if (requiresServerPersistence()) {
+          set({ syncError: "Save onboarding step: Backend session is not ready.", syncStatus: "failed" });
+          return false;
+        }
+        set({ onboardingStep: step, syncError: null, syncStatus: "saved" });
+        return true;
       },
       completeOnboarding: async () => {
         const { sessionId, backendReady } = get();

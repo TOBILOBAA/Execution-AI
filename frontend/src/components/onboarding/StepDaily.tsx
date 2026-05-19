@@ -308,6 +308,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
     habits,
     categories,
     weeklyGoals,
+    sessionTimezone,
     addHabit,
     updateHabit,
     removeHabit,
@@ -327,6 +328,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       habits: state.habits,
       categories: state.categories,
       weeklyGoals: state.weeklyGoals,
+      sessionTimezone: state.sessionTimezone,
       addHabit: state.addHabit,
       updateHabit: state.updateHabit,
       removeHabit: state.removeHabit,
@@ -336,8 +338,9 @@ export function StepDaily({ onFinish, onBack }: Props) {
     })),
   );
 
-  const todayPriorities = dailyPriorities.filter((p) => p.date === getToday());
-  const todayTasks = secondaryTasks.filter((t) => t.date === getToday());
+  const todayStr = getToday(sessionTimezone);
+  const todayPriorities = dailyPriorities.filter((p) => p.date === todayStr);
+  const todayTasks = secondaryTasks.filter((t) => t.date === todayStr);
   const activeHabits = habits.filter((h) => h.active);
 
   // Modal state
@@ -389,7 +392,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateDailyPlan(getToday());
+    const result = await generateDailyPlan(todayStr);
     if (!result.ok) {
       const banner = useAppStore.getState().syncError;
       const apiDetail =
@@ -428,7 +431,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       if (aiRowKeys.has(`t:${i}`)) priorities.push({ ...t, is_main: false });
     });
     setAiAccepting(true);
-    const ok = await approveDailyPlan(getToday(), priorities);
+    const ok = await approveDailyPlan(todayStr, priorities);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -436,7 +439,6 @@ export function StepDaily({ onFinish, onBack }: Props) {
     setAiAccepting(false);
   };
 
-  const todayStr = getToday();
   const headlineDate = useMemo(() => {
     const d = new Date(`${todayStr}T12:00:00`);
     return {
@@ -448,8 +450,8 @@ export function StepDaily({ onFinish, onBack }: Props) {
 
   const handleFinish = async () => {
     setLeaveError(null);
-    const todayPrioritiesCount = dailyPriorities.filter(p => p.date === getToday()).length;
-    const todayTasksCount = secondaryTasks.filter(t => t.date === getToday()).length;
+    const todayPrioritiesCount = dailyPriorities.filter((p) => p.date === todayStr).length;
+    const todayTasksCount = secondaryTasks.filter((t) => t.date === todayStr).length;
     if (todayPrioritiesCount !== 1) {
       setLeaveError("You need exactly one main goal for today before continuing.");
       return;
@@ -458,7 +460,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       setLeaveError("You can have at most three secondary goals for today.");
       return;
     }
-    const ok = await syncDailySetupToServer(getToday(), { mode: "verify" });
+    const ok = await syncDailySetupToServer(todayStr, { mode: "verify" });
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Your daily goals and routines have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -669,7 +671,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                   index={idx}
                   isLast={idx === todayPriorities.length - 1}
                   onEdit={() => setPriorityModal(p)}
-                  onDelete={() => { void removeDailyPriority(p.id, { persistMode: "blocking" }); }}
+                  onDelete={async () => { await removeDailyPriority(p.id, { persistMode: "blocking" }); }}
                 />
               ))
             )}
@@ -703,7 +705,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                   index={idx}
                   isLast={idx === todayTasks.length - 1}
                   onEdit={() => setTaskModal(t)}
-                  onDelete={() => { void removeSecondaryTask(t.id, { persistMode: "blocking" }); }}
+                  onDelete={async () => { await removeSecondaryTask(t.id, { persistMode: "blocking" }); }}
                 />
               ))
             )}
@@ -725,7 +727,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 key={habit.id}
                 habit={habit}
                 onEdit={() => setHabitModal(habit)}
-                onDelete={() => { void removeHabit(habit.id, { persistMode: "blocking" }); }}
+                onDelete={async () => { await removeHabit(habit.id, { persistMode: "blocking" }); }}
               />
             ))}
             {activeHabits.length === 0 && (
@@ -814,7 +816,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 tag: data.tag,
                 weeklyGoalId: data.weeklyGoalId,
                 ...(data.description ? { description: data.description } : {}),
-                date: getToday(),
+                date: todayStr,
                 status: "active",
                 completed: false,
                 priority: "high",
@@ -859,7 +861,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 tag: data.tag,
                 weeklyGoalId: data.weeklyGoalId,
                 ...(data.description ? { description: data.description } : {}),
-                date: getToday(),
+                date: todayStr,
                 status: "active",
                 completed: false,
                 priority: "medium",

@@ -528,7 +528,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 goal={goal}
                 categoryName={getCategoryName(goal.categoryId)}
                 onEdit={() => setGoalModal(goal)}
-                onDelete={() => { void removeMonthlyGoal(goal.id, { persistMode: "blocking" }); }}
+                onDelete={async () => { await removeMonthlyGoal(goal.id, { persistMode: "blocking" }); }}
               />
             ))}
             {mainGoals.length === 0 && (
@@ -546,7 +546,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 key={goal.id}
                 goal={goal}
                 onEdit={() => setGoalModal(goal)}
-                onDelete={() => { void removeMonthlyGoal(goal.id, { persistMode: "blocking" }); }}
+                onDelete={async () => { await removeMonthlyGoal(goal.id, { persistMode: "blocking" }); }}
               />
             ))}
             {secondaryGoals.length === 0 && (
@@ -568,7 +568,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 categoryName={getCategoryName(habit.categoryId)}
                 freqLabel={FREQ_LABELS[habit.frequency]}
                 onEdit={() => setHabitModal(habit)}
-                onDelete={() => { void removeHabit(habit.id, { persistMode: "blocking" }); }}
+                onDelete={async () => { await removeHabit(habit.id, { persistMode: "blocking" }); }}
               />
             ))}
             {activeHabits.length === 0 && (
