@@ -23,6 +23,7 @@ class HabitFrequency(str, Enum):
     three_x_week = "3x_week"
     five_x_week = "5x_week"
     weekends = "weekends"
+    flexible = "flexible"
 
 
 class PlanStatus(str, Enum):

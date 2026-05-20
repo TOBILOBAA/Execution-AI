@@ -4,9 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { WeeklyGoal } from "@/lib/types";
-import { getCurrentMonth, getCurrentYear, getToday } from "@/lib/mockData";
-import { getWeekNumber } from "@/lib/goalsView";
-import { WEEKLY_MAIN_GOAL_CAP, WEEKLY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
+import { getCurrentWeek, getCurrentMonth, getCurrentYear } from "@/lib/mockData";
 import { AddWeeklyGoalModal } from "./AddWeeklyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
@@ -170,7 +168,7 @@ function SecondaryGoalCard({
             color: goal.aiSuggested ? "#006c4a" : "#8a9e97",
           }}
         >
-          {goal.aiSuggested ? "AI Suggested" : "Secondary Goal"}
+          {goal.aiSuggested ? "AI Suggested" : "Supporting Goal"}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -347,8 +345,6 @@ export function StepWeekly({ onNext, onBack }: Props) {
     generateWeeklyPlan,
     approveWeeklyPlan,
     syncWeeklyGoalsToServer,
-    sessionTimezone,
-    sessionWeekStartsOn,
   } = useAppStore(
     useShallow((state) => ({
       weeklyGoals: state.weeklyGoals,
@@ -364,27 +360,17 @@ export function StepWeekly({ onNext, onBack }: Props) {
       generateWeeklyPlan: state.generateWeeklyPlan,
       approveWeeklyPlan: state.approveWeeklyPlan,
       syncWeeklyGoalsToServer: state.syncWeeklyGoalsToServer,
-      sessionTimezone: state.sessionTimezone,
-      sessionWeekStartsOn: state.sessionWeekStartsOn,
     })),
   );
 
-  const today = getToday(sessionTimezone);
-  const currentYear = Number(today.slice(0, 4)) || getCurrentYear();
-  const currentMonth = Number(today.slice(5, 7)) || getCurrentMonth();
-  const todayReference = new Date(`${today}T12:00:00`);
-  const currentWeek = Number.isNaN(todayReference.getTime())
-    ? getWeekNumber(new Date(), sessionWeekStartsOn)
-    : getWeekNumber(todayReference, sessionWeekStartsOn);
-
   const currentWeekGoals = weeklyGoals.filter(
-    (g) => g.weekNumber === currentWeek && g.year === currentYear
+    (g) => g.weekNumber === getCurrentWeek() && g.year === getCurrentYear()
   );
   const mainGoals = currentWeekGoals.filter((g) => g.isMain);
   const secondaryGoals = currentWeekGoals.filter((g) => !g.isMain);
 
   const currentMonthlyGoals = monthlyGoals.filter(
-    (g) => g.month === currentMonth && g.year === currentYear
+    (g) => g.month === getCurrentMonth() && g.year === getCurrentYear()
   );
 
   // Modal state
@@ -439,7 +425,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateWeeklyPlan(currentYear, currentWeek);
+    const result = await generateWeeklyPlan(getCurrentYear(), getCurrentWeek());
     if (!result.ok) {
       const banner = useAppStore.getState().syncError;
       const apiDetail =
@@ -478,7 +464,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false });
     });
     setAiAccepting(true);
-    const ok = await approveWeeklyPlan(currentYear, currentWeek, goals);
+    const ok = await approveWeeklyPlan(getCurrentYear(), getCurrentWeek(), goals);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -488,17 +474,17 @@ export function StepWeekly({ onNext, onBack }: Props) {
 
   const handleLeaveWeekly = async () => {
     setLeaveError(null);
-    const mainGoalsCount = weeklyGoals.filter(g => g.year === currentYear && g.weekNumber === currentWeek && g.isMain).length;
-    const secondaryGoalsCount = weeklyGoals.filter(g => g.year === currentYear && g.weekNumber === currentWeek && !g.isMain).length;
+    const mainGoalsCount = weeklyGoals.filter(g => g.year === getCurrentYear() && g.weekNumber === getCurrentWeek() && g.isMain).length;
+    const secondaryGoalsCount = weeklyGoals.filter(g => g.year === getCurrentYear() && g.weekNumber === getCurrentWeek() && !g.isMain).length;
     if (mainGoalsCount !== 1) {
       setLeaveError("You need exactly one main goal for the week before continuing.");
       return;
     }
-    if (secondaryGoalsCount > WEEKLY_SECONDARY_GOAL_CAP) {
-      setLeaveError("You can have at most two secondary goals for the week.");
+    if (secondaryGoalsCount > 3) {
+      setLeaveError("You can have at most three secondary goals for the week.");
       return;
     }
-    const ok = await syncWeeklyGoalsToServer(currentYear, currentWeek, { mode: "verify" });
+    const ok = await syncWeeklyGoalsToServer(getCurrentYear(), getCurrentWeek());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Weekly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -515,10 +501,10 @@ export function StepWeekly({ onNext, onBack }: Props) {
           className="font-headline text-4xl font-extrabold tracking-tight"
           style={{ color: "#1a1f1e" }}
         >
-          Plan week {currentWeek}.
+          Plan week {getCurrentWeek()}.
         </h1>
         <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#8a9e97" }}>
-          1 main goal, up to 2 secondary goals. Each connects to a monthly goal.
+          1 main goal, up to 3 secondary goals. Each connects to a monthly goal.
         </p>
       </div>
 
@@ -701,7 +687,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               goal={goal}
               supportTitle={getMonthlyTitle(goal.monthlyGoalId)}
               onEdit={() => { setEditGoal(goal); setAddMainOpen(true); }}
-              onDelete={async () => { await removeWeeklyGoal(goal.id, { persistMode: "blocking" }); }}
+              onDelete={() => removeWeeklyGoal(goal.id)}
             />
           ))}
           {mainGoals.length === 0 && (
@@ -733,7 +719,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       <section>
         <SectionHeader
           title="Secondary Weekly Goals"
-          action="Add Goal"
+          action="Add Target"
           actionIcon="add"
           onAction={() => { setEditGoal(null); setAddSecOpen(true); }}
         />
@@ -743,7 +729,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               key={goal.id}
               goal={goal}
               onEdit={() => { setEditGoal(goal); setAddSecOpen(true); }}
-              onDelete={async () => { await removeWeeklyGoal(goal.id, { persistMode: "blocking" }); }}
+              onDelete={() => removeWeeklyGoal(goal.id)}
             />
           ))}
           {secondaryGoals.length === 0 && (
@@ -787,7 +773,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       {/* ── FOUNDATIONAL HABITS ── */}
       <section>
         <SectionHeader
-          title="Routines"
+          title="Foundational Habits"
           action="Define Routine"
           actionIcon="add_circle"
           onAction={() => { setEditHabitId(null); setAddHabitOpen(true); }}
@@ -798,7 +784,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               key={habit.id}
               habit={habit}
               onEdit={() => setEditHabitId(habit.id)}
-              onDelete={async () => { await removeHabit(habit.id, { persistMode: "blocking" }); }}
+              onDelete={() => removeHabit(habit.id)}
             />
           ))}
           {habits.length === 0 && (
@@ -811,7 +797,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               }}
             >
               <span className="material-symbols-outlined text-[18px]">add</span>
-              Define your first routine
+              Define your first foundational habit
             </button>
           )}
         </div>
@@ -852,30 +838,25 @@ export function StepWeekly({ onNext, onBack }: Props) {
         <AddWeeklyGoalModal
           mode="main"
           monthlyGoals={currentMonthlyGoals}
-          currentCount={editGoal ? 0 : mainGoals.length}
-          maxCount={WEEKLY_MAIN_GOAL_CAP}
-          limitMessage="You can only save 1 main goal for this week."
           initialTitle={editGoal?.title}
           initialMonthlyGoalId={editGoal?.monthlyGoalId}
           initialTargetDay={editGoal?.targetDay}
           initialDescription={editGoal?.description}
           initialWorkload={editGoal?.workload}
-          onSubmit={async (data) => {
+          onSubmit={(data) => {
             if (editGoal) {
-              const ok = await updateWeeklyGoal(editGoal.id, data, { persistMode: "blocking" });
-              if (!ok) return;
+              updateWeeklyGoal(editGoal.id, data);
             } else {
-              const ok = await addWeeklyGoal({
+              addWeeklyGoal({
                 ...data,
                 isMain: true,
-                weekNumber: currentWeek,
-                month: currentMonth,
-                year: currentYear,
+                weekNumber: getCurrentWeek(),
+                month: getCurrentMonth(),
+                year: getCurrentYear(),
                 status: "active",
                 progress: 0,
                 aiSuggested: false,
-              }, { persistMode: "blocking" });
-              if (!ok) return;
+              });
             }
             setAddMainOpen(false);
             setEditGoal(null);
@@ -888,30 +869,25 @@ export function StepWeekly({ onNext, onBack }: Props) {
         <AddWeeklyGoalModal
           mode="secondary"
           monthlyGoals={currentMonthlyGoals}
-          currentCount={editGoal ? 0 : secondaryGoals.length}
-          maxCount={WEEKLY_SECONDARY_GOAL_CAP}
-          limitMessage="You can only save up to 2 secondary goals for this week."
           initialTitle={editGoal?.title}
           initialMonthlyGoalId={editGoal?.monthlyGoalId}
           initialTargetDay={editGoal?.targetDay}
           initialDescription={editGoal?.description}
           initialWorkload={editGoal?.workload}
-          onSubmit={async (data) => {
+          onSubmit={(data) => {
             if (editGoal) {
-              const ok = await updateWeeklyGoal(editGoal.id, data, { persistMode: "blocking" });
-              if (!ok) return;
+              updateWeeklyGoal(editGoal.id, data);
             } else {
-              const ok = await addWeeklyGoal({
+              addWeeklyGoal({
                 ...data,
                 isMain: false,
-                weekNumber: currentWeek,
-                month: currentMonth,
-                year: currentYear,
+                weekNumber: getCurrentWeek(),
+                month: getCurrentMonth(),
+                year: getCurrentYear(),
                 status: "active",
                 progress: 0,
                 aiSuggested: false,
-              }, { persistMode: "blocking" });
-              if (!ok) return;
+              });
             }
             setAddSecOpen(false);
             setEditGoal(null);
@@ -927,13 +903,20 @@ export function StepWeekly({ onNext, onBack }: Props) {
           initialIcon={editHabitData?.icon}
           initialCategoryId={editHabitData?.categoryId}
           initialFrequency={editHabitData?.frequency}
-          onSubmit={async (name, icon, categoryId, frequency) => {
+          initialYearlyGoalId={editHabitData?.yearlyGoalId}
+          initialMonthlyGoalId={editHabitData?.monthlyGoalId}
+          initialWeeklyGoalId={editHabitData?.weeklyGoalId}
+          onSubmit={async ({ name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId }) => {
             if (editHabitId) {
-              const ok = await updateHabit(editHabitId, { name, icon, categoryId, frequency }, { persistMode: "blocking" });
+              const ok = await updateHabit(
+                editHabitId,
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId },
+                { persistMode: "blocking" },
+              );
               if (!ok) return;
             } else {
               const ok = await addHabit(
-                { name, icon, categoryId, frequency, active: true, completedToday: false, streak: 0 },
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId, active: true, completedToday: false, streak: 0 },
                 { persistMode: "blocking" },
               );
               if (!ok) return;
@@ -984,12 +967,12 @@ export function WeeklyAIGuidancePanel() {
           <p className="text-xs leading-relaxed mb-3" style={{ color: "#6b7b74" }}>
             Your weekly main goal should be the clearest advancement on this month&apos;s main goal. Secondary goals should support that priority, not compete with it.
           </p>
-          <div className="space-y-2.5">
-            {[
-              { num: "1", text: "Main goal that moves the month forward." },
-              { num: "2", text: "Secondary goals that remove friction or carry useful momentum." },
-              { num: "3+", text: "Routines that protect your focus, energy, and follow-through." },
-            ].map((item) => (
+            <div className="space-y-2.5">
+              {[
+                { num: "1", text: "Main goal that moves the month forward." },
+                { num: "2", text: "Secondary goals that remove friction or carry useful momentum." },
+                { num: "3+", text: "Routines that protect your focus, energy, and follow-through." },
+              ].map((item) => (
               <div key={item.num} className="flex items-start gap-2.5">
                 <span
                   className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
@@ -1021,7 +1004,7 @@ export function WeeklyAIGuidancePanel() {
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>stacked_line_chart</span>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              Routine Continuity
+              Habit Continuity
             </p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>

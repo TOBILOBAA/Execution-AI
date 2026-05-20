@@ -3,8 +3,7 @@
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { getCurrentMonth, getCurrentYear, getToday, MONTH_NAMES } from "@/lib/mockData";
-import { MONTHLY_MAIN_GOAL_CAP, MONTHLY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
+import { getCurrentMonth, getCurrentYear, MONTH_NAMES } from "@/lib/mockData";
 import { AddMonthlyGoalModal } from "./AddMonthlyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import type { MonthlyGoal, FoundationalHabit, HabitFrequency } from "@/lib/types";
@@ -21,6 +20,7 @@ const FREQ_LABELS: Record<HabitFrequency, string> = {
   "3x_week": "3x Per Week",
   "5x_week": "5x Per Week",
   weekends: "Weekends",
+  flexible: "Flexible",
 };
 
 // ── Right panel ───────────────────────────────────────────────────────────────
@@ -108,7 +108,6 @@ export function StepMonthly({ onNext, onBack }: Props) {
     categories,
     yearlyGoals,
     monthlyGoals,
-    sessionTimezone,
     addMonthlyGoal,
     updateMonthlyGoal,
     removeMonthlyGoal,
@@ -124,7 +123,6 @@ export function StepMonthly({ onNext, onBack }: Props) {
       categories: state.categories,
       yearlyGoals: state.yearlyGoals,
       monthlyGoals: state.monthlyGoals,
-      sessionTimezone: state.sessionTimezone,
       addMonthlyGoal: state.addMonthlyGoal,
       updateMonthlyGoal: state.updateMonthlyGoal,
       removeMonthlyGoal: state.removeMonthlyGoal,
@@ -171,10 +169,6 @@ export function StepMonthly({ onNext, onBack }: Props) {
     return n;
   }, [aiDraft, aiRowKeys]);
 
-  const today = getToday(sessionTimezone);
-  const currentYear = Number(today.slice(0, 4)) || getCurrentYear();
-  const currentMonth = Number(today.slice(5, 7)) || getCurrentMonth();
-
   const toggleAiRow = (key: string) => {
     setAiRowKeys((prev) => {
       const next = new Set(prev);
@@ -188,7 +182,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateMonthlyPlan(currentYear, currentMonth);
+    const result = await generateMonthlyPlan(getCurrentYear(), getCurrentMonth());
     if (result.ok && result.draft) {
       const draft = result.draft as AIDraft;
       setAiDraft(draft);
@@ -225,7 +219,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false, priority: "medium" });
     });
     setAiAccepting(true);
-    const ok = await approveMonthlyPlan(currentYear, currentMonth, goals);
+    const ok = await approveMonthlyPlan(getCurrentYear(), getCurrentMonth(), goals);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -233,7 +227,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiAccepting(false);
   };
 
-  const currentGoals = monthlyGoals.filter((g) => g.month === currentMonth && g.year === currentYear);
+  const currentGoals = monthlyGoals.filter((g) => g.month === getCurrentMonth() && g.year === getCurrentYear());
   const mainGoals = currentGoals.filter((g) => g.isMain);
   const secondaryGoals = currentGoals.filter((g) => !g.isMain);
   const activeHabits = habits.filter((h) => h.active);
@@ -241,7 +235,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
   const isEditMode = goalModal !== null && typeof goalModal === "object";
   const addMode = typeof goalModal === "string" ? goalModal : null;
 
-  const handleGoalSubmit = async (
+  const handleGoalSubmit = (
     title: string,
     categoryId: string,
     yearlyGoalId: string,
@@ -253,17 +247,16 @@ export function StepMonthly({ onNext, onBack }: Props) {
     const wl = workload.trim();
     if (isEditMode && goalModal) {
       const g = goalModal as MonthlyGoal;
-      const ok = await updateMonthlyGoal(g.id, {
+      updateMonthlyGoal(g.id, {
         title,
         categoryId,
         yearlyGoalId: yearlyGoalId || undefined,
         targetDate,
         description: desc,
         workload: wl,
-      }, { persistMode: "blocking" });
-      if (!ok) return;
+      });
     } else if (addMode) {
-      const ok = await addMonthlyGoal({
+      addMonthlyGoal({
         title,
         categoryId,
         yearlyGoalId: yearlyGoalId || undefined,
@@ -271,28 +264,47 @@ export function StepMonthly({ onNext, onBack }: Props) {
         ...(desc ? { description: desc } : {}),
         ...(wl ? { workload: wl } : {}),
         isMain: addMode === "main",
-        month: currentMonth,
-        year: currentYear,
+        month: getCurrentMonth(),
+        year: getCurrentYear(),
         status: "active",
         progress: 0,
         priority: addMode === "main" ? "high" : "medium",
         aiSuggested: false,
-      }, { persistMode: "blocking" });
-      if (!ok) return;
+      });
     }
     setGoalModal(null);
   };
 
   const isEditingHabit = habitModal !== null && habitModal !== true;
 
-  const handleHabitSubmit = async (name: string, icon: string, categoryId: string, frequency: HabitFrequency) => {
+  const handleHabitSubmit = async ({
+    name,
+    icon,
+    categoryId,
+    frequency,
+    yearlyGoalId,
+    monthlyGoalId,
+    weeklyGoalId,
+  }: {
+    name: string;
+    icon: string;
+    categoryId: string;
+    frequency: HabitFrequency;
+    yearlyGoalId?: string;
+    monthlyGoalId?: string;
+    weeklyGoalId?: string;
+  }) => {
     if (isEditingHabit && habitModal) {
       const h = habitModal as FoundationalHabit;
-      const ok = await updateHabit(h.id, { name, icon, categoryId, frequency }, { persistMode: "blocking" });
+      const ok = await updateHabit(
+        h.id,
+        { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId },
+        { persistMode: "blocking" },
+      );
       if (!ok) return;
     } else {
       const ok = await addHabit(
-        { name, icon, categoryId, frequency, completedToday: false, streak: 0, active: true },
+        { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId, completedToday: false, streak: 0, active: true },
         { persistMode: "blocking" },
       );
       if (!ok) return;
@@ -305,17 +317,17 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
   const handleLeaveMonthly = async () => {
     setLeaveError(null);
-    const mainGoalsCount = monthlyGoals.filter((g) => g.month === currentMonth && g.year === currentYear && g.isMain).length;
-    const secondaryGoalsCount = monthlyGoals.filter((g) => g.month === currentMonth && g.year === currentYear && !g.isMain).length;
+    const mainGoalsCount = monthlyGoals.filter(g => g.month === getCurrentMonth() && g.year === getCurrentYear() && g.isMain).length;
+    const secondaryGoalsCount = monthlyGoals.filter(g => g.month === getCurrentMonth() && g.year === getCurrentYear() && !g.isMain).length;
     if (mainGoalsCount !== 1) {
       setLeaveError("You need exactly one main goal for the month before continuing.");
       return;
     }
-    if (secondaryGoalsCount > MONTHLY_SECONDARY_GOAL_CAP) {
+    if (secondaryGoalsCount > 2) {
       setLeaveError("You can have at most two secondary goals for the month.");
       return;
     }
-    const ok = await syncMonthlyGoalsToServer(currentYear, currentMonth, { mode: "verify" });
+    const ok = await syncMonthlyGoalsToServer(getCurrentYear(), getCurrentMonth());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Monthly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -330,10 +342,10 @@ export function StepMonthly({ onNext, onBack }: Props) {
         {/* Heading */}
         <div className="text-center">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight mb-2.5" style={{ color: "#1a1f1e" }}>
-            Plan {MONTH_NAMES[currentMonth - 1]}.
+            Plan {MONTH_NAMES[getCurrentMonth() - 1]}.
           </h1>
           <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#6b7b74" }}>
-            Pick 1 main goal, up to 2 secondary goals, and the routines you&apos;ll hold this month. Each goal
+            Pick 1 main goal, up to 2 secondary goals, and the foundational habits you&apos;ll hold this month. Each goal
             connects to a yearly goal.
           </p>
         </div>
@@ -518,7 +530,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
         {/* ── Main Goals ── */}
         <section>
-          <SectionHeader label="Main Goals" action="Add Goal" onAction={() => setGoalModal("main")} />
+          <SectionHeader label="Main Goals (High Priority)" action="Add Goal" onAction={() => setGoalModal("main")} />
           <div className="space-y-3">
             {mainGoals.map((goal) => (
               <MainGoalCard
@@ -526,7 +538,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 goal={goal}
                 categoryName={getCategoryName(goal.categoryId)}
                 onEdit={() => setGoalModal(goal)}
-                onDelete={async () => { await removeMonthlyGoal(goal.id, { persistMode: "blocking" }); }}
+                onDelete={() => removeMonthlyGoal(goal.id)}
               />
             ))}
             {mainGoals.length === 0 && (
@@ -537,27 +549,27 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
         {/* ── Secondary Goals ── */}
         <section>
-          <SectionHeader label="Secondary Goals" action="Add Goal" onAction={() => setGoalModal("secondary")} />
+          <SectionHeader label="Secondary Goals" action="Add Target" onAction={() => setGoalModal("secondary")} />
           <div className="grid grid-cols-2 gap-3">
             {secondaryGoals.map((goal) => (
               <SecondaryGoalCard
                 key={goal.id}
                 goal={goal}
                 onEdit={() => setGoalModal(goal)}
-                onDelete={async () => { await removeMonthlyGoal(goal.id, { persistMode: "blocking" }); }}
+                onDelete={() => removeMonthlyGoal(goal.id)}
               />
             ))}
             {secondaryGoals.length === 0 && (
               <div className="col-span-2">
-                <EmptySlot label="Add secondary goals" onAdd={() => setGoalModal("secondary")} />
+                <EmptySlot label="Add supporting goals" onAdd={() => setGoalModal("secondary")} />
               </div>
             )}
           </div>
         </section>
 
-        {/* ── Routines ── */}
+        {/* ── Foundational Habits ── */}
         <section>
-          <SectionHeader label="Routines" action="Define Routine" onAction={() => setHabitModal(true)} />
+          <SectionHeader label="Foundational Habits" action="Define Routine" onAction={() => setHabitModal(true)} />
           <div className="space-y-2">
             {activeHabits.map((habit) => (
               <HabitRow
@@ -566,11 +578,11 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 categoryName={getCategoryName(habit.categoryId)}
                 freqLabel={FREQ_LABELS[habit.frequency]}
                 onEdit={() => setHabitModal(habit)}
-                onDelete={async () => { await removeHabit(habit.id, { persistMode: "blocking" }); }}
+                onDelete={() => removeHabit(habit.id)}
               />
             ))}
             {activeHabits.length === 0 && (
-              <EmptySlot label="Define your routines" onAdd={() => setHabitModal(true)} />
+              <EmptySlot label="Define your foundational habits" onAdd={() => setHabitModal(true)} />
             )}
           </div>
         </section>
@@ -609,20 +621,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
         <AddMonthlyGoalModal
           mode={isEditMode ? ((goalModal as MonthlyGoal).isMain ? "main" : "secondary") : (addMode as "main" | "secondary")}
           categories={categories}
-          yearlyGoals={yearlyGoals.filter((g) => g.year === currentYear)}
-          currentCount={
-            isEditMode
-              ? 0
-              : addMode === "main"
-                ? mainGoals.length
-                : secondaryGoals.length
-          }
-          maxCount={addMode === "main" ? MONTHLY_MAIN_GOAL_CAP : MONTHLY_SECONDARY_GOAL_CAP}
-          limitMessage={
-            addMode === "main"
-              ? "You can only save 1 main goal for this month."
-              : "You can only save up to 2 secondary goals for this month."
-          }
+          yearlyGoals={yearlyGoals.filter((g) => g.year === getCurrentYear())}
           initialTitle={isEditMode ? (goalModal as MonthlyGoal).title : ""}
           initialCategoryId={isEditMode ? (goalModal as MonthlyGoal).categoryId : undefined}
           initialYearlyGoalId={isEditMode ? (goalModal as MonthlyGoal).yearlyGoalId : undefined}
@@ -640,6 +639,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
           initialIcon={isEditingHabit ? (habitModal as FoundationalHabit).icon : undefined}
           initialCategoryId={isEditingHabit ? (habitModal as FoundationalHabit).categoryId : undefined}
           initialFrequency={isEditingHabit ? (habitModal as FoundationalHabit).frequency : undefined}
+          initialYearlyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).yearlyGoalId : undefined}
+          initialMonthlyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).monthlyGoalId : undefined}
+          initialWeeklyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).weeklyGoalId : undefined}
           onSubmit={handleHabitSubmit}
           onClose={() => setHabitModal(null)}
         />

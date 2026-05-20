@@ -178,6 +178,9 @@ def compute_habit_streak(
     if not completed_dates:
         return 0
 
+    if frequency == "flexible":
+        return 0
+
     if frequency == "daily":
         streak = 0
         expected = today
