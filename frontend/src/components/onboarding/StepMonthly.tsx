@@ -32,39 +32,37 @@ export function MonthlyAIGuidancePanel() {
           <span className="material-symbols-outlined text-[18px]" style={{ color: "#006c4a" }}>auto_awesome</span>
         </div>
         <div>
-          <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>AI Guidance</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>Planning Strategy</p>
+          <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>Planning Strategy</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>Monthly Focus</p>
         </div>
       </div>
       <div className="space-y-5">
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>layers</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Bedrock Structure</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Anchor The Month</p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            For a balanced month, use a &lsquo;Bedrock&rsquo; setup:{" "}
-            <strong style={{ color: "#1a1f1e" }}>1 Main Goal</strong> for focus and{" "}
-            <strong style={{ color: "#1a1f1e" }}>2 Secondary Goals</strong> for support.{" "}
-            Routines are yours to define below — AI only suggests the goals.
+            Anchor the month around <strong style={{ color: "#1a1f1e" }}>1 main goal</strong>. Add up to{" "}
+            <strong style={{ color: "#1a1f1e" }}>2 secondary goals</strong> only when they strengthen, de-risk, or unblock that main goal.
           </p>
         </div>
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>bolt</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Avoid Overload</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Think In Milestones</p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Most productivity failures happen when the monthly list is too long. By limiting your primary targets, you increase your completion probability by 40%.
+            If a project lasts longer than one month, make this month&apos;s goal a milestone. Define the most important progress the project must make now, not the whole project at once.
           </p>
         </div>
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>stacked_line_chart</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Routine Design</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Routine Support</p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Select routines that directly strengthen your goals. If your goal is financial, &ldquo;Daily Expense Logging&rdquo; is a critical routine.
+            Choose routines that make the main goal easier to execute. If the month depends on focus, recovery, study, or spiritual consistency, your routines should reinforce that directly.
           </p>
         </div>
       </div>

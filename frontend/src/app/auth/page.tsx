@@ -142,7 +142,7 @@ export default function AuthPage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
         <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>
-          {handingOffToWorkspace ? "Opening your workspace…" : "Loading…"}
+          {handingOffToWorkspace ? "Preparing your execution engine…" : "Loading…"}
         </p>
       </div>
     );
@@ -300,7 +300,7 @@ export default function AuthPage() {
         ? "Enter your code"
         : mode === "signin"
           ? "Welcome back."
-          : "Set up your execution loop.";
+          : "Build your execution engine.";
 
   const subline =
     mode === "forgot"
@@ -312,9 +312,9 @@ export default function AuthPage() {
         : cloudOtpEnabled && mode === "signup" && !cloudOtpVerify
           ? "We will email you a one-time code to verify this address — no password to remember."
           : cloudPassword && mode === "signin"
-            ? "Pick up where today left off."
+            ? "Step back into your plans, protect your focus, and keep today moving."
           : cloudPassword && mode === "signup"
-            ? "One account. Yearly, monthly, weekly, and daily goals — all linked."
+            ? "Create one workspace where your yearly, monthly, weekly, and daily goals stay connected."
             : authLocalOnly
               ? mode === "signin"
                 ? "No company email domain needed. Use a seeded profile or sign up with any address — each user gets their own workspace on your API."
@@ -348,7 +348,7 @@ export default function AuthPage() {
           <div>
             <p className="font-headline font-bold text-base text-white">Execution AI</p>
             <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>
-              Productivity OS
+              Execution Engine
             </p>
           </div>
         </div>
@@ -370,8 +370,8 @@ export default function AuthPage() {
             </h1>
           </div>
           <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.5)" }}>
-            Execution AI transforms your yearly vision into daily action — with AI-assisted planning, real-time tracking, and a
-            full historical archive of your growth.
+            Execution AI turns long-range direction into a living execution engine with linked planning, disciplined follow-through,
+            and a clear record of how your goals progress over time.
           </p>
 
           <div className="flex flex-wrap gap-2">
