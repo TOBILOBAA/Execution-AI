@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { getCurrentYear } from "@/lib/mockData";
-import { MetricInfoTooltip } from "@/components/reports/MetricInfoTooltip";
+import { ReportMetricCard } from "@/components/reports/ReportMetricCard";
 import {
   listYearSnapshots,
   monthlyCompletionRate,
@@ -133,7 +133,7 @@ export default function ReportsPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4 mt-8">
+        <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[
             {
               label: "Execution Score",
@@ -141,6 +141,8 @@ export default function ReportsPage() {
               subvalue: `${executionScore} / 100`,
               helper: `${executionGrade.label} · ${executionGrade.rangeLabel}`,
               detail: "A = 85-100, B = 70-84, C = 55-69, D = 40-54, F = 0-39. The grade blends completion, consistency, alignment, realism, and momentum.",
+              emphasized: true,
+              tone: "mint" as const,
             },
             {
               label: "Completion",
@@ -175,26 +177,17 @@ export default function ReportsPage() {
           ].map((metric) => (
             <div
               key={metric.label}
-              className="rounded-2xl p-4"
-              style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.05)" }}
+              className={metric.label === "Execution Score" ? "md:col-span-2 xl:col-span-1" : ""}
             >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                  {metric.label}
-                </p>
-                <MetricInfoTooltip label={metric.label} detail={metric.detail} />
-              </div>
-              <p className="font-headline font-extrabold mt-3" style={{ fontSize: "30px", color: "#1a1f1e", lineHeight: 1 }}>
-                {metric.value}
-              </p>
-              <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
-                {metric.subvalue}
-              </p>
-              {"helper" in metric && metric.helper && (
-                <p className="text-xs mt-2" style={{ color: "#006c4a" }}>
-                  {metric.helper}
-                </p>
-              )}
+              <ReportMetricCard
+                label={metric.label}
+                value={metric.value}
+                subvalue={metric.subvalue}
+                detail={metric.detail}
+                helper={metric.helper}
+                emphasized={metric.emphasized}
+                tone={metric.tone ?? "white"}
+              />
             </div>
           ))}
         </div>

@@ -10,6 +10,12 @@
 
 import type { Session } from "./api";
 
+export interface BackendSessionIdentity {
+  id: string;
+  name?: string;
+  email?: string;
+}
+
 const SESSION_KEY_PREFIX = "execution-ai-session-";
 const pendingSessionRequests = new Map<string, Promise<Session>>();
 
@@ -32,7 +38,8 @@ export function clearSessionId(userId: string): void {
  * Ensure a backend session exists for this user.
  * Creates one if not found, returns the existing one if present.
  */
-export async function ensureBackendSession(userId: string): Promise<Session> {
+export async function ensureBackendSession(identity: string | BackendSessionIdentity): Promise<Session> {
+  const userId = typeof identity === "string" ? identity : identity.id;
   const inflight = pendingSessionRequests.get(userId);
   if (inflight) {
     return inflight;
@@ -44,10 +51,6 @@ export async function ensureBackendSession(userId: string): Promise<Session> {
     if (existing) {
       try {
         const session = await sessionsApi.get(existing);
-        if (!session.auth_user_id) {
-          await sessionsApi.update(existing, { auth_user_id: userId });
-          return { ...session, auth_user_id: userId };
-        }
         if (session.auth_user_id === userId) {
           return session;
         }

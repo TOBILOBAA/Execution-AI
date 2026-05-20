@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { type ApiReport } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { MetricInfoTooltip } from "@/components/reports/MetricInfoTooltip";
+import { ReportMetricCard } from "@/components/reports/ReportMetricCard";
 import {
   average,
   buildExecutionScore,
@@ -22,6 +22,8 @@ import {
   monthlyCompletionRate,
   buildQuarterReviewNarrative,
   type QuarterReportSnapshot,
+  monthlyNextFocus,
+  monthlyReflection,
   monthlySummary,
   monthlyTopPillar,
   yearlyCompletionRate,
@@ -54,6 +56,11 @@ function asString(value: unknown): string | null {
 function narrativeField(report: ApiReport | null, key: string): string | null {
   if (!report) return null;
   return asString(asRecord(report.ai_narrative)[key]);
+}
+
+function hasSavedAiReview(report: ApiReport | null | undefined): boolean {
+  if (!report?.ai_generated_at) return false;
+  return Object.keys(asRecord(report.ai_narrative)).length > 0;
 }
 
 /** Gemini quarterly narrative fields from persisted report snapshot */
@@ -104,6 +111,74 @@ function firstSentence(value: string | null): string | null {
   if (!value) return null;
   const match = value.trim().match(/.*?[.!?](\s|$)/);
   return (match?.[0] ?? value).trim();
+}
+
+function metricCount(report: ApiReport | null, key: string): number | null {
+  if (!report) return null;
+  return asNumber(asRecord(report.metrics)[key]);
+}
+
+function dayArchiveBadge(status: "future" | "current" | "past", hasReport: boolean) {
+  if (hasReport) return "Saved";
+  if (status === "future") return "Future";
+  if (status === "current") return "Today";
+  return "Empty";
+}
+
+function monthSummaryLine(report: ApiReport | null) {
+  const completedGoals = metricCount(report, "goals_completed");
+  const totalGoals = metricCount(report, "goals_total");
+  const completedTasks = metricCount(report, "tasks_completed");
+  const totalTasks = metricCount(report, "tasks_total");
+  const completion = monthlyCompletionRate(report);
+
+  if (
+    completedGoals !== null &&
+    totalGoals !== null &&
+    completedTasks !== null &&
+    totalTasks !== null &&
+    completion !== null
+  ) {
+    return `${completedGoals} of ${totalGoals} goals completed and ${completedTasks} of ${totalTasks} tasks finished, with ${completion}% average weekly completion.`;
+  }
+
+  return firstSentence(monthlySummary(report)) ?? "Open this month to review the saved archive snapshot.";
+}
+
+function dailyMainGoalsLine(report: ApiReport | null) {
+  const completed = metricCount(report, "priorities_completed");
+  const total = metricCount(report, "priorities_total");
+  if (completed === null || total === null) return "No main goal data saved.";
+  return `Main goals ${completed} / ${total}`;
+}
+
+function dailyWorkLine(report: ApiReport | null) {
+  const mainCompleted = metricCount(report, "priorities_completed") ?? 0;
+  const mainTotal = metricCount(report, "priorities_total") ?? 0;
+  const secondaryCompleted = metricCount(report, "secondary_tasks_completed") ?? 0;
+  const secondaryTotal = metricCount(report, "secondary_tasks_total") ?? 0;
+  const habitsCompleted = metricCount(report, "habits_completed") ?? 0;
+  const habitsTotal = metricCount(report, "habits_total") ?? 0;
+  const completed = mainCompleted + secondaryCompleted + habitsCompleted;
+  const total = mainTotal + secondaryTotal + habitsTotal;
+  return total > 0 ? `All tracked work ${completed} / ${total}` : "No tracked work saved.";
+}
+
+function dailyHeadline(report: ApiReport | null) {
+  const completed = metricCount(report, "priorities_completed");
+  const total = metricCount(report, "priorities_total");
+  if (completed === null || total === null) {
+    return narrativeField(report, "top_win") ?? "Daily reflection saved";
+  }
+  if (total === 0) return "No main goals were planned.";
+  if (completed === total) return `Completed all ${total} main goal${total === 1 ? "" : "s"}.`;
+  return `Completed ${completed} of ${total} main goal${total === 1 ? "" : "s"}.`;
+}
+
+function dailyFooterNote(report: ApiReport | null) {
+  if (!report) return "No saved daily report.";
+  if (hasSavedAiReview(report)) return "Saved daily reflection";
+  return "Historical execution snapshot";
 }
 
 function compactBullets(values: Array<string | null | undefined>, fallback: string): string[] {
@@ -226,6 +301,10 @@ function scoreTone(score: number): { label: string; color: string } {
   return { label: "Needs attention", color: "#dc2626" };
 }
 
+function isHistoricalSnapshot(report: ApiReport | null | undefined): boolean {
+  return Boolean(report) && !hasSavedAiReview(report);
+}
+
 function metricTitle(label: string): string {
   return `${label[0].toUpperCase()}${label.slice(1)}`;
 }
@@ -270,7 +349,6 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
     syncError,
     openModal,
     generateQuarterlyReport,
-    generateDailyReport,
   } = useAppStore(
     useShallow((state) => ({
       sessionId: state.sessionId,
@@ -282,13 +360,12 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
       syncError: state.syncError,
       openModal: state.openModal,
       generateQuarterlyReport: state.generateQuarterlyReport,
-      generateDailyReport: state.generateDailyReport,
     })),
   );
   const [generatingQuarter, setGeneratingQuarter] = useState<number | null>(null);
-  const [generatingDailyDate, setGeneratingDailyDate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ArchiveTab>("overview");
   const [expandedDailyMonths, setExpandedDailyMonths] = useState<number[]>(() => [new Date().getMonth() + 1]);
+  const [visibleWeeklyCount, setVisibleWeeklyCount] = useState(8);
 
   useEffect(() => {
     if (!sessionId || Number.isNaN(year)) return;
@@ -390,19 +467,9 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
     [year, openModal],
   );
 
-  const handleDailyGemini = useCallback(
-    async (dateIso: string) => {
-      setGeneratingDailyDate(dateIso);
-      try {
-        const saved = await generateDailyReport(dateIso);
-        if (!saved) return;
-        void syncReports(true);
-      } finally {
-        setGeneratingDailyDate(null);
-      }
-    },
-    [generateDailyReport, syncReports],
-  );
+  useEffect(() => {
+    setVisibleWeeklyCount(8);
+  }, [year]);
 
   if (Number.isNaN(year)) {
     return (
@@ -511,6 +578,11 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
       todayIso < range.start ? "future" : todayIso > range.end ? "past" : "current";
     return { week, report, range, status };
   });
+  const weeklyArchiveStarted = weekArchive
+    .filter((entry) => entry.status !== "future")
+    .sort((a, b) => b.week - a.week);
+  const visibleWeeklyArchive = weeklyArchiveStarted.slice(0, visibleWeeklyCount);
+  const hasMoreWeeklyArchive = weeklyArchiveStarted.length > visibleWeeklyArchive.length;
   const dailyArchiveMonths = Array.from({ length: 12 }, (_, index) => {
     const month = index + 1;
     const daysInThisMonth = new Date(year, month, 0).getDate();
@@ -587,16 +659,16 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
       ? "Reduce secondary workload by 20-30% so your weekly plan matches your actual execution capacity."
       : null,
     consistencyScore < 70
-      ? "Reinforce one or two foundational habits first, then scale your task load after follow-through stabilizes."
+      ? "Reinforce one or two routines first, then scale your goal load after follow-through stabilizes."
       : null,
     alignmentScore < 70
-      ? "Link every monthly priority back to a yearly goal so effort is not spread across low-value work."
+      ? "Link every monthly goal back to a yearly goal so effort is not spread across low-value work."
       : null,
     momentumScore < 70
       ? "Protect the part of the week where execution dips and deliberately schedule lighter recovery work there."
       : null,
     completionRate < 70
-      ? "Focus on fewer commitments and finish more of them before adding new priorities."
+      ? "Focus on fewer commitments and finish more of them before adding new goals."
       : null,
   ]
     .filter((step): step is string => Boolean(step))
@@ -639,7 +711,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   );
 
   return (
-    <div className="p-6 md:p-8 max-w-6xl mx-auto w-full space-y-8">
+    <div className="w-full max-w-6xl mx-auto space-y-8 p-4 sm:p-6 md:p-8">
       <div>
         <div className="flex items-center gap-2 mb-3">
           <button
@@ -728,38 +800,136 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
         </div>
       ) : (
         <>
-          <div
-            className="rounded-2xl p-2"
-            style={{ background: "#f4f6f4", border: "1px solid rgba(0,0,0,0.05)" }}
-          >
-            <div className="flex flex-wrap gap-2">
-              {REPORT_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className="px-4 py-2 rounded-xl text-sm font-bold transition-all"
-                  style={{
-                    background: activeTab === tab.id ? "#fff" : "transparent",
-                    color: activeTab === tab.id ? "#1a1f1e" : "#6b7b74",
-                    boxShadow: activeTab === tab.id ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                  }}
+          <div className="space-y-5 md:hidden">
+            <section
+              className="rounded-[28px] p-5"
+              style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.07)", boxShadow: "0 8px 28px rgba(0,0,0,0.04)" }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
+                Mobile summary
+              </p>
+              <div className="mt-3 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-headline text-3xl font-extrabold" style={{ color: "#006c4a", lineHeight: 1 }}>
+                    {executionGrade.grade}
+                  </h2>
+                  <p className="mt-2 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                    {executionGrade.label}
+                  </p>
+                </div>
+                <span
+                  className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest"
+                  style={{ background: "rgba(0,108,74,0.10)", color: "#006c4a" }}
                 >
-                  {tab.label}
-                </button>
+                  {executionScore} / 100
+                </span>
+              </div>
+              <p className="mt-4 text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+                {diagnosis}
+              </p>
+              <div className="mt-4 rounded-2xl p-4" style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)" }}>
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                  Current emphasis
+                </p>
+                <p className="mt-2 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                  {priorityFixes.length ? priorityFixes.join(" + ") : "Execution hygiene"}
+                </p>
+                <p className="mt-2 text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+                  {topPillar ?? "The yearly pillar will appear here once enough report depth exists."}
+                </p>
+              </div>
+            </section>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {[
+                {
+                  label: "Execution Score",
+                  value: executionGrade.grade,
+                  subvalue: `${executionScore} / 100`,
+                  helper: `${executionGrade.label} · ${executionGrade.rangeLabel}`,
+                  detail: "A condensed grade blending completion, consistency, alignment, realism, and momentum.",
+                  emphasized: true,
+                  tone: "mint" as const,
+                },
+                {
+                  label: "Completion",
+                  value: `${completionRate}%`,
+                  subvalue: "planned work finished",
+                  detail: "How much of your planned work actually got completed.",
+                },
+                {
+                  label: "Consistency",
+                  value: `${consistencyScore}%`,
+                  subvalue: "regular action",
+                  detail: "How regularly you showed up and produced execution activity.",
+                },
+                {
+                  label: "Alignment",
+                  value: `${alignmentScore}%`,
+                  subvalue: "linked to goals",
+                  detail: "How much of your monthly work is clearly tied back to yearly goals.",
+                },
+              ].map((metric) => (
+                <ReportMetricCard
+                  key={metric.label}
+                  label={metric.label}
+                  value={metric.value}
+                  subvalue={metric.subvalue}
+                  detail={metric.detail}
+                  helper={metric.helper}
+                  emphasized={metric.emphasized}
+                  tone={metric.tone ?? "white"}
+                  density="compact"
+                />
               ))}
             </div>
+
+            <section
+              className="rounded-2xl p-5"
+              style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                Deeper archive
+              </p>
+              <p className="mt-3 text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+                Quarterly, monthly, weekly, and daily report breakdowns are preserved for tablet and desktop where the archive has room to stay readable and aligned.
+              </p>
+            </section>
           </div>
 
-          {activeTab === "overview" && (
-            <div className="space-y-6">
+          <div className="hidden md:block">
+            <div
+              className="rounded-2xl p-2"
+              style={{ background: "#f4f6f4", border: "1px solid rgba(0,0,0,0.05)" }}
+            >
+              <div className="flex flex-wrap gap-2">
+                {REPORT_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className="px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                    style={{
+                      background: activeTab === tab.id ? "#fff" : "transparent",
+                      color: activeTab === tab.id ? "#1a1f1e" : "#6b7b74",
+                      boxShadow: activeTab === tab.id ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {activeTab === "overview" && (
+              <div className="space-y-6">
               <section className="space-y-4">
                 <div className="flex items-center gap-2">
                   <p className="text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: "#1a1f1e" }}>
                     1. Performance Metrics
                   </p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {[
                     {
                       label: "Execution Score",
@@ -768,11 +938,13 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       helper: `${executionGrade.label} · ${executionGrade.rangeLabel}`,
                       detail:
                         "A = 85-100, B = 70-84, C = 55-69, D = 40-54, F = 0-39. The grade blends completion, consistency, alignment, realism, and momentum.",
+                      emphasized: true,
+                      tone: "mint" as const,
                     },
                     {
                       label: "Completion",
                       value: `${completionRate}%`,
-                      subvalue: "planned tasks finished",
+                      subvalue: "planned goals finished",
                       detail: "How much of your planned work actually got completed.",
                     },
                     {
@@ -800,35 +972,17 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       detail: "Whether your execution is being sustained over time instead of fading between periods.",
                     },
                   ].map((metric) => (
-                    <div
-                      key={metric.label}
-                      className="bg-white rounded-2xl p-5"
-                      style={{ border: "1.5px solid rgba(0,0,0,0.07)" }}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>
-                          {metric.label}
-                        </p>
-                        <MetricInfoTooltip label={metric.label} detail={metric.detail} />
-                      </div>
-                      <p
-                        className="font-headline font-extrabold mt-3"
-                        style={{
-                          color: "#1a1f1e",
-                          fontSize: metric.label === "Execution Score" ? "40px" : "32px",
-                          lineHeight: 1,
-                        }}
-                      >
-                        {metric.value}
-                      </p>
-                      <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
-                        {metric.subvalue}
-                      </p>
-                      {"helper" in metric && metric.helper && (
-                        <p className="text-xs mt-2" style={{ color: "#006c4a" }}>
-                          {metric.helper}
-                        </p>
-                      )}
+                    <div key={metric.label}>
+                      <ReportMetricCard
+                        label={metric.label}
+                        value={metric.value}
+                        subvalue={metric.subvalue}
+                        detail={metric.detail}
+                        helper={metric.helper}
+                        emphasized={metric.emphasized}
+                        tone={metric.tone ?? "white"}
+                        density="compact"
+                      />
                     </div>
                   ))}
                 </div>
@@ -900,7 +1054,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   ].map((card) => (
                     <div
                       key={card.title}
-                      className="rounded-2xl p-5"
+                      className="flex h-full flex-col rounded-2xl p-5"
                       style={{ background: card.tone, border: `1.5px solid ${card.border}` }}
                     >
                       <p className="font-bold text-sm mb-3" style={{ color: card.color }}>
@@ -1172,11 +1326,12 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 </div>
               </section>
             </div>
-          )}
+            )}
 
-          {activeTab === "quarterly" && (
+            {activeTab === "quarterly" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {quarterArchive.map((quarter) => {
+                const savedQuarterReview = hasSavedAiReview(quarter.snapshot.report);
                 const strongestMonth = [...quarter.snapshot.months]
                   .map((report) => ({
                     report,
@@ -1184,6 +1339,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   }))
                   .filter((entry): entry is { report: ApiReport; score: number } => entry.score !== null)
                   .sort((a, b) => b.score - a.score)[0] ?? null;
+                const currentQuarterSnapshot = quarter.status === "current" && quarter.snapshot.months.length > 0 && !savedQuarterReview;
 
                 if (!quarter.hasReport) {
                   const inactive = inactiveCardStyle(quarter.status);
@@ -1212,7 +1368,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       <p className="text-sm leading-relaxed" style={{ color: inactive.color }}>
                         {periodAvailabilityMessage({ kind: "quarter", label: quarter.label, status: quarter.status })}
                       </p>
-                      {quarter.status !== "future" && (
+                      {quarter.status === "past" && (
                         <button
                           type="button"
                           disabled={generatingQuarter === quarter.quarter}
@@ -1226,7 +1382,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                             "Generating…"
                           ) : (
                             <>
-                              Run AI quarterly review
+                              Generate quarterly review
                               <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
                             </>
                           )}
@@ -1237,6 +1393,56 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 }
 
                 const tone = archiveCardTone(quarter.snapshot.avgCompletion);
+                if (currentQuarterSnapshot) {
+                  return (
+                    <div
+                      key={quarter.label}
+                      className="rounded-2xl p-6"
+                      style={{ background: "rgba(0,108,74,0.04)", border: "1.5px solid rgba(0,108,74,0.12)" }}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-4">
+                        <div>
+                          <p className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>
+                            {quarter.label}
+                          </p>
+                          <p className="text-sm mt-1" style={{ color: "#6e8078" }}>
+                            {quarter.snapshot.months.map((monthReport) => monthName(monthReport.period_month)).join(", ")}
+                          </p>
+                        </div>
+                        <span
+                          className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
+                          style={{ background: "rgba(0,108,74,0.10)", color: "#006c4a" }}
+                        >
+                          Quarter in progress
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                        <div className="rounded-xl p-4" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+                            Live quarter snapshot
+                          </p>
+                          <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
+                            {quarter.snapshot.avgCompletion === null
+                              ? "Monthly snapshots are building up for this quarter."
+                              : `Average monthly completion is currently ${quarter.snapshot.avgCompletion}%.`}
+                          </p>
+                        </div>
+                        <div className="rounded-xl p-4" style={{ background: "#f7faf8" }}>
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+                            Strongest month so far
+                          </p>
+                          <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                            {strongestMonth ? `${monthName(strongestMonth.report.period_month)} (${strongestMonth.score}%)` : "-"}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+                        This quarter is still underway. We can keep surfacing the saved monthly snapshots, but the final AI quarterly review should wait until the quarter closes so it becomes one stable review instead of a moving target.
+                      </p>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={quarter.label}
@@ -1257,11 +1463,14 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                       <div className="rounded-xl p-4" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
                         <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                          Quarterly report
+                          {savedQuarterReview ? "Saved quarterly review" : "Quarter snapshot"}
                         </p>
                         <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
-                          {firstSentence(quarter.snapshot.summary) ??
-                            "A quarterly narrative has been stitched from the monthly reports in this period."}
+                          {savedQuarterReview
+                            ? firstSentence(quarterlyNarrativeFromReport(quarter.snapshot.report).summary || quarter.snapshot.summary) ??
+                              "A saved quarterly review is available for this period."
+                            : firstSentence(quarter.snapshot.summary) ??
+                              "Monthly reports exist in this quarter, but a saved AI quarterly review has not been generated yet."}
                         </p>
                       </div>
                       <div className="rounded-xl p-4" style={{ background: "#f7faf8" }}>
@@ -1274,51 +1483,52 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       </div>
                     </div>
                     <p className="text-sm leading-relaxed" style={{ color: "#5d6d67" }}>
-                      {quarter.snapshot.summary ??
-                        "Monthly reports exist in this quarter, but no stitched quarter narrative has been formed yet."}
+                      {savedQuarterReview
+                        ? quarterlyNarrativeFromReport(quarter.snapshot.report).reflection ||
+                          quarter.snapshot.summary ||
+                          "A saved quarterly review is available for this period."
+                        : "Monthly reports already exist for this quarter. Generate the quarterly AI review once to lock in a stable reflection and next-quarter focus."}
                     </p>
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                      <button
-                        type="button"
-                        disabled={generatingQuarter === quarter.quarter}
-                        onClick={() =>
-                          void handleQuarterlyGemini(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
-                        }
-                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-85 disabled:opacity-50"
-                        style={{ background: "#003d2b" }}
-                      >
-                        {generatingQuarter === quarter.quarter ? (
-                          "Generating…"
-                        ) : quarterlyNarrativeFromReport(quarter.snapshot.report).summary ? (
-                          <>
-                            Regenerate AI quarterly review
-                            <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-                          </>
-                        ) : (
-                          <>
-                            Run AI quarterly review
-                            <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-                          </>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openQuarterlyModalLocal(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
-                        }
-                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-opacity hover:opacity-85"
-                        style={{ borderColor: "rgba(0,61,43,0.35)", color: "#003d2b" }}
-                      >
-                        View quarterly review
-                      </button>
+                      {savedQuarterReview ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openQuarterlyModalLocal(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
+                          }
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-opacity hover:opacity-85"
+                          style={{ borderColor: "rgba(0,61,43,0.35)", color: "#003d2b" }}
+                        >
+                          View saved quarterly review
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={generatingQuarter === quarter.quarter}
+                          onClick={() =>
+                            void handleQuarterlyGemini(quarter.quarter as 1 | 2 | 3 | 4, quarter.snapshot)
+                          }
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-85 disabled:opacity-50"
+                          style={{ background: "#003d2b" }}
+                        >
+                          {generatingQuarter === quarter.quarter ? (
+                            "Generating…"
+                          ) : (
+                            <>
+                              Generate quarterly review
+                              <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
               })}
             </div>
-          )}
+            )}
 
-          {activeTab === "monthly" && (
+            {activeTab === "monthly" && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {monthArchive.map((entry) => {
                 if (!entry.report) {
@@ -1326,7 +1536,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   return (
                     <div
                       key={entry.month}
-                      className="rounded-2xl p-5"
+                      className="rounded-2xl p-5 min-h-[260px]"
                       style={{ background: inactive.background, border: inactive.border }}
                     >
                       <div className="flex items-start justify-between gap-3 mb-3">
@@ -1354,13 +1564,22 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
 
                 const rate = monthlyCompletionRate(entry.report);
                 const tone = archiveCardTone(rate);
+                const currentMonthSnapshot = entry.status === "current";
+                const historicalMonthSnapshot = isHistoricalSnapshot(entry.report);
+                const monthlyReflectionText = monthlyReflection(entry.report);
+                const monthlyNextFocusText = monthlyNextFocus(entry.report);
+                const monthlyMetrics = asRecord(entry.report.metrics);
+                const monthlyWeeksCount =
+                  typeof monthlyMetrics.weeks_count === "number" ? monthlyMetrics.weeks_count : null;
+                const monthlyBestWeek =
+                  typeof monthlyMetrics.best_week === "number" ? monthlyMetrics.best_week : null;
 
                 return (
                   <button
                     key={entry.month}
                     type="button"
                     onClick={() => router.push(`/dashboard/reports/${year}/${entry.month}`)}
-                    className="bg-white rounded-2xl p-5 text-left transition-opacity hover:opacity-80"
+                    className="bg-white rounded-2xl p-5 text-left transition-opacity hover:opacity-80 min-h-[260px]"
                     style={{ border: `1.5px solid ${tone.border}` }}
                   >
                     <div className="flex items-start justify-between gap-3 mb-3">
@@ -1369,46 +1588,92 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                           {monthName(entry.month)}
                         </p>
                         <p className="text-xs mt-1" style={{ color: "#8a9e97" }}>
-                          {monthlyTopPillar(entry.report) ?? "Saved monthly report"}
+                          {currentMonthSnapshot
+                            ? "Current month"
+                            : historicalMonthSnapshot
+                              ? "Historical snapshot"
+                              : monthlyTopPillar(entry.report) ?? "Saved monthly report"}
                         </p>
                       </div>
-                      {completionBadge(rate)}
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full"
+                        style={{
+                          background: currentMonthSnapshot ? "rgba(0,108,74,0.08)" : "rgba(0,108,74,0.10)",
+                          color: currentMonthSnapshot ? "#006c4a" : "#006c4a",
+                        }}
+                      >
+                        {currentMonthSnapshot ? "In progress" : rate === null ? "No score" : `${rate}%`}
+                      </span>
                     </div>
-                    <div className="rounded-xl p-4 mb-3" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
+                    <div className="rounded-xl p-4 mb-4" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
                       <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                        Monthly report
+                        {currentMonthSnapshot
+                          ? "Month in progress"
+                          : historicalMonthSnapshot
+                            ? "Historical snapshot"
+                            : "Monthly review"}
                       </p>
                       <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
-                        {firstSentence(monthlySummary(entry.report)) ??
-                          "Open this month for its full report, reflection, and linked weekly archive."}
+                        {currentMonthSnapshot
+                          ? "This month is still open. The final monthly review will appear after the month closes."
+                          : historicalMonthSnapshot
+                            ? "This month was reconstructed from saved plans and execution rows, so it should be treated as a factual archive snapshot."
+                            : monthSummaryLine(entry.report)}
                       </p>
                     </div>
-                    <p className="text-sm leading-relaxed mb-3" style={{ color: "#5d6d67" }}>
-                      {monthlySummary(entry.report) ?? "Open this month for its full report, reflection, and linked weekly archive."}
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mb-4">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                          Reflection
+                          {currentMonthSnapshot ? "Tracked weeks" : historicalMonthSnapshot ? "Best week" : "Reflection"}
                         </p>
-                        <p style={{ color: "#1a1f1e" }}>{narrativeField(entry.report, "reflection") ?? "-"}</p>
+                        <p className="leading-relaxed" style={{ color: "#1a1f1e" }}>
+                          {currentMonthSnapshot
+                            ? monthlyWeeksCount === null
+                              ? "Tracking in progress"
+                              : `${monthlyWeeksCount} saved week${monthlyWeeksCount === 1 ? "" : "s"} so far`
+                            : historicalMonthSnapshot
+                              ? monthlyBestWeek === null
+                                ? "No best week yet"
+                                : `Week ${monthlyBestWeek}`
+                              : firstSentence(monthlyReflectionText) ?? "-"}
+                        </p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                          Next focus
+                          {currentMonthSnapshot ? "Current pillar" : historicalMonthSnapshot ? "Completion" : "Next focus"}
                         </p>
-                        <p style={{ color: "#1a1f1e" }}>{narrativeField(entry.report, "next_month_focus") ?? "-"}</p>
+                        <p className="leading-relaxed" style={{ color: "#1a1f1e" }}>
+                          {currentMonthSnapshot
+                            ? monthlyTopPillar(entry.report) ?? "Still forming"
+                            : historicalMonthSnapshot
+                              ? rate === null
+                                ? "No saved score"
+                                : `${rate}% average weekly completion`
+                              : firstSentence(monthlyNextFocusText) ?? "-"}
+                        </p>
                       </div>
                     </div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                      Open monthly archive
+                    </p>
                   </button>
                 );
               })}
             </div>
-          )}
+            )}
 
-          {activeTab === "weekly" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {weekArchive.map((entry) => {
+            {activeTab === "weekly" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <p className="text-sm" style={{ color: "#6b7b74" }}>
+                  Showing the most recent started weeks first so the archive stays readable.
+                </p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                  {visibleWeeklyArchive.length} of {weeklyArchiveStarted.length} weeks
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {visibleWeeklyArchive.map((entry) => {
                 if (!entry.report) {
                   const inactive = inactiveCardStyle(entry.status);
                   return (
@@ -1440,54 +1705,72 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   );
                 }
 
-                const weeklyRate = asNumber(asRecord(entry.report.metrics).avg_daily_completion);
-                const tone = archiveCardTone(weeklyRate);
-                return (
-                  <div
-                    key={entry.week}
-                    className="bg-white rounded-2xl p-5"
-                    style={{ border: `1.5px solid ${tone.border}` }}
+                  const weeklyRate = asNumber(asRecord(entry.report.metrics).avg_daily_completion);
+                  const tone = archiveCardTone(weeklyRate);
+                  return (
+                    <div
+                      key={entry.week}
+                      className="bg-white rounded-2xl p-5 min-h-[225px]"
+                      style={{ border: `1.5px solid ${tone.border}` }}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div>
+                          <p className="font-headline font-bold text-xl" style={{ color: "#1a1f1e" }}>
+                            Week {entry.week}
+                          </p>
+                          <p className="text-xs mt-1" style={{ color: "#8a9e97" }}>
+                            {weeklyRange(entry.report)}
+                          </p>
+                        </div>
+                        {completionBadge(weeklyRate)}
+                      </div>
+                      <div className="rounded-xl p-4 mb-4" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
+                        <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+                          Weekly report
+                        </p>
+                        <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
+                          {firstSentence(narrativeField(entry.report, "summary")) ?? "A saved weekly report exists for this range."}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+                            Key pattern
+                          </p>
+                          <p className="leading-relaxed" style={{ color: "#1a1f1e" }}>
+                            {firstSentence(narrativeField(entry.report, "key_pattern")) ?? "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+                            Next week priority
+                          </p>
+                          <p className="leading-relaxed" style={{ color: "#1a1f1e" }}>
+                            {firstSentence(narrativeField(entry.report, "next_week_priority")) ?? "-"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {hasMoreWeeklyArchive && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleWeeklyCount((count) => count + 8)}
+                    className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-opacity hover:opacity-85"
+                    style={{ background: "#f3f7f5", color: "#006c4a", border: "1px solid rgba(0,108,74,0.12)" }}
                   >
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div>
-                        <p className="font-headline font-bold text-xl" style={{ color: "#1a1f1e" }}>
-                          Week {entry.week}
-                        </p>
-                        <p className="text-xs mt-1" style={{ color: "#8a9e97" }}>
-                          {weeklyRange(entry.report)}
-                        </p>
-                      </div>
-                      {completionBadge(weeklyRate)}
-                    </div>
-                    <div className="rounded-xl p-4 mb-3" style={{ background: "#f7faf8", borderLeft: `4px solid ${tone.accent}` }}>
-                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                        Weekly report
-                      </p>
-                      <p className="text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
-                        {firstSentence(narrativeField(entry.report, "summary")) ?? "A saved weekly report exists for this range."}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                          Key pattern
-                        </p>
-                        <p style={{ color: "#1a1f1e" }}>{narrativeField(entry.report, "key_pattern") ?? "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                          Next week priority
-                        </p>
-                        <p style={{ color: "#1a1f1e" }}>{narrativeField(entry.report, "next_week_priority") ?? "-"}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    Show older weeks
+                    <span className="material-symbols-outlined text-[16px]">expand_more</span>
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+            )}
 
-          {activeTab === "daily" && (
+            {activeTab === "daily" && (
             <div className="space-y-6">
               {dailyArchiveMonths.map((monthEntry) => {
                 const isExpanded = expandedDailyMonths.includes(monthEntry.month);
@@ -1541,97 +1824,179 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       </div>
                     </button>
                     {isExpanded && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 p-4 pt-0">
+                      <div className="space-y-4 p-4 pt-0">
+                        <div
+                          className="rounded-2xl px-4 py-3"
+                          style={{ background: "linear-gradient(135deg, rgba(0,108,74,0.05), rgba(0,108,74,0.015))", border: "1px solid rgba(0,108,74,0.08)" }}
+                        >
+                          <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+                              Daily archive works best as a clean reflection layer: one saved note for the day, plus the key execution counts that explain what happened.
+                            </p>
+                            <span
+                              className="text-[10px] font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-full"
+                              style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.10)" }}
+                            >
+                              {savedDays} saved
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {monthEntry.days.map((entry) => {
+                          const weekday = weekdayLabel(entry.date);
                           if (!entry.report) {
                             const inactive = inactiveCardStyle(entry.status);
                             return (
                               <div
                                 key={entry.date}
-                                className="rounded-xl p-3"
+                                className="rounded-[26px] p-5 min-h-[252px] flex flex-col"
                                 style={{ background: inactive.background, border: inactive.border }}
                               >
-                                <div className="flex items-start justify-between gap-2">
-                                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: inactive.badgeColor }}>
-                                    {pad2(entry.day)}
-                                  </p>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: inactive.badgeColor }}>
+                                      {pad2(entry.day)} {weekday ? `· ${weekday}` : ""}
+                                    </p>
+                                    <p className="text-lg font-semibold mt-3" style={{ color: inactive.color }}>
+                                      {entry.status === "current"
+                                        ? "Today is still unfolding."
+                                        : entry.status === "future"
+                                          ? `${monthName(monthEntry.month)} ${entry.day} has not started yet.`
+                                          : `${monthName(monthEntry.month)} ${entry.day} has no saved daily reflection.`}
+                                    </p>
+                                  </div>
                                   <span
-                                    className="text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-full"
+                                    className="text-[9px] font-bold uppercase tracking-[0.2em] px-2.5 py-1 rounded-full"
                                     style={{ background: inactive.badgeBg, color: inactive.badgeColor }}
                                   >
-                                    {entry.status === "future" ? "Future" : entry.status === "current" ? "Today" : "Empty"}
+                                    {dayArchiveBadge(entry.status, false)}
                                   </span>
                                 </div>
-                                <p className="text-xs mt-2 leading-relaxed" style={{ color: inactive.color }}>
-                                  {periodAvailabilityMessage({
-                                    kind: "day",
-                                    label: `${monthName(monthEntry.month)} ${entry.day}`,
-                                    status: entry.status,
-                                  })}
+                                <p className="text-sm mt-5 leading-relaxed" style={{ color: inactive.color }}>
+                                  {entry.status === "current"
+                                    ? "The daily archive should fill in after the day closes."
+                                    : entry.status === "future"
+                                      ? "Once execution begins on this day, it will appear here automatically."
+                                      : "It stays visible here so the archive remains truthful even when that day was skipped."}
                                 </p>
-                                {entry.status !== "future" && (
-                                  <button
-                                    type="button"
-                                    disabled={generatingDailyDate === entry.date}
-                                    onClick={() => void handleDailyGemini(entry.date)}
-                                    className="mt-2 w-full rounded-lg py-2 text-[9px] font-bold uppercase tracking-widest text-white transition-opacity hover:opacity-90 disabled:opacity-45"
-                                    style={{ background: "#006c4a" }}
+                                <div className="mt-auto pt-6">
+                                  <div
+                                    className="rounded-2xl px-3 py-3"
+                                    style={{ background: "rgba(255,255,255,0.55)", border: "1px solid rgba(255,255,255,0.35)" }}
                                   >
-                                    {generatingDailyDate === entry.date
-                                      ? "Generating…"
-                                      : "Run AI daily review"}
-                                  </button>
-                                )}
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: inactive.badgeColor }}>
+                                      Archive state
+                                    </p>
+                                    <p className="text-sm mt-2 leading-relaxed" style={{ color: inactive.color }}>
+                                      {entry.status === "future"
+                                        ? "Waiting for the day to happen."
+                                        : entry.status === "current"
+                                          ? "Waiting for the day to close."
+                                          : "Day was visible, but no saved reflection exists."}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
                             );
                           }
 
                           const tone = archiveCardTone(dailyCompletion(entry.report));
+                          const mainGoalsLine = dailyMainGoalsLine(entry.report);
+                          const allWorkLine = dailyWorkLine(entry.report);
+                          const reflectionLine =
+                            firstSentence(narrativeField(entry.report, "reflection")) ??
+                            firstSentence(narrativeField(entry.report, "summary")) ??
+                            "Saved execution snapshot.";
                           return (
                             <div
                               key={entry.date}
-                              className="rounded-xl p-3"
-                              style={{ background: "#fff", border: `1.5px solid ${tone.border}` }}
+                              className="rounded-[26px] p-5 min-h-[252px] flex flex-col"
+                              style={{
+                                background: "#fff",
+                                border: `1.5px solid ${tone.border}`,
+                                boxShadow: "0 10px 28px rgba(15,23,42,0.04)",
+                              }}
                             >
-                              <div className="flex items-start justify-between gap-2">
-                                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                                  {pad2(entry.day)}
-                                </p>
-                                {completionBadge(dailyCompletion(entry.report))}
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                                    {pad2(entry.day)} {weekday ? `· ${weekday}` : ""}
+                                  </p>
+                                  <p className="text-[11px] font-semibold mt-2" style={{ color: "#006c4a" }}>
+                                    {dailyFooterNote(entry.report)}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {completionBadge(dailyCompletion(entry.report))}
+                                </div>
                               </div>
-                              <p className="text-xs font-semibold mt-2" style={{ color: "#1a1f1e" }}>
-                                {narrativeField(entry.report, "top_win") ?? "Saved daily review"}
-                              </p>
-                              <p className="text-xs mt-2 leading-relaxed" style={{ color: "#5d6d67" }}>
-                                {firstSentence(narrativeField(entry.report, "summary")) ??
-                                  firstSentence(narrativeField(entry.report, "reflection")) ??
-                                  "Open the saved daily report details."}
-                              </p>
-                              {entry.status !== "future" && (
-                                <button
-                                  type="button"
-                                  disabled={generatingDailyDate === entry.date}
-                                  onClick={() => void handleDailyGemini(entry.date)}
-                                  className="mt-2 w-full rounded-lg py-2 text-[9px] font-bold uppercase tracking-widest transition-opacity hover:opacity-90 disabled:opacity-45"
-                                  style={{ background: "rgba(0,108,74,0.12)", color: "#006c4a" }}
+
+                              <div
+                                className="mt-5 rounded-[22px] px-4 py-4"
+                                style={{ background: "linear-gradient(180deg, rgba(0,108,74,0.05), rgba(0,108,74,0.015))" }}
+                              >
+                                <p className="text-lg font-semibold leading-tight" style={{ color: "#1a1f1e" }}>
+                                  {dailyHeadline(entry.report)}
+                                </p>
+                                <p
+                                  className="text-sm mt-3 leading-relaxed"
+                                  style={{
+                                    color: "#5d6d67",
+                                    display: "-webkit-box",
+                                    WebkitLineClamp: 4,
+                                    WebkitBoxOrient: "vertical",
+                                    overflow: "hidden",
+                                  }}
                                 >
-                                  {generatingDailyDate === entry.date
-                                    ? "Generating…"
-                                    : narrativeField(entry.report, "summary")
-                                      ? "Regenerate AI daily review"
-                                      : "Run AI daily review"}
-                                </button>
-                              )}
+                                  {reflectionLine}
+                                </p>
+                              </div>
+
+                              <div className="mt-4 grid grid-cols-2 gap-3">
+                                <div
+                                  className="rounded-2xl px-3 py-3"
+                                  style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.04)" }}
+                                >
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                                    Main goals
+                                  </p>
+                                  <p className="text-sm font-medium mt-2 leading-snug" style={{ color: "#1a1f1e" }}>
+                                    {mainGoalsLine}
+                                  </p>
+                                </div>
+                                <div
+                                  className="rounded-2xl px-3 py-3"
+                                  style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.04)" }}
+                                >
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                                    All work
+                                  </p>
+                                  <p className="text-sm font-medium mt-2 leading-snug" style={{ color: "#1a1f1e" }}>
+                                    {allWorkLine}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="mt-auto pt-4">
+                                <p className="text-[11px] leading-relaxed" style={{ color: "#8a9e97" }}>
+                                  {narrativeField(entry.report, "top_win")
+                                    ? firstSentence(narrativeField(entry.report, "top_win")) ?? ""
+                                    : "This day is stored as part of the daily archive."}
+                                </p>
+                              </div>
                             </div>
                           );
                         })}
+                        </div>
                       </div>
                     )}
                   </section>
                 );
               })}
             </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>

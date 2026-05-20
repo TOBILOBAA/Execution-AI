@@ -90,6 +90,16 @@ def _period_window(report: dict, week_starts_on: str) -> tuple[date, date] | Non
     return None
 
 
+def _can_refresh_stale_daily_report(report: dict, today: date, now_utc: datetime, cutoff_hour: int) -> bool:
+    if report.get("report_type") != "daily":
+        return False
+    if report.get("status") != "stale":
+        return False
+    if report.get("period_date") != today.isoformat():
+        return False
+    return now_utc.hour >= cutoff_hour
+
+
 def _has_execution_data_between(db: Client, session_id: UUID, start: date, end: date) -> bool:
     priorities = (
         db.table("daily_priorities")
@@ -461,8 +471,8 @@ def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
         monthly_summaries.append(ms)
 
     # Execution streak from latest daily report or recompute
-    from app.services.dashboard_service import _compute_execution_streak
-    streak = _compute_execution_streak(db, session_id, date.today())
+    from app.services.dashboard_service import _compute_execution_streaks
+    streak, _ = _compute_execution_streaks(db, session_id, date.today())
 
     # Previous year comparison
     prev_report = reports_db.get_report(db, session_id, "yearly", year - 1)
@@ -509,12 +519,15 @@ def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
 def list_reports(db: Client, session_id: UUID) -> list[dict]:
     existing_reports = reports_db.list_reports(db, session_id)
     today = get_session_today(db, session_id)
+    settings = get_settings()
+    now_utc = datetime.now(timezone.utc)
     refreshed_reports: list[dict] = []
     for report in existing_reports:
-        if (
-            report.get("report_type") == "daily"
-            and report.get("period_date") == today.isoformat()
-            and report.get("status") == "stale"
+        if _can_refresh_stale_daily_report(
+            report,
+            today,
+            now_utc,
+            settings.report_cutoff_hour,
         ):
             refreshed_reports.append(generate_daily_report(db, session_id, today))
         else:
@@ -645,9 +658,9 @@ def ensure_historical_reports(
                     "period_year": plan_date.year,
                     "metrics": metrics,
                     "ai_narrative": {
-                        "summary": f"Execution snapshot for {plan_date.isoformat()} reconstructed from saved priorities and habits.",
-                        "top_win": f"Completed {metrics['priorities_completed']} of {metrics['priorities_total']} main priorities.",
-                        "key_miss": f"{metrics['secondary_tasks_total'] - metrics['secondary_tasks_completed']} secondary tasks were left unfinished.",
+                        "summary": f"Execution snapshot for {plan_date.isoformat()} reconstructed from saved goals and routines.",
+                        "top_win": f"Completed {metrics['priorities_completed']} of {metrics['priorities_total']} main goals.",
+                        "key_miss": f"{metrics['secondary_tasks_total'] - metrics['secondary_tasks_completed']} secondary goals were left unfinished.",
                         "reflection": "This historical daily report was reconstructed from saved execution data.",
                         "tomorrow_focus": "Carry the most important unfinished work into the next planned day.",
                     },
@@ -980,11 +993,11 @@ def _build_yearly_summary(
         for (summary_year, _month), summary in sorted(monthly_summaries_by_key.items())
         if summary_year == year
     ]
-    from app.services.dashboard_service import _compute_execution_streak
+    from app.services.dashboard_service import _compute_execution_streaks
 
     metrics = aggregate_yearly_metrics(
         monthly_summaries=monthly_summaries,
-        execution_streak=_compute_execution_streak(db, session_id, date.today()),
+        execution_streak=_compute_execution_streaks(db, session_id, date.today())[0],
         previous_year_completion=previous_completion,
     )
     metrics["year"] = year

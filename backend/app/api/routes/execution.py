@@ -14,10 +14,9 @@ import app.db.plans as plans_db
 import app.db.sessions as sessions_db
 from app.utils.date_utils import week_number_for
 from app.utils.period_guards import assert_period_current_daily, get_session_today
+from app.utils.planning_limits import DAILY_MAIN_PRIORITY_CAP, DAILY_SECONDARY_TASK_CAP
 
 router = APIRouter(tags=["Execution"])
-
-MAIN_GOAL_CAP = 3
 
 
 def _ensure_daily_plan_row(db: Client, session_id: UUID, plan_date: date) -> dict:
@@ -73,8 +72,17 @@ def update_task(
                 for row in current_rows
                 if row.get("is_main") and str(row.get("id")) != str(task_id)
             )
-            if existing_main >= MAIN_GOAL_CAP:
-                raise ConflictError("You can only save up to 3 main priorities for this day.")
+            if existing_main >= DAILY_MAIN_PRIORITY_CAP:
+                raise ConflictError("You can only save 1 main goal for this day.")
+        if body.is_main is False and item.get("is_main"):
+            current_rows = plans_db.list_daily_priorities(db, session_id, date.fromisoformat(item["date"]))
+            existing_secondary = sum(
+                1
+                for row in current_rows
+                if (not row.get("is_main")) and str(row.get("id")) != str(task_id)
+            )
+            if existing_secondary >= DAILY_SECONDARY_TASK_CAP:
+                raise ConflictError("You can only save up to 3 secondary goals for this day.")
     return execution_service.update_daily_priority_fields(
         db, session_id, task_id, body.model_dump(exclude_unset=True)
     )
@@ -92,8 +100,13 @@ def create_task(
     if body.is_main:
         current_rows = plans_db.list_daily_priorities(db, session_id, plan_date)
         existing_main = sum(1 for row in current_rows if row.get("is_main"))
-        if existing_main >= MAIN_GOAL_CAP:
-            raise ConflictError("You can only save up to 3 main priorities for this day.")
+        if existing_main >= DAILY_MAIN_PRIORITY_CAP:
+            raise ConflictError("You can only save 1 main goal for this day.")
+    else:
+        current_rows = plans_db.list_daily_priorities(db, session_id, plan_date)
+        existing_secondary = sum(1 for row in current_rows if not row.get("is_main"))
+        if existing_secondary >= DAILY_SECONDARY_TASK_CAP:
+            raise ConflictError("You can only save up to 3 secondary goals for this day.")
     plan = _ensure_daily_plan_row(db, session_id, plan_date)
     data = {
         **body.model_dump(),

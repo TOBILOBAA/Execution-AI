@@ -120,6 +120,7 @@ export interface DashboardRecapEntry {
 
 export interface DashboardMetrics {
   executionStreak: number;
+  bestExecutionStreak: number;
   yesterdayCompletion: number;
   weeklyConsistency: number[]; // 7 values in the workspace's week order (0–100)
   weeklyObjective: string;

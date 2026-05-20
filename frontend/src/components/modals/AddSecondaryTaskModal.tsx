@@ -78,7 +78,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
   if (!open) return null;
 
   const handleSave = () => {
-    if (!title.trim()) { setError("Task name is required"); return; }
+    if (!title.trim()) { setError("Secondary goal name is required"); return; }
     if (!weeklyGoalId) { setError("Pick a weekly goal first"); return; }
     if (isEdit && initialData) {
       updateSecondaryTask(initialData.id, {
@@ -105,14 +105,14 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
 
   const handleDelete = () => {
     if (!initialData) return;
-    if (!window.confirm("Delete this secondary task? This cannot be undone.")) return;
+    if (!window.confirm("Delete this secondary goal? This cannot be undone.")) return;
     removeSecondaryTask(initialData.id);
     onClose();
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)" }}
       onClick={onClose}
       role="dialog"
@@ -120,7 +120,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
       aria-labelledby={titleId}
     >
       <div
-        className="bg-white w-full max-w-[460px] rounded-3xl shadow-2xl overflow-hidden"
+        className="bg-white w-full max-w-[460px] max-h-[calc(100vh-2rem)] sm:max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
         style={{ border: "1px solid rgba(0,0,0,0.07)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -128,10 +128,10 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
         <div className="px-8 pt-8 pb-6 flex items-start justify-between" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-              {isEdit ? "Edit Task" : "Execution Layer"}
+              {isEdit ? "Edit Goal" : "Execution Layer"}
             </p>
             <h2 id={titleId} className="font-headline font-extrabold text-xl" style={{ color: "#1a1f1e" }}>
-              {isEdit ? "Edit Secondary Task" : "New Secondary Task"}
+              {isEdit ? "Edit Secondary Goal" : "New Secondary Goal"}
             </h2>
           </div>
           <button
@@ -147,11 +147,11 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
         </div>
 
         {/* Body */}
-        <div className="px-8 py-7 space-y-6">
-          {/* Task Name */}
+        <div className="px-8 py-7 space-y-6 overflow-y-auto">
+          {/* Secondary Goal */}
           <div className="space-y-2">
             <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              Task Name
+              Secondary Goal
             </label>
             <input
               type="text"
@@ -273,7 +273,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
 
         {/* Footer */}
         <div
-          className="px-8 py-5 flex items-center justify-between"
+          className="px-8 py-5 flex items-center justify-between flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
           <div>
@@ -284,7 +284,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
                 style={{ color: "#ef4444" }}
               >
                 <span className="material-symbols-outlined text-[16px]">delete</span>
-                Delete Task
+                Delete Secondary Goal
               </button>
             ) : (
               <button
@@ -314,7 +314,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
               onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
             >
-              {isEdit ? "Save Changes" : "Add to Today"}
+              {isEdit ? "Save Changes" : "Add Secondary Goal"}
               <span className="material-symbols-outlined text-[16px]">{isEdit ? "check" : "bolt"}</span>
             </button>
           </div>

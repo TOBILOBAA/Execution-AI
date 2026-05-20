@@ -84,6 +84,13 @@ export default function MonthlyReportPage({
   const tasksCompleted = typeof metrics.tasks_completed === "number" ? metrics.tasks_completed : null;
   const tasksTotal = typeof metrics.tasks_total === "number" ? metrics.tasks_total : null;
   const bestWeek = typeof metrics.best_week === "number" ? metrics.best_week : null;
+  const today = new Date();
+  const periodKey = year * 12 + month;
+  const currentPeriodKey = today.getFullYear() * 12 + (today.getMonth() + 1);
+  const periodState: "future" | "current" | "past" =
+    periodKey > currentPeriodKey ? "future" : periodKey < currentPeriodKey ? "past" : "current";
+  const hasSavedAiReview = Boolean(report?.ai_generated_at);
+  const isHistoricalSnapshot = Boolean(report) && !hasSavedAiReview;
 
   return (
     <div className="p-6 md:p-8 max-w-4xl mx-auto w-full space-y-8">
@@ -145,11 +152,41 @@ export default function MonthlyReportPage({
       ) : !report && reports !== null ? (
         <div className="rounded-2xl p-6 bg-white" style={{ border: "1.5px dashed rgba(0,108,74,0.25)" }}>
           <p className="text-sm" style={{ color: "#8a9e97" }}>
-            No monthly report history exists for {label} yet.
+            {periodState === "future"
+              ? `${label} has not started yet. Its archive will appear once work begins in that month.`
+              : periodState === "current"
+                ? `${label} is still in progress. The final monthly review will appear after the month closes.`
+                : `No monthly report history exists for ${label} yet.`}
           </p>
         </div>
       ) : (
         <>
+          {periodState === "current" ? (
+            <div
+              className="rounded-2xl p-5"
+              style={{ background: "rgba(0,108,74,0.05)", border: "1.5px solid rgba(0,108,74,0.12)" }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#006c4a" }}>
+                Month in progress
+              </p>
+              <p className="text-sm leading-relaxed mt-2" style={{ color: "#4a5c54" }}>
+                This page shows the live snapshot so far. We should not treat it as the final monthly review until the month has actually closed.
+              </p>
+            </div>
+          ) : isHistoricalSnapshot ? (
+            <div
+              className="rounded-2xl p-5"
+              style={{ background: "#f7faf8", border: "1.5px solid rgba(0,0,0,0.07)" }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#6b7b74" }}>
+                Historical snapshot
+              </p>
+              <p className="text-sm leading-relaxed mt-2" style={{ color: "#4a5c54" }}>
+                This month was reconstructed from saved plans, weekly reports, and execution rows. It is useful as a truthful archive snapshot, but it is not the same as a final saved AI monthly review.
+              </p>
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-2xl p-5" style={{ border: "1.5px solid rgba(0,0,0,0.07)" }}>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
@@ -188,11 +225,17 @@ export default function MonthlyReportPage({
                 <span className="material-symbols-outlined text-[18px] text-white">auto_awesome</span>
               </div>
               <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>
-                Monthly Narrative
+                {periodState === "current" ? "Live Monthly Snapshot" : isHistoricalSnapshot ? "Historical Monthly Snapshot" : "Monthly Narrative"}
               </p>
             </div>
             <p className="text-sm leading-relaxed mb-3" style={{ color: "#4a5c54" }}>
-              {monthlySummary(report) ?? "No monthly summary was saved with this report."}
+              {periodState === "current"
+                ? monthlySummary(report) ??
+                  "This month is still underway. The metrics below reflect progress so far, while the full reflection and next-month focus will appear after the period closes."
+                : isHistoricalSnapshot
+                  ? monthlySummary(report) ??
+                    "This month was reconstructed from saved planning rows and linked weekly execution history."
+                  : monthlySummary(report) ?? "No monthly summary was saved with this report."}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div>
@@ -203,15 +246,23 @@ export default function MonthlyReportPage({
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                  Key Lesson
+                  {periodState === "current" ? "Current Status" : "Key Lesson"}
                 </p>
-                <p style={{ color: "#1a1f1e" }}>{monthlyLesson(report) ?? "—"}</p>
+                <p style={{ color: "#1a1f1e" }}>
+                  {periodState === "current"
+                    ? `${weeksCount || 0} tracked week${weeksCount === 1 ? "" : "s"} so far`
+                    : monthlyLesson(report) ?? "—"}
+                </p>
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
-                  Next Focus
+                  {periodState === "current" ? "Review Status" : "Next Focus"}
                 </p>
-                <p style={{ color: "#1a1f1e" }}>{monthlyNextFocus(report) ?? "—"}</p>
+                <p style={{ color: "#1a1f1e" }}>
+                  {periodState === "current"
+                    ? "Final reflection not generated yet"
+                    : monthlyNextFocus(report) ?? "—"}
+                </p>
               </div>
             </div>
           </div>
@@ -219,10 +270,12 @@ export default function MonthlyReportPage({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white rounded-2xl p-5" style={{ border: "1.5px solid rgba(0,0,0,0.07)" }}>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>
-                Reflection
+                {periodState === "current" ? "Current Reflection Status" : "Reflection"}
               </p>
               <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
-                {monthlyReflection(report) ?? "No reflection was saved with this report."}
+                {periodState === "current"
+                  ? "The month is still active, so this reflection intentionally stays in progress until the period closes."
+                  : monthlyReflection(report) ?? "No reflection was saved with this report."}
               </p>
             </div>
             <div className="bg-white rounded-2xl p-5" style={{ border: "1.5px solid rgba(0,0,0,0.07)" }}>

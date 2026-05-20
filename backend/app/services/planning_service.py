@@ -67,6 +67,22 @@ def _normalize_monthly_target_date(raw: object | None, year: int, month: int) ->
     return d.isoformat()
 
 
+def _cap_ai_plan_items(
+    ai_output,
+    *,
+    main_field: str,
+    secondary_field: str,
+    max_main: int,
+    max_secondary: int,
+):
+    return ai_output.model_copy(
+        update={
+            main_field: list(getattr(ai_output, main_field, [])[:max_main]),
+            secondary_field: list(getattr(ai_output, secondary_field, [])[:max_secondary]),
+        }
+    )
+
+
 def _match_yearly_goal_by_ref(ref: str | None, yearly_goals: list[dict]) -> dict | None:
     if not ref or not yearly_goals:
         return None
@@ -190,6 +206,13 @@ def generate_monthly_plan(
     # Call AI
     start = datetime.now(timezone.utc)
     ai_output = ai_service.generate_monthly_plan(payload)
+    ai_output = _cap_ai_plan_items(
+        ai_output,
+        main_field="main_goals",
+        secondary_field="secondary_goals",
+        max_main=payload["workload_budget"]["max_main_goals"],
+        max_secondary=payload["workload_budget"]["max_secondary_goals"],
+    )
     latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
 
     # Log generation
@@ -351,6 +374,13 @@ def generate_weekly_plan(
 
     start = datetime.now(timezone.utc)
     ai_output = ai_service.generate_weekly_plan(payload)
+    ai_output = _cap_ai_plan_items(
+        ai_output,
+        main_field="main_goals",
+        secondary_field="secondary_goals",
+        max_main=payload["workload_budget"]["max_main_goals"],
+        max_secondary=payload["workload_budget"]["max_secondary_goals"],
+    )
     latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
     _log_generation(db, session_id, "weekly_plan", latency_ms=latency_ms)
 
@@ -514,6 +544,13 @@ def generate_daily_plan(
 
     start = datetime.now(timezone.utc)
     ai_output = ai_service.generate_daily_plan(payload)
+    ai_output = _cap_ai_plan_items(
+        ai_output,
+        main_field="top_priorities",
+        secondary_field="secondary_tasks",
+        max_main=payload["workload_budget"]["max_daily_priorities"],
+        max_secondary=payload["workload_budget"]["max_secondary_tasks"],
+    )
     latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
     _log_generation(db, session_id, "daily_plan", latency_ms=latency_ms)
 

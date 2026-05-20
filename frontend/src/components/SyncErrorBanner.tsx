@@ -1,28 +1,7 @@
 "use client";
 
 import { useAppStore } from "@/lib/store";
-
-function bannerMeta(syncError: string): { title: string; footer: string } {
-  const isAiOrLoad =
-    syncError.includes("(AI generate)") ||
-    syncError.includes("AI generate") ||
-    syncError.startsWith("Load ") ||
-    syncError.startsWith("Monthly plan (AI") ||
-    syncError.startsWith("Weekly plan (AI") ||
-    syncError.startsWith("Daily plan (AI");
-  if (isAiOrLoad) {
-    return {
-      title: "Server request failed",
-      footer:
-        "This request did not finish successfully. Check NEXT_PUBLIC_API_URL, network, and backend status, then retry.",
-    };
-  }
-  return {
-    title: "Save sync failed",
-    footer:
-      "Your latest local edit is still visible in this browser. Retry after the API or network issue is fixed to confirm it on the server.",
-  };
-}
+import { describeSyncError } from "@/lib/apiErrors";
 
 /** Shows backend / sync failures so users are not misled when local UI looks saved. */
 export function SyncErrorBanner() {
@@ -31,7 +10,7 @@ export function SyncErrorBanner() {
 
   if (!syncError) return null;
 
-  const { title, footer } = bannerMeta(syncError);
+  const { title, message, footer } = describeSyncError(syncError);
 
   return (
     <div
@@ -43,14 +22,14 @@ export function SyncErrorBanner() {
       role="alert"
     >
       <span className="material-symbols-outlined text-[20px] flex-shrink-0 mt-0.5" style={{ color: "#dc2626" }}>
-        cloud_off
+        warning
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-bold uppercase tracking-wider mb-0.5" style={{ color: "#b91c1c" }}>
+        <p className="text-sm font-semibold mb-0.5" style={{ color: "#b91c1c" }}>
           {title}
         </p>
         <p className="text-xs leading-relaxed break-words" style={{ color: "#7f1d1d" }}>
-          {syncError}
+          {message}
         </p>
         <p className="text-[11px] mt-1.5" style={{ color: "#991b1b" }}>
           {footer}

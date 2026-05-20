@@ -80,7 +80,7 @@ const DAY_DATA = {
     { name: "Meditation", icon: "self_improvement", done: true },
     { name: "Reading",    icon: "menu_book",        done: false },
   ],
-  reflection: "Today's execution was marked by a strong start on high-leverage tasks. You spent 82% of your focus hours on documented priorities. The missed task 'Internal Team Onboarding' was likely due to over-extension of the leadership meeting — consider capping future review sessions at 30 minutes to protect afternoon execution blocks.",
+  reflection: "Today's execution was marked by a strong start on high-leverage goals. You spent 82% of your focus hours on documented goals. The missed goal 'Internal Team Onboarding' was likely due to over-extension of the leadership meeting — consider capping future review sessions at 30 minutes to protect afternoon execution blocks.",
   tomorrow: [
     "Research competitive execution frameworks",
     "Quarterly roadmap presentation prep",
@@ -111,7 +111,7 @@ function DayRecapModal({ onClose }: { onClose: () => void }) {
             <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Efficiency</p>
             <div className="flex items-baseline gap-1 mb-2">
               <span className="font-headline font-extrabold text-3xl" style={{ color: "#1a1f1e" }}>8/10</span>
-              <span className="text-xs" style={{ color: "#8a9e97" }}>Tasks Met</span>
+              <span className="text-xs" style={{ color: "#8a9e97" }}>Goals Met</span>
             </div>
             <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#e8eeeb" }}>
               <div className="h-full rounded-full" style={{ width: "80%", background: "#006c4a" }} />
@@ -139,7 +139,7 @@ function DayRecapModal({ onClose }: { onClose: () => void }) {
           <div>
             <p className="text-xs font-bold mb-1" style={{ color: "#006c4a" }}>AI Insights</p>
             <p className="text-xs leading-relaxed" style={{ color: "#4a5c54" }}>
-              You reached a flow state within 15 minutes of your first task. This suggests your morning routine is optimised. However, your energy dipped around 3 PM — consider scheduling your &ldquo;Review&rdquo; tasks during this window tomorrow to maintain momentum without burnout.
+              You reached a flow state within 15 minutes of your first goal. This suggests your morning routine is optimised. However, your energy dipped around 3 PM — consider scheduling your review work during this window tomorrow to maintain momentum without burnout.
             </p>
           </div>
         </div>
@@ -148,7 +148,7 @@ function DayRecapModal({ onClose }: { onClose: () => void }) {
         <div className="mb-5">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Suggested for Tomorrow</p>
-            <button className="text-[10px] font-bold uppercase tracking-widest transition-opacity hover:opacity-60" style={{ color: "#006c4a" }}>Add Task</button>
+            <button className="text-[10px] font-bold uppercase tracking-widest transition-opacity hover:opacity-60" style={{ color: "#006c4a" }}>Add Goal</button>
           </div>
           <div className="space-y-1">
             {DAY_DATA.tomorrow.map((t, i) => (
@@ -222,7 +222,7 @@ function WeeklyReportModal({ onClose }: { onClose: () => void }) {
               <span className="font-headline font-extrabold text-3xl" style={{ color: "#1a1f1e" }}>{WEEK_DATA.efficiencyPct}%</span>
               <span className="text-sm font-bold" style={{ color: "#006c4a" }}>{WEEK_DATA.efficiencyDelta}</span>
             </div>
-            <p className="text-xs" style={{ color: "#a8b5af" }}>{WEEK_DATA.tasksCompleted} of {WEEK_DATA.tasksTotal} scheduled tasks completed</p>
+            <p className="text-xs" style={{ color: "#a8b5af" }}>{WEEK_DATA.tasksCompleted} of {WEEK_DATA.tasksTotal} scheduled goals completed</p>
           </div>
           <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
             <div className="flex items-center gap-1.5 mb-2">
@@ -248,10 +248,10 @@ function WeeklyReportModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* Habit Foundations */}
+        {/* Routines */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>Habit Foundations</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>Routines</p>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>Weekly Completion</p>
           </div>
           <div className="space-y-3">
@@ -318,18 +318,18 @@ function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unk
           <div>
             <p className="text-sm font-bold mb-2" style={{ color: "#1a1f1e" }}>Executive Performance Summary</p>
             <p className="text-xs leading-relaxed" style={{ color: "#4a5c54" }}>
-              You&rsquo;ve demonstrated exceptional consistency in your <strong>Foundational Habits</strong> this month, maintaining an 88% success rate. While the <strong>Main Goal</strong> completion reached 92%, your focus dipped slightly in Week 3. Adjusting your evening wind-down routine by 15 minutes could mitigate future mid-month fatigue.
+              You&rsquo;ve demonstrated exceptional consistency in your <strong>Routines</strong> this month, maintaining an 88% success rate. While the <strong>Main Goal</strong> completion reached 92%, your focus dipped slightly in Week 3. Adjusting your evening wind-down routine by 15 minutes could mitigate future mid-month fatigue.
             </p>
           </div>
         </div>
 
-        {/* Main Objective + Secondary */}
+        {/* Main Goal + Secondary */}
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-4 mb-5">
           {/* Main objective */}
           <div className="rounded-2xl p-5" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
             <div className="flex items-start justify-between mb-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>Main Objective</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>Main Goal</p>
                 <p className="font-headline font-bold text-base" style={{ color: "#1a1f1e" }}>Scale Operations: Project Phoenix</p>
               </div>
               <div className="text-right">
@@ -357,10 +357,10 @@ function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unk
             </div>
           </div>
 
-          {/* Secondary priorities */}
+          {/* Secondary goals */}
           <div className="flex flex-col gap-3">
             <div className="rounded-2xl p-4 flex-1" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
-              <p className="text-[9px] font-bold uppercase tracking-widest mb-3" style={{ color: "#a8b5af" }}>Secondary Priorities</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest mb-3" style={{ color: "#a8b5af" }}>Secondary Goals</p>
               {[{ label: "Health: Marathon Prep", pct: 75 }, { label: "Personal: Piano Practice", pct: 40 }].map((s) => (
                 <div key={s.label} className="mb-3">
                   <div className="flex justify-between mb-1">
@@ -379,10 +379,10 @@ function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unk
           </div>
         </div>
 
-        {/* Foundational Habits */}
+        {/* Routines */}
         <div className="mb-5">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Foundational Habits</p>
+            <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Routines</p>
             <p className="text-xs font-bold" style={{ color: "#006c4a" }}>{monthName.slice(0,3)} Avg: 88%</p>
           </div>
           <div className="grid grid-cols-4 gap-2">

@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import type { DailyPriority } from "@/lib/types";
 import { getWeekNumber } from "@/lib/goalsView";
+import { DAILY_MAIN_GOAL_CAP } from "@/lib/planningConstraints";
 
 const ORDINALS = ["ONE", "TWO", "THREE"];
 
@@ -58,7 +59,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
     (goal) => goal.year === referenceWeekYear && goal.weekNumber === referenceWeekNumber,
   );
   const mainPriorityCapReached =
-    !initialData && dailyPriorities.filter((priority) => priority.date === activeDashboardDate).length >= 3;
+    !initialData && dailyPriorities.filter((priority) => priority.date === activeDashboardDate).length >= DAILY_MAIN_GOAL_CAP;
 
   useEffect(() => {
     if (!open) return;
@@ -102,10 +103,10 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
 
   const handleSaveSingle = () => {
     if (mainPriorityCapReached) {
-      setSingleError("You can only save up to 3 main priorities for this day.");
+      setSingleError("You can only save 1 main goal for this day.");
       return;
     }
-    if (!singleTitle.trim()) { setSingleError("Priority title is required"); return; }
+    if (!singleTitle.trim()) { setSingleError("Main goal title is required"); return; }
     if (!singleWeeklyGoalId) { setSingleError("Pick a weekly goal first"); return; }
     if (initialData) {
       updateDailyPriority(initialData.id, { title: singleTitle.trim(), tag: singleTag, weeklyGoalId: singleWeeklyGoalId });
@@ -126,14 +127,14 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
 
   const handleDelete = () => {
     if (!initialData) return;
-    if (!window.confirm("Delete this daily priority? This cannot be undone.")) return;
+    if (!window.confirm("Delete this main goal? This cannot be undone.")) return;
     removeDailyPriority(initialData.id);
     onClose();
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.30)", backdropFilter: "blur(4px)" }}
       onClick={onClose}
       role="dialog"
@@ -141,14 +142,14 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
       aria-labelledby={titleId}
     >
       <div
-        className="bg-white w-full max-w-[520px] rounded-3xl shadow-2xl overflow-hidden"
+        className="bg-white w-full max-w-[520px] max-h-[calc(100vh-2rem)] sm:max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
         style={{ border: "1px solid rgba(0,0,0,0.07)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="px-8 pt-7 pb-6 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
           <h2 id={titleId} className="font-headline font-extrabold text-xl" style={{ color: "#1a1f1e" }}>
-            {isBatchEdit ? "Manage Daily Priorities" : (initialData ? "Edit Priority" : "Add Priority")}
+            {isBatchEdit ? "Manage Daily Main Goals" : (initialData ? "Edit Main Goal" : "Add Main Goal")}
           </h2>
           <button
             onClick={onClose}
@@ -163,7 +164,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
         </div>
 
         {/* Body */}
-        <div className="px-8 py-7 space-y-5">
+        <div className="px-8 py-7 space-y-5 overflow-y-auto">
           {isBatchEdit ? (
             edits.map((edit, idx) => (
               <div key={edit.id} className="space-y-2">
@@ -176,7 +177,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
                     {idx + 1}
                   </div>
                   <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>
-                    Priority {ORDINALS[idx] ?? idx + 1}
+                    Main goal {ORDINALS[idx] ?? idx + 1}
                   </span>
                 </div>
                 {/* Inputs */}
@@ -193,7 +194,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
                       border: "1.5px solid rgba(0,0,0,0.07)",
                       color: "#1a1f1e",
                     }}
-                    placeholder={`Priority ${idx + 1} title...`}
+                    placeholder={`Main goal ${idx + 1} title...`}
                     onFocus={(e) => (e.currentTarget.style.border = "1.5px solid #006c4a")}
                     onBlur={(e) => (e.currentTarget.style.border = "1.5px solid rgba(0,0,0,0.07)")}
                   />
@@ -265,7 +266,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
               </div>
               <div className="space-y-2">
                 <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                  Priority Title
+                  Main Goal
                 </label>
                 <input
                   type="text"
@@ -285,7 +286,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
                 {singleError && <p className="text-xs" style={{ color: "#ef4444" }}>{singleError}</p>}
                 {mainPriorityCapReached && !singleError && (
                   <p className="text-xs" style={{ color: "#a25a5a" }}>
-                    This day already has 3 main priorities. Remove or edit one before adding another.
+                    This day already has a main goal. Remove or edit it before adding another.
                   </p>
                 )}
               </div>
@@ -324,7 +325,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
 
         {/* Footer */}
         <div
-          className="px-8 py-5 flex items-center justify-between gap-4"
+          className="px-8 py-5 flex items-center justify-end gap-4 flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
           <div>
@@ -335,7 +336,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
                 style={{ color: "#ef4444" }}
               >
                 <span className="material-symbols-outlined text-[16px]">delete</span>
-                Delete Priority
+                Delete Main Goal
               </button>
             ) : (
               <button
@@ -378,7 +379,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
                   : "#006c4a";
               }}
             >
-              {isBatchEdit ? "Save Changes" : initialData ? "Save Priority" : "Add Priority"}
+              {isBatchEdit ? "Save Changes" : initialData ? "Save Main Goal" : "Add Main Goal"}
             </button>
           </div>
         </div>

@@ -6,6 +6,8 @@ import type { Category, WeeklyGoal } from "@/lib/types";
 interface Props {
   categories: Category[];
   weeklyGoals: WeeklyGoal[];
+  secondaryGoalCapReached?: boolean;
+  secondaryGoalCapMessage?: string;
   initialTitle?: string;
   initialCategoryId?: string;
   initialWeeklyGoalId?: string;
@@ -32,6 +34,8 @@ const ALLOC_OPTIONS = [
 export function AddSecondaryTaskModal({
   categories,
   weeklyGoals,
+  secondaryGoalCapReached = false,
+  secondaryGoalCapMessage = "You can only save up to 3 secondary goals for this day.",
   initialTitle = "",
   initialCategoryId,
   initialWeeklyGoalId,
@@ -53,7 +57,11 @@ export function AddSecondaryTaskModal({
 
   const handleSubmit = () => {
     if (!title.trim()) {
-      setError("Please enter a task name.");
+      setError("Please enter a goal name.");
+      return;
+    }
+    if (!isEdit && secondaryGoalCapReached) {
+      setError(secondaryGoalCapMessage);
       return;
     }
     const cat = categories.find((c) => c.id === categoryId);
@@ -69,26 +77,26 @@ export function AddSecondaryTaskModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[88vh] overflow-hidden flex flex-col my-auto"
         style={{ border: "1px solid rgba(0,0,0,0.06)" }}
       >
-        <div className="px-7 pt-7 pb-0">
+        <div className="px-7 pt-7 pb-0 overflow-y-auto min-h-0">
           {/* Top label + close */}
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "#a8b5af" }}>
-                Secondary Action
+                Secondary Goal
               </p>
               <h2 className="font-headline text-xl font-bold leading-snug" style={{ color: "#1a1f1e" }}>
-                {isEdit ? "Edit Task" : "Add Secondary Task"}
+                {isEdit ? "Edit Secondary Goal" : "Add Secondary Goal"}
               </h2>
               <p className="text-xs leading-relaxed mt-1" style={{ color: "#8a9e97" }}>
-                Define a supporting task to optimize your daily execution flow.
+                Add another goal for today without crowding the main goal.
               </p>
             </div>
             <button
@@ -102,10 +110,10 @@ export function AddSecondaryTaskModal({
             </button>
           </div>
 
-          {/* TASK NAME */}
+          {/* GOAL NAME */}
           <div className="mb-5">
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
-              Task Name
+              Secondary Goal
             </label>
             <input
               type="text"
@@ -257,7 +265,7 @@ export function AddSecondaryTaskModal({
                 style={{ color: "#ef4444" }}
               >
                 <span className="material-symbols-outlined text-[16px]">delete</span>
-                Delete Task
+                Delete Secondary Goal
               </button>
             ) : null}
           </div>
@@ -278,7 +286,7 @@ export function AddSecondaryTaskModal({
               onMouseEnter={(e) => (e.currentTarget.style.background = "#006c4a")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "#003d2b")}
             >
-              {isEdit ? "Save Changes" : "Add Task"}
+              {isEdit ? "Save Changes" : "Add Goal"}
             </button>
           </div>
         </div>

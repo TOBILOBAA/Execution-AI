@@ -67,7 +67,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
       <GoalsLoadingShell
         eyebrow={`Week ${focusWeek}`}
         title="Loading this week's execution picture"
-        detail="We are pulling the sprint, its monthly parent, and the saved daily priorities for this ISO week before rendering the page."
+        detail="We are pulling the sprint, its monthly parent, and the saved daily goals for this ISO week before rendering the page."
       />
     );
   }
@@ -93,7 +93,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
   const executionGaps = [
     weekGoals.length === 0 ? `No weekly goals are saved for week ${focusWeek}.` : null,
     weekGoals.length > 0 && linkedPriorityCount === 0 ? "The weekly sprint exists, but nothing in the daily execution layer is linked to it." : null,
-    unlinkedPriorityCount > 0 ? `${unlinkedPriorityCount} daily priorit${unlinkedPriorityCount === 1 ? "y is" : "ies are"} saved this week without a weekly-goal link.` : null,
+    unlinkedPriorityCount > 0 ? `${unlinkedPriorityCount} daily goal${unlinkedPriorityCount === 1 ? " is" : "s are"} saved this week without a weekly-goal link.` : null,
     linkedMonthly ? null : "The main weekly goal is not linked to a monthly goal yet." ,
   ].filter((item): item is string => Boolean(item));
 
@@ -150,13 +150,13 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
           }}
         >
           <p className="text-[10px] font-bold uppercase tracking-[0.24em]" style={{ color: "rgba(255,255,255,0.45)" }}>
-            Main objective
+            Main goal
           </p>
           <p className="text-lg font-bold mt-3" style={{ color: "#fff" }}>
             {mainGoal?.title ?? "No main weekly goal yet"}
           </p>
           <p className="text-sm mt-2 leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
-            {mainGoal?.description || "Add one clear main weekly goal so the sprint is more than a list of disconnected tasks."}
+            {mainGoal?.description || "Add one clear main weekly goal so the sprint is more than a scattered list of work."}
           </p>
         </div>
       </div>
@@ -176,7 +176,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
             {[
               { label: "Week range", value: formatWeekRange(selectedWeekStart, selectedWeekEnd), tone: "#1a1f1e", helper: isCurrentWeek ? "Current ISO week" : "Selected week" },
               { label: "Weekly goals", value: String(weekGoals.length), tone: "#006c4a", helper: `${completedGoals} completed` },
-              { label: "Linked daily priorities", value: String(linkedPriorityCount), tone: linkedPriorityCount > 0 ? "#006c4a" : "#b45309", helper: `${unlinkedPriorityCount} unlinked` },
+              { label: "Linked daily goals", value: String(linkedPriorityCount), tone: linkedPriorityCount > 0 ? "#006c4a" : "#b45309", helper: `${unlinkedPriorityCount} unlinked` },
               { label: "Progress", value: `${weekProgress}%`, tone: "#1a1f1e", helper: linkedMonthly?.title ?? "No monthly link yet" },
             ].map((stat) => (
               <div
@@ -262,7 +262,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
               {[
                 { label: "Supports monthly goal", value: linkedMonthly?.title ?? "No monthly goal linked" },
                 { label: "Supports yearly goal", value: linkedYearly?.title ?? "No yearly goal linked" },
-                { label: "Daily execution this week", value: selectedWeekDailyPriorities.length > 0 ? `${selectedWeekDailyPriorities.length} saved priorities` : "No saved daily priorities" },
+                { label: "Daily execution this week", value: selectedWeekDailyPriorities.length > 0 ? `${selectedWeekDailyPriorities.length} saved goals` : "No saved daily goals" },
               ].map((item) => (
                 <div
                   key={item.label}
@@ -309,7 +309,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
                             className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
                             style={{ background: goal.isMain ? "#006c4a" : "rgba(0,0,0,0.06)", color: goal.isMain ? "#fff" : "#6b7c75" }}
                           >
-                            {goal.isMain ? "Main objective" : "Support goal"}
+                            {goal.isMain ? "Main goal" : "Secondary goal"}
                           </span>
                           <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
                             {goal.progress}% complete
@@ -373,7 +373,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
             </p>
             {selectedWeekDailyPriorities.length === 0 ? (
               <p className="text-sm mt-4 leading-relaxed" style={{ color: "#6b7c75" }}>
-                No daily priorities are saved for this week. If the sprint is real, the next move is translating it into day-level execution.
+                No daily goals are saved for this week. If the sprint is real, the next move is translating it into day-level execution.
               </p>
             ) : (
               <div className="mt-4 space-y-5">
@@ -510,11 +510,11 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
             style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
-              Habit support
+              Routine support
             </p>
             {activeHabits.length === 0 ? (
               <p className="text-sm mt-4 leading-relaxed" style={{ color: "#6b7c75" }}>
-                No active foundational habits are saved right now. If the weekly sprint depends on repeated behavior, that support layer should exist.
+                No active routines are saved right now. If the weekly sprint depends on repeated behavior, that routine layer should exist.
               </p>
             ) : (
               <div className="mt-4 space-y-3">

@@ -13,6 +13,14 @@ Key principles:
 from dataclasses import dataclass, field
 from typing import Any
 from .date_utils import TemporalContext
+from .planning_limits import (
+    DAILY_MAIN_PRIORITY_CAP,
+    DAILY_SECONDARY_TASK_CAP,
+    MONTHLY_MAIN_GOAL_CAP,
+    MONTHLY_SECONDARY_GOAL_CAP,
+    WEEKLY_MAIN_GOAL_CAP,
+    WEEKLY_SECONDARY_GOAL_CAP,
+)
 
 
 @dataclass
@@ -40,41 +48,41 @@ def compute_monthly_workload(ctx: TemporalContext) -> WorkloadBudget:
 
     if days >= 21:
         return WorkloadBudget(
-            max_main_goals=3,
-            max_secondary_goals=5,
+            max_main_goals=MONTHLY_MAIN_GOAL_CAP,
+            max_secondary_goals=MONTHLY_SECONDARY_GOAL_CAP,
             max_habits=6,
-            max_daily_priorities=3,
-            max_daily_secondary=4,
+            max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
+            max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="full",
-            rationale=f"Full month available ({days} days remaining). Suggest ambitious but achievable targets.",
+            rationale=f"Full month available ({days} days remaining). Keep the month focused around one main goal and a small set of supporting goals.",
         )
     elif days >= 14:
         return WorkloadBudget(
-            max_main_goals=2,
-            max_secondary_goals=4,
+            max_main_goals=MONTHLY_MAIN_GOAL_CAP,
+            max_secondary_goals=MONTHLY_SECONDARY_GOAL_CAP,
             max_habits=5,
-            max_daily_priorities=3,
-            max_daily_secondary=3,
+            max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
+            max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="moderate",
-            rationale=f"{days} days remaining. Moderate workload: focus on 2 main goals.",
+            rationale=f"{days} days remaining. Keep one clear main goal and only the supporting goals that still matter.",
         )
     elif days >= 7:
         return WorkloadBudget(
-            max_main_goals=2,
-            max_secondary_goals=3,
+            max_main_goals=MONTHLY_MAIN_GOAL_CAP,
+            max_secondary_goals=MONTHLY_SECONDARY_GOAL_CAP,
             max_habits=4,
-            max_daily_priorities=3,
-            max_daily_secondary=3,
+            max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
+            max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="compressed",
-            rationale=f"Only {days} days left. Compress scope — prioritize highest-impact work.",
+            rationale=f"Only {days} days left. Compress scope around one realistic main goal and a few supporting goals.",
         )
     else:
         return WorkloadBudget(
-            max_main_goals=1,
-            max_secondary_goals=2,
+            max_main_goals=MONTHLY_MAIN_GOAL_CAP,
+            max_secondary_goals=MONTHLY_SECONDARY_GOAL_CAP,
             max_habits=3,
-            max_daily_priorities=2,
-            max_daily_secondary=2,
+            max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
+            max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="minimal",
             rationale=f"Only {days} days remaining this month. Set 1 achievable main goal and close out habits.",
         )
@@ -88,31 +96,31 @@ def compute_weekly_workload(ctx: TemporalContext) -> WorkloadBudget:
 
     if days >= 5:
         return WorkloadBudget(
-            max_main_goals=3,
-            max_secondary_goals=4,
+            max_main_goals=WEEKLY_MAIN_GOAL_CAP,
+            max_secondary_goals=WEEKLY_SECONDARY_GOAL_CAP,
             max_habits=5,
-            max_daily_priorities=3,
-            max_daily_secondary=4,
+            max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
+            max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="full",
-            rationale=f"Nearly full week ({days} days remaining). Set strong weekly goals.",
+            rationale=f"Nearly full week ({days} days remaining). Keep the week anchored by one main goal and a tight set of supporting goals.",
         )
     elif days >= 3:
         return WorkloadBudget(
-            max_main_goals=2,
-            max_secondary_goals=3,
+            max_main_goals=WEEKLY_MAIN_GOAL_CAP,
+            max_secondary_goals=WEEKLY_SECONDARY_GOAL_CAP,
             max_habits=4,
-            max_daily_priorities=3,
-            max_daily_secondary=3,
+            max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
+            max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="compressed",
-            rationale=f"{days} days left in the week. Compress scope — focus on 2 critical goals.",
+            rationale=f"{days} days left in the week. Compress scope around one critical goal and only the support work that truly matters.",
         )
     else:
         return WorkloadBudget(
-            max_main_goals=1,
-            max_secondary_goals=2,
+            max_main_goals=WEEKLY_MAIN_GOAL_CAP,
+            max_secondary_goals=WEEKLY_SECONDARY_GOAL_CAP,
             max_habits=3,
-            max_daily_priorities=2,
-            max_daily_secondary=2,
+            max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
+            max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="minimal",
             rationale=f"Only {days} days left. Sprint on 1 main deliverable and close habits.",
         )
@@ -125,31 +133,31 @@ def compute_daily_workload(ctx: TemporalContext, total_weekly_remaining: int) ->
     if total_weekly_remaining > 8:
         # Heavy week backlog — push more into today
         return WorkloadBudget(
-            max_main_goals=3,
-            max_secondary_goals=5,
+            max_main_goals=DAILY_MAIN_PRIORITY_CAP,
+            max_secondary_goals=DAILY_SECONDARY_TASK_CAP,
             max_habits=5,
-            max_daily_priorities=3,
-            max_daily_secondary=5,
+            max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
+            max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="full",
-            rationale="Heavy weekly backlog. Today should be a high-output day — push hard.",
+            rationale="Heavy weekly backlog. Keep today anchored to one main goal and only a few supporting tasks.",
         )
     elif total_weekly_remaining > 4:
         return WorkloadBudget(
-            max_main_goals=3,
-            max_secondary_goals=4,
+            max_main_goals=DAILY_MAIN_PRIORITY_CAP,
+            max_secondary_goals=DAILY_SECONDARY_TASK_CAP,
             max_habits=5,
-            max_daily_priorities=3,
-            max_daily_secondary=4,
+            max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
+            max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="moderate",
-            rationale="Moderate weekly backlog. Balanced day — stay consistent.",
+            rationale="Moderate weekly backlog. Stay focused on one main outcome and only the supporting tasks that fit today.",
         )
     else:
         return WorkloadBudget(
-            max_main_goals=2,
-            max_secondary_goals=3,
+            max_main_goals=DAILY_MAIN_PRIORITY_CAP,
+            max_secondary_goals=DAILY_SECONDARY_TASK_CAP,
             max_habits=4,
-            max_daily_priorities=2,
-            max_daily_secondary=3,
+            max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
+            max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="light",
             rationale="Light workload remaining. Focus on depth over breadth today.",
         )

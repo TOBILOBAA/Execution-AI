@@ -18,10 +18,10 @@ import { useAppStore } from "@/lib/store";
 import type { DailyPriority, FoundationalHabit, ModalType } from "@/lib/types";
 
 const STATUS_GUIDE_DETAIL = [
-  "Completed: daily priorities already finished.",
-  "In Progress: priorities started and still moving without being overdue.",
-  "At Risk: priorities overdue or already marked missed.",
-  "Not Started: priorities with no progress yet.",
+  "Completed: daily goals already finished.",
+  "In Progress: goals started and still moving without being overdue.",
+  "At Risk: goals overdue or already marked missed.",
+  "Not Started: goals with no progress yet.",
 ].join(" ");
 
 function formatHeaderDate(todayIso: string) {
@@ -214,6 +214,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
       habits: habitsSource.map(mapStoreHabitToApiShape),
       metrics: {
         execution_streak: 0,
+        best_execution_streak: 0,
         yesterday_completion: 0,
         weekly_consistency: [],
         tasks_completed_today: 0,
@@ -328,7 +329,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
       <GoalsLoadingShell
         eyebrow={`${year} daily goals`}
         title="Loading the daily execution layer"
-        detail="We are pulling daily priorities across the year so the table reflects the real day-by-day progression of execution."
+        detail="We are pulling daily goals across the year so the table reflects the real day-by-day progression of execution."
       />
     );
   }
@@ -438,7 +439,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 style={{ background: "#006c4a", color: "#fff" }}
               >
                 <span className="material-symbols-outlined text-[16px]">add</span>
-                Add main priority
+                Add main goal
               </button>
               <button
                 type="button"
@@ -449,7 +450,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
               >
                 <span className="material-symbols-outlined text-[16px]">playlist_add</span>
-                Add supporting task
+                Add secondary goal
               </button>
               <button
                 type="button"
@@ -460,7 +461,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
               >
                 <span className="material-symbols-outlined text-[16px]">settings</span>
-                Manage habits
+                Manage routines
               </button>
             </div>
           ) : (
@@ -495,15 +496,15 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#006c4a" }}>
-                  Main priorities
+                  Main goals
                 </p>
                 <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                  {resolvedSelectedDayDetail.daily_priorities.length} priority{resolvedSelectedDayDetail.daily_priorities.length === 1 ? "" : "ies"}
+                  {resolvedSelectedDayDetail.daily_priorities.length} main goal{resolvedSelectedDayDetail.daily_priorities.length === 1 ? "" : "s"}
                 </p>
               </div>
               {resolvedSelectedDayDetail.daily_priorities.length === 0 ? (
                 <p className="text-sm" style={{ color: "#8a9e97" }}>
-                  No main priorities were saved for this day.
+                  No main goals were saved for this day.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -585,15 +586,15 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                  Supporting tasks
+                  Secondary goals
                 </p>
                 <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                  {resolvedSelectedDayDetail.secondary_tasks.length} task{resolvedSelectedDayDetail.secondary_tasks.length === 1 ? "" : "s"}
+                  {resolvedSelectedDayDetail.secondary_tasks.length} secondary goal{resolvedSelectedDayDetail.secondary_tasks.length === 1 ? "" : "s"}
                 </p>
               </div>
               {resolvedSelectedDayDetail.secondary_tasks.length === 0 ? (
                 <p className="text-sm" style={{ color: "#8a9e97" }}>
-                  No supporting tasks were saved for this day.
+                  No secondary goals were saved for this day.
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -616,7 +617,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                             {task.title}
                           </p>
                           <p className="text-xs mt-1" style={{ color: "#6b7c75" }}>
-                            {task.tag || "Supporting task"}
+                            {task.tag || "Secondary goal"}
                           </p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -664,15 +665,15 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                  Habit status
+                  Routine status
                 </p>
                 <p className="text-xs font-semibold" style={{ color: "#8a9e97" }}>
-                  {resolvedSelectedDayDetail.habits.filter((habit) => habit.active).length} active habit{resolvedSelectedDayDetail.habits.filter((habit) => habit.active).length === 1 ? "" : "s"}
+                  {resolvedSelectedDayDetail.habits.filter((habit) => habit.active).length} active routine{resolvedSelectedDayDetail.habits.filter((habit) => habit.active).length === 1 ? "" : "s"}
                 </p>
               </div>
               {resolvedSelectedDayDetail.habits.filter((habit) => habit.active).length === 0 ? (
                 <p className="text-sm" style={{ color: "#8a9e97" }}>
-                  No active habits were available for this day.
+                  No active routines were available for this day.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -734,7 +735,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           </div>
         ) : (
           <div className="mt-5 rounded-2xl p-5 text-sm" style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)", color: "#6b7c75" }}>
-            Choose a day from the table to inspect the exact priorities, tasks, and habits for that date.
+            Choose a day from the table to inspect the exact main goals, secondary goals, and routines for that date.
           </div>
         )}
       </div>
@@ -742,7 +743,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   }
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6 p-4 sm:p-6 md:p-8">
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -816,7 +817,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           </label>
 
           <div
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium"
+            className="hidden items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium md:inline-flex"
             style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#4b635b" }}
           >
             <span>Status guide</span>
@@ -824,11 +825,82 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           </div>
         </div>
 
-        <div className="mt-5 overflow-x-auto rounded-[22px]" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
+        <div className="mt-5 space-y-3 md:hidden">
+          {paginatedRows.map((row) => {
+            const progressTone = getProgressTone(row.progress);
+            const current = row.date === today && year === liveYear;
+            return (
+              <button
+                key={row.date}
+                type="button"
+                onClick={() => pushDay(row.date)}
+                className="w-full rounded-[22px] p-4 text-left"
+                style={{
+                  background: current ? "rgba(0,108,74,0.03)" : "#fff",
+                  border: current ? "1.5px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.06)",
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold" style={{ color: current ? "#006c4a" : "#1a1f1e" }}>
+                      {formatGoalDay(row.date)}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: "#8a9e97" }}>
+                      {row.prioritiesCount} planned main goal{row.prioritiesCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <span
+                    className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest"
+                    style={{ background: "rgba(0,108,74,0.08)", color: progressTone }}
+                  >
+                    {row.progress}%
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                      Completed
+                    </p>
+                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("completed").text }}>
+                      {row.completed}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                      In Progress
+                    </p>
+                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("on-track").text }}>
+                      {row.inProgress}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                      At Risk
+                    </p>
+                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("at-risk").text }}>
+                      {row.atRisk}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                      Not Started
+                    </p>
+                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("not-started").text }}>
+                      {row.notStarted}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+          {selectedDay !== null ? renderSelectedDayDetail() : null}
+        </div>
+
+        <div className="mt-5 hidden overflow-x-auto rounded-[22px] md:block" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
           <table className="min-w-full">
             <thead>
               <tr className="text-left" style={{ background: "#fbfcfb" }}>
-                {["Day", "Tasks / Goals", "Completed", "In Progress", "At Risk", "Not Started", "Progress"].map((label) => (
+                {["Day", "Goals", "Completed", "In Progress", "At Risk", "Not Started", "Progress"].map((label) => (
                   <th
                     key={label}
                     className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]"
@@ -898,7 +970,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           </table>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-4 flex-wrap text-sm" style={{ color: "#6b7c75" }}>
+        <div className="mt-5 hidden items-center justify-between gap-4 flex-wrap text-sm md:flex" style={{ color: "#6b7c75" }}>
           <p>
             Showing {startRow} to {endRow} of {sortedRows.length} days
           </p>
