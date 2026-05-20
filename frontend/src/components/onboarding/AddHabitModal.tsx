@@ -1,8 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/lib/store";
 import type { Category, HabitFrequency } from "@/lib/types";
+
+type HabitLinkType = "none" | "yearly" | "monthly" | "weekly";
+
+interface HabitSubmitPayload {
+  name: string;
+  icon: string;
+  categoryId: string;
+  frequency: HabitFrequency;
+  yearlyGoalId?: string;
+  monthlyGoalId?: string;
+  weeklyGoalId?: string;
+}
+
+function formatLinkedGoalOption(goal: { id: string; title: string; year: number; month?: number; weekNumber?: number }) {
+  if (typeof goal.weekNumber === "number") {
+    return `Week ${goal.weekNumber} · ${goal.title}`;
+  }
+  if (typeof goal.month === "number") {
+    return `${new Date(2000, goal.month - 1, 1).toLocaleString("en-US", { month: "short" })} ${goal.year} · ${goal.title}`;
+  }
+  return `${goal.year} · ${goal.title}`;
+}
 
 interface Props {
   categories: Category[];
@@ -11,7 +34,10 @@ interface Props {
   initialIcon?: string;
   initialCategoryId?: string;
   initialFrequency?: HabitFrequency;
-  onSubmit: (name: string, icon: string, categoryId: string, frequency: HabitFrequency) => void;
+  initialYearlyGoalId?: string;
+  initialMonthlyGoalId?: string;
+  initialWeeklyGoalId?: string;
+  onSubmit: (payload: HabitSubmitPayload) => void;
   onClose: () => void;
 }
 
@@ -30,6 +56,7 @@ const FREQUENCIES: { value: HabitFrequency; label: string }[] = [
   { value: "3x_week", label: "3x Per Week" },
   { value: "5x_week", label: "5x Per Week" },
   { value: "weekends", label: "Weekends" },
+  { value: "flexible", label: "Flexible" },
 ];
 
 export function AddHabitModal({
@@ -38,19 +65,59 @@ export function AddHabitModal({
   initialIcon = "favorite",
   initialCategoryId,
   initialFrequency = "daily",
+  initialYearlyGoalId,
+  initialMonthlyGoalId,
+  initialWeeklyGoalId,
   onSubmit,
   onClose,
 }: Props) {
+  const yearlyGoals = useAppStore((state) => state.yearlyGoals);
+  const monthlyGoals = useAppStore((state) => state.monthlyGoals);
+  const weeklyGoals = useAppStore((state) => state.weeklyGoals);
   const isEdit = !!initialName;
   const [selectedIcon, setSelectedIcon] = useState(initialIcon);
   const [name, setName] = useState(initialName);
   const [categoryId, setCategoryId] = useState(initialCategoryId ?? categories[0]?.id ?? "");
   const [frequency, setFrequency] = useState<HabitFrequency>(initialFrequency);
+  const initialLinkType: HabitLinkType = initialWeeklyGoalId
+    ? "weekly"
+    : initialMonthlyGoalId
+      ? "monthly"
+      : initialYearlyGoalId
+        ? "yearly"
+        : "none";
+  const [linkType, setLinkType] = useState<HabitLinkType>(initialLinkType);
+  const [yearlyGoalId, setYearlyGoalId] = useState(initialYearlyGoalId ?? "");
+  const [monthlyGoalId, setMonthlyGoalId] = useState(initialMonthlyGoalId ?? "");
+  const [weeklyGoalId, setWeeklyGoalId] = useState(initialWeeklyGoalId ?? "");
   const [error, setError] = useState("");
+  const sortedYearlyGoals = useMemo(
+    () => [...yearlyGoals].sort((a, b) => (a.year - b.year) || a.title.localeCompare(b.title)),
+    [yearlyGoals],
+  );
+  const sortedMonthlyGoals = useMemo(
+    () => [...monthlyGoals].sort((a, b) => (a.year - b.year) || (a.month - b.month) || a.title.localeCompare(b.title)),
+    [monthlyGoals],
+  );
+  const sortedWeeklyGoals = useMemo(
+    () => [...weeklyGoals].sort((a, b) => (a.year - b.year) || (a.weekNumber - b.weekNumber) || a.title.localeCompare(b.title)),
+    [weeklyGoals],
+  );
 
   const handleSubmit = () => {
     if (!name.trim()) { setError("Routine name is required."); return; }
-    onSubmit(name.trim(), selectedIcon, categoryId, frequency);
+    if (linkType === "yearly" && !yearlyGoalId) { setError("Choose the yearly goal this routine supports."); return; }
+    if (linkType === "monthly" && !monthlyGoalId) { setError("Choose the monthly goal this routine supports."); return; }
+    if (linkType === "weekly" && !weeklyGoalId) { setError("Choose the weekly goal this routine supports."); return; }
+    onSubmit({
+      name: name.trim(),
+      icon: selectedIcon,
+      categoryId,
+      frequency,
+      ...(linkType === "yearly" && yearlyGoalId ? { yearlyGoalId } : {}),
+      ...(linkType === "monthly" && monthlyGoalId ? { monthlyGoalId } : {}),
+      ...(linkType === "weekly" && weeklyGoalId ? { weeklyGoalId } : {}),
+    });
   };
 
   return (
@@ -59,8 +126,8 @@ export function AddHabitModal({
       style={{ background: "rgba(0,0,0,0.35)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
-        <div className="px-7 pt-7 pb-0">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[88vh] flex flex-col overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
+        <div className="px-7 pt-7 pb-0 overflow-y-auto">
           {/* Header */}
           <div className="flex items-start justify-between mb-1">
             <h2 className="font-headline text-xl font-bold" style={{ color: "#1a1f1e" }}>
@@ -181,6 +248,87 @@ export function AddHabitModal({
                 );
               })}
             </div>
+            {frequency === "flexible" && (
+              <p className="mt-2 text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+                Flexible routines stay visible without treating skipped days like a miss. Use this when the practice supports a goal but does not belong on a fixed schedule.
+              </p>
+            )}
+          </div>
+
+          <div className="mb-7">
+            <label className="block mb-3" style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8a9e97" }}>
+              Strategic Link
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: "none" as const, label: "None" },
+                { value: "yearly" as const, label: "Yearly Goal" },
+                { value: "monthly" as const, label: "Monthly Goal" },
+                { value: "weekly" as const, label: "Weekly Goal" },
+              ].map(({ value, label }) => {
+                const isSelected = value === linkType;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setLinkType(value);
+                      setError("");
+                      if (value !== "yearly") setYearlyGoalId("");
+                      if (value !== "monthly") setMonthlyGoalId("");
+                      if (value !== "weekly") setWeeklyGoalId("");
+                    }}
+                    className="px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all"
+                    style={{
+                      background: isSelected ? "#006c4a" : "#f4f6f4",
+                      color: isSelected ? "#ffffff" : "#6b7b74",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {linkType !== "none" && (
+              <div className="mt-3 relative">
+                <select
+                  value={linkType === "yearly" ? yearlyGoalId : linkType === "monthly" ? monthlyGoalId : weeklyGoalId}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (linkType === "yearly") setYearlyGoalId(value);
+                    if (linkType === "monthly") setMonthlyGoalId(value);
+                    if (linkType === "weekly") setWeeklyGoalId(value);
+                    setError("");
+                  }}
+                  className="w-full appearance-none rounded-xl px-4 py-3 text-sm outline-none transition"
+                  style={{
+                    background: "#f7f9f8",
+                    border: "1.5px solid rgba(0,0,0,0.07)",
+                    color: "#1a1f1e",
+                  }}
+                >
+                  <option value="">
+                    {linkType === "yearly"
+                      ? "Select a yearly goal"
+                      : linkType === "monthly"
+                        ? "Select a monthly goal"
+                        : "Select a weekly goal"}
+                  </option>
+                  {(linkType === "yearly" ? sortedYearlyGoals : linkType === "monthly" ? sortedMonthlyGoals : sortedWeeklyGoals).map((goal) => (
+                    <option key={goal.id} value={goal.id}>
+                      {formatLinkedGoalOption(goal)}
+                    </option>
+                  ))}
+                </select>
+                <span className="material-symbols-outlined text-[18px] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "#8a9e97" }}>
+                  expand_more
+                </span>
+              </div>
+            )}
+            <p className="mt-2 text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+              Use this when a routine supports a goal directly, even if it does not need to sit inside a monthly or weekly plan.
+            </p>
           </div>
         </div>
 

@@ -470,6 +470,7 @@ function HabitSection({
     "3x_week": "3x / Week",
     "5x_week": "5x / Week",
     weekends: "Weekends",
+    flexible: "Flexible",
   };
 
   return (
@@ -1307,15 +1308,21 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
           initialIcon={plannerModal.habit?.icon}
           initialCategoryId={plannerModal.habit?.categoryId}
           initialFrequency={plannerModal.habit?.frequency}
-          onSubmit={(name, icon, categoryId, frequency) => {
+          initialYearlyGoalId={plannerModal.habit?.yearlyGoalId}
+          initialMonthlyGoalId={plannerModal.habit?.monthlyGoalId}
+          initialWeeklyGoalId={plannerModal.habit?.weeklyGoalId}
+          onSubmit={({ name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId }) => {
             if (plannerModal.habit) {
-              updateHabit(plannerModal.habit.id, { name, icon, categoryId, frequency });
+              updateHabit(plannerModal.habit.id, { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId });
             } else {
               addHabit({
                 name,
                 icon,
                 categoryId,
                 frequency,
+                yearlyGoalId,
+                monthlyGoalId,
+                weeklyGoalId,
                 completedToday: false,
                 streak: 0,
                 active: true,

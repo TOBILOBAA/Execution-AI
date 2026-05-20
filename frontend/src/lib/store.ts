@@ -772,13 +772,16 @@ function mapApiGoalToPriority(p: {
 
 function mapApiHabit(h: {
   id: string; name: string; icon: string; frequency: string;
-  active: boolean; category_id?: string; completed_today: boolean; streak: number;
+  active: boolean; category_id?: string; yearly_goal_id?: string; monthly_goal_id?: string; weekly_goal_id?: string; completed_today: boolean; streak: number;
 }): FoundationalHabit {
   return {
     id: h.id,
     name: h.name,
     icon: h.icon,
     categoryId: h.category_id,
+    yearlyGoalId: h.yearly_goal_id,
+    monthlyGoalId: h.monthly_goal_id,
+    weeklyGoalId: h.weekly_goal_id,
     frequency: h.frequency as FoundationalHabit["frequency"],
     completedToday: h.completed_today,
     streak: h.streak,
@@ -2744,7 +2747,10 @@ export const useAppStore = create<AppState>()(
         if (updates.icon !== undefined) hPatch.icon = updates.icon;
         if (updates.frequency !== undefined) hPatch.frequency = updates.frequency;
         if (updates.active !== undefined) hPatch.active = updates.active;
-        if (updates.categoryId !== undefined && isUuid(updates.categoryId)) hPatch.category_id = updates.categoryId;
+        if (updates.categoryId !== undefined) hPatch.category_id = isUuid(updates.categoryId) ? updates.categoryId : null;
+        if (updates.yearlyGoalId !== undefined) hPatch.yearly_goal_id = isUuid(updates.yearlyGoalId) ? updates.yearlyGoalId : null;
+        if (updates.monthlyGoalId !== undefined) hPatch.monthly_goal_id = isUuid(updates.monthlyGoalId) ? updates.monthlyGoalId : null;
+        if (updates.weeklyGoalId !== undefined) hPatch.weekly_goal_id = isUuid(updates.weeklyGoalId) ? updates.weeklyGoalId : null;
         if (shouldBlock && isUuid(id)) {
           if (!sessionId) {
             set({ syncError: "Update habit: Backend session is not ready.", syncStatus: "failed" });
@@ -2798,11 +2804,21 @@ export const useAppStore = create<AppState>()(
               icon: habit.icon,
               frequency: habit.frequency,
               ...(categoryId ? { category_id: categoryId } : {}),
+              ...(isUuid(habit.yearlyGoalId) ? { yearly_goal_id: habit.yearlyGoalId } : {}),
+              ...(isUuid(habit.monthlyGoalId) ? { monthly_goal_id: habit.monthlyGoalId } : {}),
+              ...(isUuid(habit.weeklyGoalId) ? { weekly_goal_id: habit.weeklyGoalId } : {}),
             });
             set((s) => ({
               habits: [
                 ...s.habits,
-                { ...habit, id: created.id, categoryId: created.category_id ?? habit.categoryId },
+                {
+                  ...habit,
+                  id: created.id,
+                  categoryId: created.category_id ?? habit.categoryId,
+                  yearlyGoalId: created.yearly_goal_id ?? habit.yearlyGoalId,
+                  monthlyGoalId: created.monthly_goal_id ?? habit.monthlyGoalId,
+                  weeklyGoalId: created.weekly_goal_id ?? habit.weeklyGoalId,
+                },
               ],
               syncError: null,
               syncStatus: "saved",
@@ -2829,6 +2845,9 @@ export const useAppStore = create<AppState>()(
               icon: habit.icon,
               frequency: habit.frequency,
               ...(categoryId ? { category_id: categoryId } : {}),
+              ...(isUuid(habit.yearlyGoalId) ? { yearly_goal_id: habit.yearlyGoalId } : {}),
+              ...(isUuid(habit.monthlyGoalId) ? { monthly_goal_id: habit.monthlyGoalId } : {}),
+              ...(isUuid(habit.weeklyGoalId) ? { weekly_goal_id: habit.weeklyGoalId } : {}),
             });
             })
             .then((created) => {
@@ -2836,7 +2855,14 @@ export const useAppStore = create<AppState>()(
               set((s) => ({
                 habits: s.habits.map((h) =>
                   h.id === localId
-                    ? { ...h, id: created.id, categoryId: created.category_id ?? h.categoryId }
+                    ? {
+                        ...h,
+                        id: created.id,
+                        categoryId: created.category_id ?? h.categoryId,
+                        yearlyGoalId: created.yearly_goal_id ?? h.yearlyGoalId,
+                        monthlyGoalId: created.monthly_goal_id ?? h.monthlyGoalId,
+                        weeklyGoalId: created.weekly_goal_id ?? h.weeklyGoalId,
+                      }
                     : h
                 ),
                 syncError: null,
@@ -2983,10 +3009,22 @@ export const useAppStore = create<AppState>()(
               icon: h.icon,
               frequency: h.frequency,
               ...(categoryId ? { category_id: categoryId } : {}),
+              ...(isUuid(h.yearlyGoalId) ? { yearly_goal_id: h.yearlyGoalId } : {}),
+              ...(isUuid(h.monthlyGoalId) ? { monthly_goal_id: h.monthlyGoalId } : {}),
+              ...(isUuid(h.weeklyGoalId) ? { weekly_goal_id: h.weeklyGoalId } : {}),
             });
             set((s) => ({
               habits: s.habits.map((item) =>
-                item.id === h.id ? { ...item, id: created.id, categoryId: created.category_id ?? item.categoryId } : item
+                item.id === h.id
+                  ? {
+                      ...item,
+                      id: created.id,
+                      categoryId: created.category_id ?? item.categoryId,
+                      yearlyGoalId: created.yearly_goal_id ?? item.yearlyGoalId,
+                      monthlyGoalId: created.monthly_goal_id ?? item.monthlyGoalId,
+                      weeklyGoalId: created.weekly_goal_id ?? item.weeklyGoalId,
+                    }
+                  : item
               ),
             }));
           } catch (e) {

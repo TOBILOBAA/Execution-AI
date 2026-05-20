@@ -927,13 +927,20 @@ export function StepWeekly({ onNext, onBack }: Props) {
           initialIcon={editHabitData?.icon}
           initialCategoryId={editHabitData?.categoryId}
           initialFrequency={editHabitData?.frequency}
-          onSubmit={async (name, icon, categoryId, frequency) => {
+          initialYearlyGoalId={editHabitData?.yearlyGoalId}
+          initialMonthlyGoalId={editHabitData?.monthlyGoalId}
+          initialWeeklyGoalId={editHabitData?.weeklyGoalId}
+          onSubmit={async ({ name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId }) => {
             if (editHabitId) {
-              const ok = await updateHabit(editHabitId, { name, icon, categoryId, frequency }, { persistMode: "blocking" });
+              const ok = await updateHabit(
+                editHabitId,
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId },
+                { persistMode: "blocking" },
+              );
               if (!ok) return;
             } else {
               const ok = await addHabit(
-                { name, icon, categoryId, frequency, active: true, completedToday: false, streak: 0 },
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId, active: true, completedToday: false, streak: 0 },
                 { persistMode: "blocking" },
               );
               if (!ok) return;
@@ -964,10 +971,10 @@ export function WeeklyAIGuidancePanel() {
         </div>
         <div>
           <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>
-            AI Guidance
+            Planning Strategy
           </p>
           <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>
-            Planning Strategy
+            Weekly Focus
           </p>
         </div>
       </div>
@@ -978,17 +985,17 @@ export function WeeklyAIGuidancePanel() {
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>bolt</span>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              The Bedrock Approach
+              Protect The Main Goal
             </p>
           </div>
           <p className="text-xs leading-relaxed mb-3" style={{ color: "#6b7b74" }}>
-            The Bedrock approach ensures you don&apos;t over-extend. For maximum execution efficiency, aim for:
+            Your weekly main goal should be the clearest advancement on this month&apos;s main goal. Secondary goals should support that priority, not compete with it.
           </p>
           <div className="space-y-2.5">
             {[
-              { num: "1", text: "Main goal for the week." },
-              { num: "2", text: "Secondary goals for operational momentum." },
-              { num: "3+", text: "Routines that protect your energy and focus." },
+              { num: "1", text: "Main goal that moves the month forward." },
+              { num: "2", text: "Secondary goals that remove friction or carry useful momentum." },
+              { num: "3+", text: "Routines that protect your focus, energy, and follow-through." },
             ].map((item) => (
               <div key={item.num} className="flex items-start gap-2.5">
                 <span
@@ -1009,11 +1016,11 @@ export function WeeklyAIGuidancePanel() {
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>trending_up</span>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              Weekly Momentum
+              Weekly Prioritisation
             </p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            A focused week with one flagship goal and two secondary goals dramatically increases your monthly goal completion rate.
+            When the week is overloaded, the monthly main goal usually slips. Keep the main goal obvious so your time and attention know where to go first.
           </p>
         </div>
 
@@ -1025,7 +1032,7 @@ export function WeeklyAIGuidancePanel() {
             </p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Your routines carry over each week. Consistency here compounds into stronger follow-through over the month.
+            Let routines carry the pressure that goals shouldn&apos;t. Consistent routines keep the week stable while your goals absorb the harder execution work.
           </p>
         </div>
       </div>
