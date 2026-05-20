@@ -208,6 +208,21 @@ function extractTailoredInsight(report: ApiReport | null) {
   return { tailoredPattern, tailoredAction };
 }
 
+function extractReviewSignal(report: ApiReport | null) {
+  const raw = report?.metrics?.review_signal;
+  const signal = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const toStringList = (value: unknown) =>
+    Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+  return {
+    completedMainTitles: toStringList(signal.completed_main_titles),
+    unfinishedSecondaryTitles: toStringList(signal.unfinished_secondary_titles),
+    notStartedTitles: toStringList(signal.not_started_titles),
+    routinesKeptNames: toStringList(signal.routines_kept_names),
+    routinesSkippedNames: toStringList(signal.routines_skipped_names),
+    losingAttentionTitles: toStringList(signal.losing_attention_titles),
+  };
+}
+
 function recapKey(entry: {
   type: ReviewType;
   periodYear: number;
@@ -442,6 +457,65 @@ function EmptyBlock({ copy }: { copy: string }) {
   );
 }
 
+function ReviewGroup({ label, items, tone = "default" }: { label: string; items: string[]; tone?: "default" | "success" | "warning" }) {
+  const palette =
+    tone === "success"
+      ? { background: "rgba(0,108,74,0.08)", border: "1px solid rgba(0,108,74,0.10)", bullet: "#006c4a" }
+      : tone === "warning"
+        ? { background: "rgba(180,83,9,0.08)", border: "1px solid rgba(180,83,9,0.12)", bullet: "#b45309" }
+        : { background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.06)", bullet: "#5d6d67" };
+
+  return (
+    <div className="rounded-2xl p-4" style={{ background: palette.background, border: palette.border }}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: "#8a9e97" }}>
+        {label}
+      </p>
+      <div className="mt-2 space-y-2">
+        {items.map((item) => (
+          <div key={`${label}:${item}`} className="flex items-start gap-2">
+            <span className="mt-[5px] h-1.5 w-1.5 rounded-full" style={{ background: palette.bullet }} />
+            <p className="min-w-0 text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
+              {item}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReviewSummaryCard({
+  eyebrow,
+  title,
+  description,
+  groups,
+  emptyCopy,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  groups: Array<{ label: string; items: string[] }>;
+  emptyCopy: string;
+}) {
+  const visibleGroups = groups.filter((group) => group.items.length > 0);
+  const tone = eyebrow === "What landed" ? "success" : "warning";
+  return (
+    <SectionCard eyebrow={eyebrow} title={title} description={description} tone="soft">
+      {visibleGroups.length === 0 ? (
+        <p className="text-sm" style={{ color: "#8a9e97" }}>
+          {emptyCopy}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {visibleGroups.map((group) => (
+            <ReviewGroup key={group.label} label={group.label} items={group.items} tone={tone} />
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
 function InfoPill({ children }: { children: React.ReactNode }) {
   return (
     <span
@@ -638,6 +712,7 @@ function formatHabitFrequencyLabel(value: FoundationalHabit["frequency"]) {
   if (value === "5x_week") return "5x per week";
   if (value === "weekdays") return "Weekdays";
   if (value === "weekends") return "Weekends";
+  if (value === "flexible") return "Flexible";
   return "Daily";
 }
 
@@ -928,6 +1003,7 @@ export function DashboardPeriodReviewPrompts() {
 
   const narrative = extractNarrative(report);
   const { tailoredPattern, tailoredAction } = extractTailoredInsight(report);
+  const reviewSignal = extractReviewSignal(report);
 
   const nextPeriodLabel =
     activeCandidate.type === "weekly" && activeWeekContext
@@ -1169,14 +1245,50 @@ export function DashboardPeriodReviewPrompts() {
     setGoalEditor(null);
   }
 
-  function handleHabitSubmit(name: string, icon: string, categoryId: string, frequency: FoundationalHabit["frequency"]) {
+  function handleHabitSubmit({
+    name,
+    icon,
+    categoryId,
+    frequency,
+    yearlyGoalId,
+    monthlyGoalId,
+    weeklyGoalId,
+  }: {
+    name: string;
+    icon: string;
+    categoryId: string;
+    frequency: FoundationalHabit["frequency"];
+    yearlyGoalId?: string;
+    monthlyGoalId?: string;
+    weeklyGoalId?: string;
+  }) {
     setPlanSectionUnlocked(true);
     if (habitEditor?.habit) {
-      updateHabit(habitEditor.habit.id, { name, icon, categoryId: categoryId || undefined, frequency, active: true });
-      setSavedNotice("Foundational habit updated.");
+      updateHabit(habitEditor.habit.id, {
+        name,
+        icon,
+        categoryId: categoryId || undefined,
+        frequency,
+        yearlyGoalId,
+        monthlyGoalId,
+        weeklyGoalId,
+        active: true,
+      });
+      setSavedNotice("Routine updated.");
     } else {
-      addHabit({ name, icon, categoryId: categoryId || undefined, frequency, completedToday: false, streak: 0, active: true });
-      setSavedNotice("Foundational habit added.");
+      addHabit({
+        name,
+        icon,
+        categoryId: categoryId || undefined,
+        frequency,
+        yearlyGoalId,
+        monthlyGoalId,
+        weeklyGoalId,
+        completedToday: false,
+        streak: 0,
+        active: true,
+      });
+      setSavedNotice("Routine added.");
     }
     setHabitEditor(null);
   }
@@ -1377,6 +1489,38 @@ export function DashboardPeriodReviewPrompts() {
           <InfoPill>{planButtonLabel(activeCandidate.type)}</InfoPill>
         </div>
       </SectionCard>
+
+      {(reviewSignal.completedMainTitles.length > 0 ||
+        reviewSignal.unfinishedSecondaryTitles.length > 0 ||
+        reviewSignal.routinesKeptNames.length > 0 ||
+        reviewSignal.routinesSkippedNames.length > 0 ||
+        reviewSignal.notStartedTitles.length > 0 ||
+        reviewSignal.losingAttentionTitles.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <ReviewSummaryCard
+            eyebrow="What landed"
+            title="What got done"
+            description="Keep the finished signal visible so the next period does not start from amnesia."
+            groups={[
+              { label: "Completed main goals", items: reviewSignal.completedMainTitles },
+              { label: "Routines kept", items: reviewSignal.routinesKeptNames },
+            ]}
+            emptyCopy="No completed signal was saved for this period."
+          />
+          <ReviewSummaryCard
+            eyebrow="What needs care"
+            title="What still needs attention"
+            description="These are the items that still need a decision before they quietly disappear."
+            groups={[
+              { label: "Still open", items: reviewSignal.unfinishedSecondaryTitles },
+              { label: "Not started", items: reviewSignal.notStartedTitles },
+              { label: "Routines skipped", items: reviewSignal.routinesSkippedNames },
+              { label: "Losing attention", items: reviewSignal.losingAttentionTitles },
+            ]}
+            emptyCopy="No loose signal was saved for this period."
+          />
+        </div>
+      )}
     </div>
   );
 
@@ -2030,6 +2174,9 @@ export function DashboardPeriodReviewPrompts() {
             initialIcon={habitEditor.habit?.icon}
             initialCategoryId={habitEditor.habit?.categoryId}
             initialFrequency={habitEditor.habit?.frequency}
+            initialYearlyGoalId={habitEditor.habit?.yearlyGoalId}
+            initialMonthlyGoalId={habitEditor.habit?.monthlyGoalId}
+            initialWeeklyGoalId={habitEditor.habit?.weeklyGoalId}
             onSubmit={handleHabitSubmit}
             onClose={() => setHabitEditor(null)}
           />

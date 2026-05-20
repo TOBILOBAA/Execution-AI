@@ -204,6 +204,9 @@ export interface ApiHabit {
   frequency: string;
   active: boolean;
   category_id?: string;
+  yearly_goal_id?: string;
+  monthly_goal_id?: string;
+  weekly_goal_id?: string;
   sort_order: number;
   completed_today: boolean;
   streak: number;
@@ -535,6 +538,9 @@ export const habitsApi = {
     icon: string;
     frequency: string;
     category_id?: string;
+    yearly_goal_id?: string;
+    monthly_goal_id?: string;
+    weekly_goal_id?: string;
   }) => post<ApiHabit>(`/habits/${sessionId}`, data),
 
   update: (sessionId: string, habitId: string, data: Partial<{
@@ -542,7 +548,10 @@ export const habitsApi = {
     icon: string;
     frequency: string;
     active: boolean;
-    category_id: string;
+    category_id: string | null;
+    yearly_goal_id: string | null;
+    monthly_goal_id: string | null;
+    weekly_goal_id: string | null;
   }>) => patch<ApiHabit>(`/habits/${sessionId}/${habitId}`, data),
 
   delete: (sessionId: string, habitId: string) =>

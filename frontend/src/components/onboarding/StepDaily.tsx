@@ -233,6 +233,7 @@ function HabitRow({
     "3x_week": "3× / Week",
     "5x_week": "5× / Week",
     weekends: "Weekends",
+    flexible: "Flexible",
   };
 
   return (
@@ -872,11 +873,23 @@ export function StepDaily({ onFinish, onBack }: Props) {
           initialIcon={isEditingHabit ? (habitModal as FoundationalHabit).icon : undefined}
           initialCategoryId={isEditingHabit ? (habitModal as FoundationalHabit).categoryId : undefined}
           initialFrequency={isEditingHabit ? (habitModal as FoundationalHabit).frequency : undefined}
-          onSubmit={(name, icon, categoryId, frequency) => {
+          initialYearlyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).yearlyGoalId : undefined}
+          initialMonthlyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).monthlyGoalId : undefined}
+          initialWeeklyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).weeklyGoalId : undefined}
+          onSubmit={async ({ name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId }) => {
             if (isEditingHabit) {
-              updateHabit((habitModal as FoundationalHabit).id, { name, icon, categoryId, frequency });
+              const ok = await updateHabit(
+                (habitModal as FoundationalHabit).id,
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             } else {
-              addHabit({ name, icon, categoryId, frequency, active: true, completedToday: false, streak: 0 });
+              const ok = await addHabit(
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId, active: true, completedToday: false, streak: 0 },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             }
             setHabitModal(null);
           }}
@@ -925,8 +938,8 @@ export function DailyAIGuidancePanel() {
           <span className="material-symbols-outlined text-[18px]" style={{ color: "#006c4a" }}>auto_awesome</span>
         </div>
         <div>
-          <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>AI Guidance</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>Daily Intelligence</p>
+          <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>Planning Strategy</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>Daily Focus</p>
         </div>
       </div>
 
@@ -935,7 +948,7 @@ export function DailyAIGuidancePanel() {
         {/* Rule of 3 */}
         <div>
           <div className="flex items-center gap-1.5 mb-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Rule of 3 Advice</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Daily Focus Rule</p>
           </div>
           <p className="text-sm font-bold mb-1.5" style={{ color: "#1a1f1e" }}>{tip.title}</p>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>{tip.body}</p>
@@ -971,7 +984,7 @@ export function DailyAIGuidancePanel() {
           onMouseEnter={(e) => { e.currentTarget.style.background = "#f5f7f6"; e.currentTarget.style.color = "#1a1f1e"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#8a9e97"; }}
         >
-          Refresh Guidance
+          Refresh Strategy
         </button>
       </div>
     </div>
