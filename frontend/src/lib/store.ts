@@ -173,8 +173,15 @@ interface AppState {
   removeSecondaryTask: (id: string) => void;
 
   toggleHabit: (id: string) => void;
-  updateHabit: (id: string, updates: Partial<FoundationalHabit>) => void;
-  addHabit: (habit: Omit<FoundationalHabit, "id">) => void;
+  updateHabit: (
+    id: string,
+    updates: Partial<FoundationalHabit>,
+    options?: { persistMode?: "background" | "blocking" },
+  ) => Promise<boolean>;
+  addHabit: (
+    habit: Omit<FoundationalHabit, "id">,
+    options?: { persistMode?: "background" | "blocking" },
+  ) => Promise<boolean>;
   removeHabit: (id: string) => void;
 
   // ── AI Plan generation ───────────────────────────────────────────────────────
@@ -1989,22 +1996,17 @@ export const useAppStore = create<AppState>()(
         const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
         if (shouldBlock) {
-          const writableSessionId =
-            sessionId ?? (await ensureWritableSession(get, set, "Save habit"));
-          if (!writableSessionId) {
+          if (!sessionId) {
+            set({ syncError: "Save habit: Backend session is not ready.", syncStatus: "failed" });
             return false;
           }
           set({ syncStatus: "saving" });
           try {
-            const categoryId = await resolveCategoryIdForSave(habit.categoryId);
-            if (habit.categoryId && !categoryId) {
-              throw new Error("The selected category is still syncing. Wait a moment and try again.");
-            }
-            const created = await habitsApi.create(writableSessionId, {
+            const created = await habitsApi.create(sessionId, {
               name: habit.name,
               icon: habit.icon,
               frequency: habit.frequency,
-              ...(categoryId ? { category_id: categoryId } : {}),
+              ...(isUuid(habit.categoryId) ? { category_id: habit.categoryId } : {}),
               ...(isUuid(habit.yearlyGoalId) ? { yearly_goal_id: habit.yearlyGoalId } : {}),
               ...(isUuid(habit.monthlyGoalId) ? { monthly_goal_id: habit.monthlyGoalId } : {}),
               ...(isUuid(habit.weeklyGoalId) ? { weekly_goal_id: habit.weeklyGoalId } : {}),
@@ -2033,17 +2035,12 @@ export const useAppStore = create<AppState>()(
         const localId = genId("hab");
         set((s) => ({ habits: [...s.habits, { ...habit, id: localId }] }));
         if (sessionId) {
-          const categoryId = await resolveCategoryIdForSave(habit.categoryId);
-          if (habit.categoryId && !categoryId) {
-            set({ syncError: "The selected category is still syncing. Wait a moment and try again." });
-            return false;
-          }
           const request = habitsApi
             .create(sessionId, {
               name: habit.name,
               icon: habit.icon,
               frequency: habit.frequency,
-              ...(categoryId ? { category_id: categoryId } : {}),
+              ...(isUuid(habit.categoryId) ? { category_id: habit.categoryId } : {}),
               ...(isUuid(habit.yearlyGoalId) ? { yearly_goal_id: habit.yearlyGoalId } : {}),
               ...(isUuid(habit.monthlyGoalId) ? { monthly_goal_id: habit.monthlyGoalId } : {}),
               ...(isUuid(habit.weeklyGoalId) ? { weekly_goal_id: habit.weeklyGoalId } : {}),
@@ -2152,15 +2149,11 @@ export const useAppStore = create<AppState>()(
 
         for (const h of refreshed.habits.filter((item) => !isUuid(item.id))) {
           try {
-            const categoryId = await resolveCategoryIdForSave(h.categoryId);
-            if (h.categoryId && !categoryId) {
-              throw new Error("The selected category is still syncing. Wait a moment and try again.");
-            }
             const created = await habitsApi.create(sessionId, {
               name: h.name,
               icon: h.icon,
               frequency: h.frequency,
-              ...(categoryId ? { category_id: categoryId } : {}),
+              ...(isUuid(h.categoryId) ? { category_id: h.categoryId } : {}),
               ...(isUuid(h.yearlyGoalId) ? { yearly_goal_id: h.yearlyGoalId } : {}),
               ...(isUuid(h.monthlyGoalId) ? { monthly_goal_id: h.monthlyGoalId } : {}),
               ...(isUuid(h.weeklyGoalId) ? { weekly_goal_id: h.weeklyGoalId } : {}),
