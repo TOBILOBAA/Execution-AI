@@ -13,6 +13,7 @@ import { ReportModal } from "./ReportModal";
 import { getWeekNumber } from "@/lib/goalsView";
 import type { Category, DailyPriority, MonthlyGoal, WeeklyGoal } from "@/lib/types";
 import { DEFAULT_CATEGORIES } from "@/lib/mockData";
+import { DAILY_MAIN_GOAL_CAP, DAILY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -74,6 +75,7 @@ function ConnectedDailyPriorityModal({
     monthlyGoals,
     sessionWeekStartsOn,
     activeDashboardDate,
+    dailyPriorities,
     addDailyPriority,
     updateDailyPriority,
     removeDailyPriority,
@@ -84,6 +86,7 @@ function ConnectedDailyPriorityModal({
       monthlyGoals: state.monthlyGoals,
       sessionWeekStartsOn: state.sessionWeekStartsOn,
       activeDashboardDate: state.activeDashboardDate,
+      dailyPriorities: state.dailyPriorities,
       addDailyPriority: state.addDailyPriority,
       updateDailyPriority: state.updateDailyPriority,
       removeDailyPriority: state.removeDailyPriority,
@@ -107,11 +110,16 @@ function ConnectedDailyPriorityModal({
       ? [...scopedWeeklyGoals, linkedWeeklyGoal]
       : scopedWeeklyGoals;
   const relevantMonthlyGoals = monthlyGoals.filter((goal) => goal.year === referenceYear);
+  const mainPriorityCapReached =
+    !initialData &&
+    dailyPriorities.filter((priority) => priority.date === activeDashboardDate).length >= DAILY_MAIN_GOAL_CAP;
 
   return (
     <PlanningDailyPriorityModal
       categories={effectiveCategories}
       weeklyGoals={availableWeeklyGoals}
+      mainGoalCapReached={mainPriorityCapReached}
+      mainGoalCapMessage="You can only save 1 main goal for this day."
       initialTitle={initialData?.title}
       initialCategoryId={
         inferCategoryId(initialData ?? {}, effectiveCategories, availableWeeklyGoals, relevantMonthlyGoals) ??
@@ -172,6 +180,7 @@ function ConnectedSecondaryTaskModal({
     monthlyGoals,
     sessionWeekStartsOn,
     activeDashboardDate,
+    secondaryTasks,
     addSecondaryTask,
     updateSecondaryTask,
     removeSecondaryTask,
@@ -182,6 +191,7 @@ function ConnectedSecondaryTaskModal({
       monthlyGoals: state.monthlyGoals,
       sessionWeekStartsOn: state.sessionWeekStartsOn,
       activeDashboardDate: state.activeDashboardDate,
+      secondaryTasks: state.secondaryTasks,
       addSecondaryTask: state.addSecondaryTask,
       updateSecondaryTask: state.updateSecondaryTask,
       removeSecondaryTask: state.removeSecondaryTask,
@@ -205,11 +215,16 @@ function ConnectedSecondaryTaskModal({
       ? [...scopedWeeklyGoals, linkedWeeklyGoal]
       : scopedWeeklyGoals;
   const relevantMonthlyGoals = monthlyGoals.filter((goal) => goal.year === referenceYear);
+  const secondaryTaskCapReached =
+    !initialData &&
+    secondaryTasks.filter((task) => task.date === activeDashboardDate).length >= DAILY_SECONDARY_GOAL_CAP;
 
   return (
     <PlanningSecondaryTaskModal
       categories={effectiveCategories}
       weeklyGoals={availableWeeklyGoals}
+      secondaryGoalCapReached={secondaryTaskCapReached}
+      secondaryGoalCapMessage="You can only save up to 3 secondary goals for this day."
       initialTitle={initialData?.title}
       initialCategoryId={
         inferCategoryId(initialData ?? {}, effectiveCategories, availableWeeklyGoals, relevantMonthlyGoals) ??

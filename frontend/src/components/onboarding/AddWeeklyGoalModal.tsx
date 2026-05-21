@@ -6,6 +6,9 @@ import { MonthlyGoal } from "@/lib/types";
 interface Props {
   mode: "main" | "secondary";
   monthlyGoals: MonthlyGoal[];
+  currentCount?: number;
+  maxCount?: number;
+  limitMessage?: string;
   initialTitle?: string;
   initialMonthlyGoalId?: string;
   initialTargetDay?: string;
@@ -34,6 +37,9 @@ const DAYS = [
 export function AddWeeklyGoalModal({
   mode,
   monthlyGoals,
+  currentCount = 0,
+  maxCount,
+  limitMessage,
   initialTitle = "",
   initialMonthlyGoalId,
   initialTargetDay,
@@ -59,6 +65,10 @@ export function AddWeeklyGoalModal({
       setError("Please enter a goal name.");
       return;
     }
+    if (!isEdit && typeof maxCount === "number" && currentCount >= maxCount) {
+      setError(limitMessage ?? "You have reached the limit for this goal type.");
+      return;
+    }
     onSubmit({
       title: title.trim(),
       monthlyGoalId: selectedMonthlyGoalId || undefined,
@@ -79,7 +89,7 @@ export function AddWeeklyGoalModal({
         style={{ border: "1px solid rgba(0,0,0,0.06)" }}
       >
         {/* Header */}
-        <div className="px-7 pt-7 pb-0 overflow-y-auto">
+        <div className="px-7 pt-7 pb-0 overflow-y-auto min-h-0">
           <div className="flex items-start justify-between mb-4">
             <div>
               <p

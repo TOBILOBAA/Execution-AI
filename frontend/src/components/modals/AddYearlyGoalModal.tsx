@@ -404,7 +404,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
 
         {/* Footer */}
         <div
-          className="px-8 py-5 flex items-center justify-between"
+          className="px-8 py-5 flex items-center justify-between flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
           {/* Left: discard only in edit mode */}

@@ -10,6 +10,7 @@ import { StepMonthly, MonthlyAIGuidancePanel } from "@/components/onboarding/Ste
 import { StepWeekly, WeeklyAIGuidancePanel } from "@/components/onboarding/StepWeekly";
 import { StepDaily, DailyAIGuidancePanel } from "@/components/onboarding/StepDaily";
 import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
+import { getToday } from "@/lib/mockData";
 
 const STEPS = [
   { num: 1, label: "Set yearly goals" },
@@ -29,6 +30,8 @@ export default function OnboardingPage() {
     authReady,
     backendReady,
     workspaceHydrating,
+    sessionTimezone,
+    setActiveDashboardDate,
   } = useAppStore(
     useShallow((state) => ({
       currentUser: state.currentUser,
@@ -39,6 +42,8 @@ export default function OnboardingPage() {
       authReady: state.authReady,
       backendReady: state.backendReady,
       workspaceHydrating: state.workspaceHydrating,
+      sessionTimezone: state.sessionTimezone,
+      setActiveDashboardDate: state.setActiveDashboardDate,
     })),
   );
 
@@ -56,6 +61,19 @@ export default function OnboardingPage() {
     }
   }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
 
+  useEffect(() => {
+    if (!authReady || workspaceHydrating || !currentUser || !backendReady || onboardingComplete) return;
+    setActiveDashboardDate(getToday(sessionTimezone));
+  }, [
+    authReady,
+    workspaceHydrating,
+    currentUser,
+    backendReady,
+    onboardingComplete,
+    sessionTimezone,
+    setActiveDashboardDate,
+  ]);
+
   if (!authReady || workspaceHydrating || !currentUser || !backendReady || onboardingComplete) {
     return (
       <AppLoadingScreen
@@ -68,7 +86,7 @@ export default function OnboardingPage() {
 
   const handleNext = async () => {
     if (onboardingStep < 4) {
-      setOnboardingStep(onboardingStep + 1);
+      await setOnboardingStep(onboardingStep + 1);
     } else {
       const ok = await completeOnboarding();
       if (ok) {
@@ -77,8 +95,10 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleBack = () => {
-    if (onboardingStep > 1) setOnboardingStep(onboardingStep - 1);
+  const handleBack = async () => {
+    if (onboardingStep > 1) {
+      await setOnboardingStep(onboardingStep - 1);
+    }
   };
 
   const rightPanel =

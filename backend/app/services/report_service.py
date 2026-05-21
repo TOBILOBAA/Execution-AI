@@ -33,7 +33,7 @@ from app.utils.metrics import (
     aggregate_yearly_metrics,
 )
 from app.services import ai_service
-from app.services.report_context import build_execution_diary, build_report_prompt_context
+from app.services.report_context import build_execution_diary, build_period_review_signal, build_report_prompt_context
 import app.db.plans as plans_db
 import app.db.habits as habits_db
 import app.db.reports as reports_db
@@ -256,6 +256,7 @@ def generate_weekly_report(
     metrics["week_number"] = week_number
     metrics["week_start"] = week_start.isoformat()
     metrics["week_end"] = week_end.isoformat()
+    metrics["review_signal"] = build_period_review_signal(session_id, week_start, week_end, db, "weekly")
     goal_context = build_report_prompt_context(session_id, week_start, week_end, db)
     execution_diary = build_execution_diary(session_id, week_start, week_end, db)
 
@@ -332,6 +333,7 @@ def generate_monthly_report(
     metrics["month"] = month
     month_start = date(year, month, 1)
     month_end = date(year, month, calendar.monthrange(year, month)[1])
+    metrics["review_signal"] = build_period_review_signal(session_id, month_start, month_end, db, "monthly")
     goal_context = build_report_prompt_context(session_id, month_start, month_end, db)
     execution_diary = build_execution_diary(session_id, month_start, month_end, db)
 
@@ -395,6 +397,7 @@ def generate_quarterly_report(db: Client, session_id: UUID, year: int, quarter: 
     metrics = summary["metrics"]
     quarter_start = date(year, months[0], 1)
     quarter_end = date(year, months[-1], calendar.monthrange(year, months[-1])[1])
+    metrics["review_signal"] = build_period_review_signal(session_id, quarter_start, quarter_end, db, "quarterly")
     goal_context = build_report_prompt_context(session_id, quarter_start, quarter_end, db)
     execution_diary = build_execution_diary(session_id, quarter_start, quarter_end, db)
 
@@ -481,6 +484,7 @@ def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
     metrics["year"] = year
     year_start = date(year, 1, 1)
     year_end = date(year, 12, 31)
+    metrics["review_signal"] = build_period_review_signal(session_id, year_start, year_end, db, "yearly")
     goal_context = build_report_prompt_context(session_id, year_start, year_end, db)
     execution_diary = build_execution_diary(session_id, year_start, year_end, db)
 

@@ -25,14 +25,22 @@ from app.utils.period_guards import (
     assert_period_plannable_weekly,
     get_session_temporal_context,
 )
+from app.utils.planning_limits import (
+    MONTHLY_MAIN_GOAL_CAP,
+    MONTHLY_SECONDARY_GOAL_CAP,
+    WEEKLY_MAIN_GOAL_CAP,
+    WEEKLY_SECONDARY_GOAL_CAP,
+)
 
 router = APIRouter(tags=["Plans"])
-
-MAIN_GOAL_CAP = 3
 
 
 def _count_main_rows(rows: list[dict]) -> int:
     return sum(1 for row in rows if row.get("is_main"))
+
+
+def _count_secondary_rows(rows: list[dict]) -> int:
+    return sum(1 for row in rows if not row.get("is_main"))
 
 
 def _ensure_monthly_plan_row(db: Client, session_id: UUID, plan_year: int, plan_month: int) -> dict:
@@ -156,8 +164,12 @@ def add_monthly_goal(
     assert_period_plannable_monthly(session_id, plan_year, plan_month, db)
     if body.is_main:
         existing = plans_db.list_monthly_goals(db, session_id, plan_year, plan_month)
-        if _count_main_rows(existing) >= MAIN_GOAL_CAP:
-            raise ConflictError("You can only save up to 3 main goals for this month.")
+        if _count_main_rows(existing) >= MONTHLY_MAIN_GOAL_CAP:
+            raise ConflictError("You can only save 1 main goal for this month.")
+    else:
+        existing = plans_db.list_monthly_goals(db, session_id, plan_year, plan_month)
+        if _count_secondary_rows(existing) >= MONTHLY_SECONDARY_GOAL_CAP:
+            raise ConflictError("You can only save up to 2 secondary goals for this month.")
     plan = _ensure_monthly_plan_row(db, session_id, plan_year, plan_month)
     data = {
         **body.model_dump(),
@@ -187,8 +199,12 @@ def update_monthly_goal(
     assert_period_plannable_monthly(session_id, int(goal["year"]), int(goal["month"]), db)
     if body.is_main is True and not goal.get("is_main"):
         existing = plans_db.list_monthly_goals(db, session_id, int(goal["year"]), int(goal["month"]))
-        if _count_main_rows([row for row in existing if str(row.get("id")) != str(goal_id)]) >= MAIN_GOAL_CAP:
-            raise ConflictError("You can only save up to 3 main goals for this month.")
+        if _count_main_rows([row for row in existing if str(row.get("id")) != str(goal_id)]) >= MONTHLY_MAIN_GOAL_CAP:
+            raise ConflictError("You can only save 1 main goal for this month.")
+    if body.is_main is False and goal.get("is_main"):
+        existing = plans_db.list_monthly_goals(db, session_id, int(goal["year"]), int(goal["month"]))
+        if _count_secondary_rows([row for row in existing if str(row.get("id")) != str(goal_id)]) >= MONTHLY_SECONDARY_GOAL_CAP:
+            raise ConflictError("You can only save up to 2 secondary goals for this month.")
     return plans_db.update_monthly_goal(
         db, goal_id, session_id, body.model_dump(exclude_unset=True)
     )
@@ -274,8 +290,12 @@ def add_weekly_goal(
     assert_period_plannable_weekly(session_id, plan_year, plan_week, db)
     if body.is_main:
         existing = plans_db.list_weekly_goals(db, session_id, plan_year, plan_week)
-        if _count_main_rows(existing) >= MAIN_GOAL_CAP:
-            raise ConflictError("You can only save up to 3 main goals for this week.")
+        if _count_main_rows(existing) >= WEEKLY_MAIN_GOAL_CAP:
+            raise ConflictError("You can only save 1 main goal for this week.")
+    else:
+        existing = plans_db.list_weekly_goals(db, session_id, plan_year, plan_week)
+        if _count_secondary_rows(existing) >= WEEKLY_SECONDARY_GOAL_CAP:
+            raise ConflictError("You can only save up to 2 secondary goals for this week.")
     plan = _ensure_weekly_plan_row(db, session_id, plan_year, plan_week)
     week_start, _ = get_week_boundaries(plan_year, plan_week, week_starts_on)
     data = {
@@ -307,8 +327,12 @@ def update_weekly_goal(
     assert_period_plannable_weekly(session_id, int(goal["year"]), int(goal["week_number"]), db)
     if body.is_main is True and not goal.get("is_main"):
         existing = plans_db.list_weekly_goals(db, session_id, int(goal["year"]), int(goal["week_number"]))
-        if _count_main_rows([row for row in existing if str(row.get("id")) != str(goal_id)]) >= MAIN_GOAL_CAP:
-            raise ConflictError("You can only save up to 3 main goals for this week.")
+        if _count_main_rows([row for row in existing if str(row.get("id")) != str(goal_id)]) >= WEEKLY_MAIN_GOAL_CAP:
+            raise ConflictError("You can only save 1 main goal for this week.")
+    if body.is_main is False and goal.get("is_main"):
+        existing = plans_db.list_weekly_goals(db, session_id, int(goal["year"]), int(goal["week_number"]))
+        if _count_secondary_rows([row for row in existing if str(row.get("id")) != str(goal_id)]) >= WEEKLY_SECONDARY_GOAL_CAP:
+            raise ConflictError("You can only save up to 2 secondary goals for this week.")
     return plans_db.update_weekly_goal(
         db, goal_id, session_id, body.model_dump(exclude_unset=True)
     )

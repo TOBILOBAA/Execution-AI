@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { getCurrentYear } from "@/lib/mockData";
+import { getCurrentYear, getToday } from "@/lib/mockData";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
 import { AddGoalModal } from "./AddGoalModal";
 import { AddCategoryModal } from "./AddCategoryModal";
@@ -14,7 +14,9 @@ interface Props {
   onNext: () => void;
 }
 
-// ── Right AI Guidance Panel ───────────────────────────────────────────────────
+const UNCATEGORIZED_CATEGORY_ID = "__uncategorized__";
+
+// ── Right planning strategy panel ─────────────────────────────────────────────
 export function YearlyAIGuidancePanel() {
   return (
     <div className="px-7 pt-10 pb-8 space-y-6 h-full overflow-y-auto">
@@ -23,15 +25,15 @@ export function YearlyAIGuidancePanel() {
           <span className="material-symbols-outlined text-[18px]" style={{ color: "#006c4a" }}>auto_awesome</span>
         </div>
         <div>
-          <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>AI Guidance</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>Goal Architecture</p>
+          <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>Planning Strategy</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>Yearly Focus</p>
         </div>
       </div>
       <div className="space-y-5">
         {[
-          { icon: "trending_up", label: "Think Long-Term", body: "Yearly goals are milestones on a longer journey. Make sure they clearly align with your 3–5 year vision." },
-          { icon: "my_location", label: "Be Specific", body: "\u201CGet healthy\u201D is a wish; \u201CRun a half-marathon by October\u201D is a goal." },
-          { icon: "favorite", label: "Align with Values", body: "Productivity without purpose leads to burnout. Ask yourself: \u201CWhy does this matter to me right now?\u201D" },
+          { icon: "filter_1", label: "Start Narrow", body: "Begin with one area that truly matters. A few clear yearly goals are more useful than a long list you won't revisit." },
+          { icon: "my_location", label: "Name The Outcome", body: "\u201CGrow spiritually\u201D is too broad. \u201CFinish a full Bible study plan by November\u201D gives you something concrete to plan toward." },
+          { icon: "volunteer_activism", label: "Keep It Meaningful", body: "Choose goals you will still care about in a difficult month. Strong yearly goals should stay connected to your values, not just your ambition." },
         ].map(({ icon, label, body }) => (
           <div key={label}>
             <div className="flex items-center gap-1.5 mb-1.5">
@@ -56,6 +58,7 @@ export function StepYearly({ onNext }: Props) {
   const {
     categories,
     yearlyGoals,
+    sessionTimezone,
     addYearlyGoal,
     updateYearlyGoal,
     removeYearlyGoal,
@@ -66,6 +69,7 @@ export function StepYearly({ onNext }: Props) {
     useShallow((state) => ({
       categories: state.categories,
       yearlyGoals: state.yearlyGoals,
+      sessionTimezone: state.sessionTimezone,
       addYearlyGoal: state.addYearlyGoal,
       updateYearlyGoal: state.updateYearlyGoal,
       removeYearlyGoal: state.removeYearlyGoal,
@@ -82,14 +86,11 @@ export function StepYearly({ onNext }: Props) {
   const [showCatModal, setShowCatModal] = useState(false);
   const [leaveBusy, setLeaveBusy] = useState(false);
   const [leaveError, setLeaveError] = useState("");
+  const currentYear = Number(getToday(sessionTimezone).slice(0, 4)) || getCurrentYear();
 
-  const fallbackCategoryId = categories[0]?.id ?? "";
   const getGoalsForCat = (catId: string) =>
-    yearlyGoals.filter(
-      (g) =>
-        g.year === getCurrentYear() &&
-        (g.categoryId === catId || (!g.categoryId && catId === fallbackCategoryId)),
-    );
+    yearlyGoals.filter((g) => g.year === currentYear && g.categoryId === catId);
+  const uncategorizedGoals = yearlyGoals.filter((g) => g.year === currentYear && !g.categoryId);
 
   const openAddGoal = (catId: string) => {
     setModalCatId(catId);
@@ -97,25 +98,31 @@ export function StepYearly({ onNext }: Props) {
   };
 
   const openEditGoal = (goal: YearlyGoal) => {
-    setModalCatId(goal.categoryId ?? fallbackCategoryId);
+    setModalCatId(goal.categoryId ?? UNCATEGORIZED_CATEGORY_ID);
     setGoalModal(goal);
   };
 
-  const handleModalSubmit = (title: string, targetDate: string, description: string) => {
+  const handleModalSubmit = async (title: string, targetDate: string, description: string) => {
     if (typeof goalModal === "string") {
       // "new" → add
-      addYearlyGoal({
+      const ok = await addYearlyGoal({
         title,
         categoryId: modalCatId,
         ...(description ? { description } : {}),
-        year: getCurrentYear(),
+        year: currentYear,
         status: "active",
         progress: 0,
         targetDate,
-      });
+      }, { persistMode: "blocking" });
+      if (!ok) return;
     } else if (goalModal) {
       // YearlyGoal object → edit
-      updateYearlyGoal(goalModal.id, { title, description: description || undefined, targetDate });
+      const ok = await updateYearlyGoal(
+        goalModal.id,
+        { title, description: description || undefined, targetDate },
+        { persistMode: "blocking" },
+      );
+      if (!ok) return;
     }
     setGoalModal(null);
   };
@@ -123,13 +130,25 @@ export function StepYearly({ onNext }: Props) {
   const isEditMode = goalModal !== null && typeof goalModal !== "string";
 
   const handleLeaveYearly = async () => {
-    if (yearlyGoals.filter(g => g.year === getCurrentYear()).length < 1) {
+    if (yearlyGoals.filter((g) => g.year === currentYear).length < 1) {
       setLeaveError("Add at least one yearly goal before continuing.");
+      return;
+    }
+    const emptyCategories = categories.filter((category) => getGoalsForCat(category.id).length === 0);
+    if (emptyCategories.length > 0) {
+      const [firstEmptyCategory] = emptyCategories;
+      setExpanded(firstEmptyCategory.id);
+      const categoryNames = emptyCategories.map((category) => category.name).join(", ");
+      setLeaveError(
+        emptyCategories.length === 1
+          ? `${firstEmptyCategory.name} does not have a goal yet. Add a goal or delete the category before continuing.`
+          : `${categoryNames} do not have goals yet. Add a goal to each one or delete the empty categories before continuing.`,
+      );
       return;
     }
     setLeaveError("");
     setLeaveBusy(true);
-    const ok = await syncYearlyGoalsToServer();
+    const ok = await syncYearlyGoalsToServer({ mode: "verify" });
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveBusy(false);
@@ -145,11 +164,10 @@ export function StepYearly({ onNext }: Props) {
         {/* Heading */}
         <div className="text-center mb-8">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight mb-2.5" style={{ color: "#1a1f1e" }}>
-            Set your yearly goals.
+            Start with 1 area of life you want to improve.
           </h1>
           <p className="text-sm leading-relaxed max-w-md mx-auto" style={{ color: "#6b7b74" }}>
-            What do you want to accomplish in {getCurrentYear()}? Group them by category. Your monthly, weekly, and daily
-            plans flow from these.
+            Not sure where to start? Pick 1 category. You can always add more later, and Execution AI will help structure the rest.
           </p>
         </div>
 
@@ -166,13 +184,31 @@ export function StepYearly({ onNext }: Props) {
                 goals={goals}
                 isOpen={isOpen}
                 onToggle={() => setExpanded(isOpen ? "" : cat.id)}
-                onDelete={() => { removeCategory(cat.id); if (expanded === cat.id) setExpanded(""); }}
+                onDelete={async () => {
+                  const ok = await removeCategory(cat.id, { persistMode: "blocking" });
+                  if (ok && expanded === cat.id) setExpanded("");
+                }}
                 onAddGoal={() => openAddGoal(cat.id)}
                 onEditGoal={openEditGoal}
-                onRemoveGoal={removeYearlyGoal}
+                onRemoveGoal={async (id) => { await removeYearlyGoal(id, { persistMode: "blocking" }); }}
               />
             );
           })}
+
+          {uncategorizedGoals.length > 0 && (
+            <CategoryCard
+              cat={{ id: UNCATEGORIZED_CATEGORY_ID, name: "Uncategorized", icon: "inventory_2" }}
+              goals={uncategorizedGoals}
+              isOpen={expanded === UNCATEGORIZED_CATEGORY_ID}
+              onToggle={() => setExpanded(expanded === UNCATEGORIZED_CATEGORY_ID ? "" : UNCATEGORIZED_CATEGORY_ID)}
+              onDelete={() => undefined}
+              onAddGoal={() => undefined}
+              onEditGoal={openEditGoal}
+              onRemoveGoal={async (id) => { await removeYearlyGoal(id, { persistMode: "blocking" }); }}
+              showDeleteButton={false}
+              showAddGoalButton={false}
+            />
+          )}
 
           {/* Add Custom Category */}
           <button
@@ -193,7 +229,7 @@ export function StepYearly({ onNext }: Props) {
             }}
           >
             <span className="material-symbols-outlined text-[17px]">add_circle</span>
-            + Add custom category
+            Add custom category
           </button>
         </div>
 
@@ -218,7 +254,11 @@ export function StepYearly({ onNext }: Props) {
       {/* Add / Edit goal modal */}
       {goalModal !== null && (
         <AddGoalModal
-          categoryName={categories.find(c => c.id === modalCatId)?.name ?? ""}
+          categoryName={
+            modalCatId === UNCATEGORIZED_CATEGORY_ID
+              ? "Uncategorized"
+              : categories.find(c => c.id === modalCatId)?.name ?? ""
+          }
           mode={isEditMode ? "edit" : "add"}
           initialTitle={isEditMode ? (goalModal as YearlyGoal).title : ""}
           initialDate={isEditMode ? (goalModal as YearlyGoal).targetDate : undefined}
@@ -231,7 +271,10 @@ export function StepYearly({ onNext }: Props) {
       {/* New category modal */}
       {showCatModal && (
         <AddCategoryModal
-          onAdd={(name, icon) => { addCategory({ name, icon }); setShowCatModal(false); }}
+          onAdd={async (name, icon) => {
+            const ok = await addCategory({ name, icon }, { persistMode: "blocking" });
+            if (ok) setShowCatModal(false);
+          }}
           onClose={() => setShowCatModal(false)}
         />
       )}
@@ -249,6 +292,8 @@ function CategoryCard({
   onAddGoal,
   onEditGoal,
   onRemoveGoal,
+  showDeleteButton = true,
+  showAddGoalButton = true,
 }: {
   cat: { id: string; name: string; icon: string };
   goals: YearlyGoal[];
@@ -258,6 +303,8 @@ function CategoryCard({
   onAddGoal: () => void;
   onEditGoal: (goal: YearlyGoal) => void;
   onRemoveGoal: (id: string) => void;
+  showDeleteButton?: boolean;
+  showAddGoalButton?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
 
@@ -306,16 +353,18 @@ function CategoryCard({
           </span>
         </button>
 
-        <button
-          type="button"
-          onClick={onDelete}
-          className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0 transition-all"
-          style={{ color: "#c8d5d0" }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#ef4444"; (e.currentTarget as HTMLElement).style.background = "#fef2f2"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "#c8d5d0"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-        >
-          <span className="material-symbols-outlined text-[15px]">delete</span>
-        </button>
+        {showDeleteButton && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0 transition-all"
+            style={{ color: "#c8d5d0" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#ef4444"; (e.currentTarget as HTMLElement).style.background = "#fef2f2"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "#c8d5d0"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
+            <span className="material-symbols-outlined text-[15px]">delete</span>
+          </button>
+        )}
       </div>
 
       {/* ── Expanded body ── */}
@@ -333,17 +382,19 @@ function CategoryCard({
             ))}
           </div>
 
-          <button
-            type="button"
-            onClick={onAddGoal}
-            className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ border: "2px dashed rgba(0,108,74,0.22)", color: "rgba(0,108,74,0.65)" }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,108,74,0.45)"; (e.currentTarget as HTMLElement).style.background = "rgba(0,108,74,0.03)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,108,74,0.22)"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-          >
-            <span className="material-symbols-outlined text-[16px]">add</span>
-            + Add yearly goal
-          </button>
+          {showAddGoalButton && (
+            <button
+              type="button"
+              onClick={onAddGoal}
+              className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
+              style={{ border: "2px dashed rgba(0,108,74,0.22)", color: "rgba(0,108,74,0.65)" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,108,74,0.45)"; (e.currentTarget as HTMLElement).style.background = "rgba(0,108,74,0.03)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,108,74,0.22)"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              Add yearly goal
+            </button>
+          )}
         </div>
       )}
     </div>

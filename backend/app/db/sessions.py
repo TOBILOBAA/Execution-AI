@@ -23,7 +23,12 @@ def _is_missing_week_starts_on_column(exc: APIError) -> bool:
 
 def _drop_unsupported_session_columns(payload: dict, exc: APIError) -> dict:
     unsupported = {
-        key for key in ("week_starts_on", "pending_recaps", "handled_recaps")
+        key
+        for key in (
+            "week_starts_on",
+            "pending_recaps",
+            "handled_recaps",
+        )
         if key in payload and _is_missing_column(exc, key)
     }
     if not unsupported:
@@ -75,10 +80,12 @@ def create_session(
     try:
         result = db.table(TABLE).insert(serialize_payload(payload)).execute()
     except APIError as exc:
-        if "week_starts_on" not in payload or not _is_missing_week_starts_on_column(exc):
-            raise
-        legacy_payload = {key: value for key, value in payload.items() if key != "week_starts_on"}
-        result = db.table(TABLE).insert(serialize_payload(legacy_payload)).execute()
+        fallback_payload = _drop_unsupported_session_columns(payload, exc)
+        if fallback_payload == payload:
+            if "week_starts_on" not in payload or not _is_missing_week_starts_on_column(exc):
+                raise
+            fallback_payload = {key: value for key, value in payload.items() if key != "week_starts_on"}
+        result = db.table(TABLE).insert(serialize_payload(fallback_payload)).execute()
     return _hydrate_session_defaults(result.data[0])
 
 
@@ -141,3 +148,16 @@ def update_session(db: Client, session_id: UUID, updates: dict) -> dict:
 def get_effective_week_starts_on(db: Client, session_id: UUID) -> str:
     session = get_session(db, session_id)
     return session["week_starts_on"] if session else "monday"
+
+
+def list_sessions(db: Client, limit: int | None = 100) -> list[dict]:
+    query = (
+        db.table(TABLE)
+        .select("*")
+        .order("updated_at", desc=True)
+        .order("created_at", desc=True)
+    )
+    if limit is not None:
+        query = query.limit(limit)
+    result = query.execute()
+    return [_hydrate_session_defaults(row) for row in (result.data or [])]

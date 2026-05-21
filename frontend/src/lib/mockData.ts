@@ -244,7 +244,7 @@ export const MOCK_WEEKLY_GOALS: WeeklyGoal[] = [
 export const LOCKED_WEEKLY_GOALS: WeeklyGoal[] = [
   {
     id: "wg-prev-1",
-    title: "Complete Reports tab and analytics views",
+    title: "Complete Reports tab and review views",
     weekNumber: 14,
     month: 4,
     year: 2026,

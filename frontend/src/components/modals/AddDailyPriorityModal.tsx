@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import type { DailyPriority } from "@/lib/types";
 import { getWeekNumber } from "@/lib/goalsView";
+import { DAILY_MAIN_GOAL_CAP } from "@/lib/planningConstraints";
 
 const ORDINALS = ["ONE", "TWO", "THREE"];
 
@@ -58,7 +59,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
     (goal) => goal.year === referenceWeekYear && goal.weekNumber === referenceWeekNumber,
   );
   const mainPriorityCapReached =
-    !initialData && dailyPriorities.filter((priority) => priority.date === activeDashboardDate).length >= 3;
+    !initialData && dailyPriorities.filter((priority) => priority.date === activeDashboardDate).length >= DAILY_MAIN_GOAL_CAP;
 
   useEffect(() => {
     if (!open) return;
@@ -102,7 +103,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
 
   const handleSaveSingle = () => {
     if (mainPriorityCapReached) {
-      setSingleError("You can only save up to 3 main goals for this day.");
+      setSingleError("You can only save 1 main goal for this day.");
       return;
     }
     if (!singleTitle.trim()) { setSingleError("Main goal title is required"); return; }
@@ -285,7 +286,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
                 {singleError && <p className="text-xs" style={{ color: "#ef4444" }}>{singleError}</p>}
                 {mainPriorityCapReached && !singleError && (
                   <p className="text-xs" style={{ color: "#a25a5a" }}>
-                    This day already has 3 main goals. Remove or edit one before adding another.
+                    This day already has a main goal. Remove or edit it before adding another.
                   </p>
                 )}
               </div>
