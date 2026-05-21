@@ -37,6 +37,10 @@ function formatHeaderDate(todayIso: string) {
   });
 }
 
+function clampProgress(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
 export default function YearlyGoalsPage({ params }: { params: Promise<{ year: string }> }) {
   const { year: yearStr } = use(params);
   const year = parseInt(yearStr, 10);
@@ -237,7 +241,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
         style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
       >
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {filterItems.map((item) => {
               const active = item.id === filter;
               return (
@@ -245,7 +249,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
                   key={item.id}
                   type="button"
                   onClick={() => setFilter(item.id)}
-                  className="px-3.5 py-2 rounded-[18px] text-sm font-bold"
+                  className="shrink-0 px-3.5 py-2 rounded-[18px] text-sm font-bold"
                   style={{
                     background: active ? "rgba(0,108,74,0.08)" : "#f7faf8",
                     color: active ? "#006c4a" : "#5d6d67",
@@ -273,7 +277,149 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
           </label>
         </div>
 
-        <div className="mt-5 overflow-x-auto">
+        <div className="mt-5 space-y-3 md:hidden">
+          {filteredRows.length === 0 ? (
+            <div
+              className="rounded-[24px] px-4 py-5 text-sm"
+              style={{ background: "#f9fbfa", border: "1px solid rgba(0,0,0,0.06)", color: "#8a9e97" }}
+            >
+              No yearly goals match this filter yet.
+            </div>
+          ) : (
+            paginatedRows.map((row) => {
+              const completed = row.state === "completed";
+              const stateMeta = getYearlyGoalStateMeta(row.state);
+              const progressTone = getProgressTone(row.progress);
+              const requiresRecovery = !completed && !row.review.canMarkComplete;
+              return (
+                <div
+                  key={row.goal.id}
+                  className="rounded-[24px] p-4"
+                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <span
+                        className="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
+                        style={{
+                          color: stateMeta.text,
+                          background: stateMeta.background,
+                          border: `1px solid ${stateMeta.border}`,
+                        }}
+                      >
+                        {stateMeta.label}
+                      </span>
+                      <h3 className="font-headline font-bold text-lg mt-3" style={{ color: "#1a1f1e" }}>
+                        {row.goal.title}
+                      </h3>
+                      <p className="text-sm mt-2 leading-relaxed" style={{ color: row.goal.description ? "#5d6d67" : "#8a9e97" }}>
+                        {row.goal.description || "No description saved yet."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          row.firstScheduledMonth
+                            ? `/dashboard/goals/${year}/monthly?month=${row.firstScheduledMonth.month}`
+                            : `/dashboard/goals/${year}/monthly`,
+                        )
+                      }
+                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl"
+                      style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
+                      aria-label="Open yearly goal breakdown"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">north_east</span>
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div
+                      className="rounded-2xl px-3.5 py-3"
+                      style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.05)" }}
+                    >
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                        Progress
+                      </p>
+                      <p className="mt-2 text-2xl font-headline font-extrabold" style={{ color: progressTone }}>
+                        {row.progress}%
+                      </p>
+                    </div>
+                    <div
+                      className="rounded-2xl px-3.5 py-3"
+                      style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.05)" }}
+                    >
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                        Category
+                      </p>
+                      <p className="mt-2 text-sm font-semibold" style={{ color: row.category?.color || "#1a1f1e" }}>
+                        {row.category?.name ?? "Uncategorised"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 h-2 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.06)" }}>
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${clampProgress(row.progress)}%`, background: progressTone }}
+                    />
+                  </div>
+
+                  <div className="mt-4 space-y-1.5 text-xs leading-relaxed" style={{ color: "#6b7c75" }}>
+                    <p>
+                      {row.firstScheduledMonth
+                        ? `${row.linkedMonthlyCount} linked month${row.linkedMonthlyCount === 1 ? "" : "s"} · ${row.linkedWeeklyCount} linked week${row.linkedWeeklyCount === 1 ? "" : "s"}`
+                        : "No monthly breakdown yet"}
+                    </p>
+                    <p style={{ color: "#8a9e97" }}>
+                      Due {formatGoalDate(row.goal.targetDate)}
+                    </p>
+                    {row.review.note ? (
+                      <p>{row.review.note}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-2">
+                    {row.goal.editable ? (
+                      <>
+                        <GoalCompletionButton
+                          completed={completed}
+                          disabled={requiresRecovery}
+                          onClick={() =>
+                            updateYearlyGoal(row.goal.id, {
+                              status: completed ? "active" : "completed",
+                              progress: completed ? Math.min(row.progress, 99) : 100,
+                            })
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() => openModal("edit-yearly-goal", row.goal)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-3 text-sm font-semibold"
+                          style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#4b635b" }}
+                        >
+                          <span className="material-symbols-outlined text-[17px]">edit</span>
+                          Edit yearly goal
+                        </button>
+                      </>
+                    ) : (
+                      <span
+                        className="inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-3 text-sm font-semibold"
+                        style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
+                        title="This period is locked. You can review it, but only the current period is editable."
+                      >
+                        <span className="material-symbols-outlined text-[17px]">lock</span>
+                        Locked
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="mt-5 hidden overflow-x-auto md:block">
           <table className="min-w-full">
             <thead>
               <tr className="text-left">
