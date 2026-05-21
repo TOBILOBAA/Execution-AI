@@ -318,6 +318,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
     generateDailyPlan,
     approveDailyPlan,
     syncDailySetupToServer,
+    sessionTimezone,
   } = useAppStore(
     useShallow((state) => ({
       dailyPriorities: state.dailyPriorities,
@@ -337,6 +338,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       generateDailyPlan: state.generateDailyPlan,
       approveDailyPlan: state.approveDailyPlan,
       syncDailySetupToServer: state.syncDailySetupToServer,
+      sessionTimezone: state.sessionTimezone,
     })),
   );
 
