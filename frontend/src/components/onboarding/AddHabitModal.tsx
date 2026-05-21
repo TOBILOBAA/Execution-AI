@@ -37,7 +37,7 @@ interface Props {
   initialYearlyGoalId?: string;
   initialMonthlyGoalId?: string;
   initialWeeklyGoalId?: string;
-  onSubmit: (payload: HabitSubmitPayload) => void;
+  onSubmit: (payload: HabitSubmitPayload) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -91,6 +91,7 @@ export function AddHabitModal({
   const [monthlyGoalId, setMonthlyGoalId] = useState(initialMonthlyGoalId ?? "");
   const [weeklyGoalId, setWeeklyGoalId] = useState(initialWeeklyGoalId ?? "");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const sortedYearlyGoals = useMemo(
     () => [...yearlyGoals].sort((a, b) => (a.year - b.year) || a.title.localeCompare(b.title)),
     [yearlyGoals],
@@ -104,20 +105,31 @@ export function AddHabitModal({
     [weeklyGoals],
   );
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name.trim()) { setError("Routine name is required."); return; }
     if (linkType === "yearly" && !yearlyGoalId) { setError("Choose the yearly goal this routine supports."); return; }
     if (linkType === "monthly" && !monthlyGoalId) { setError("Choose the monthly goal this routine supports."); return; }
     if (linkType === "weekly" && !weeklyGoalId) { setError("Choose the weekly goal this routine supports."); return; }
-    onSubmit({
-      name: name.trim(),
-      icon: selectedIcon,
-      categoryId,
-      frequency,
-      ...(linkType === "yearly" && yearlyGoalId ? { yearlyGoalId } : {}),
-      ...(linkType === "monthly" && monthlyGoalId ? { monthlyGoalId } : {}),
-      ...(linkType === "weekly" && weeklyGoalId ? { weeklyGoalId } : {}),
-    });
+    setSaving(true);
+    try {
+      await onSubmit({
+        name: name.trim(),
+        icon: selectedIcon,
+        categoryId,
+        frequency,
+        ...(linkType === "yearly" && yearlyGoalId ? { yearlyGoalId } : {}),
+        ...(linkType === "monthly" && monthlyGoalId ? { monthlyGoalId } : {}),
+        ...(linkType === "weekly" && weeklyGoalId ? { weeklyGoalId } : {}),
+      });
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Couldn't save this routine. Try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -336,6 +348,7 @@ export function AddHabitModal({
         <div className="flex items-center justify-end gap-3 px-7 py-5" style={{ borderTop: "1px solid #f0f3f1" }}>
           <button
             onClick={onClose}
+            disabled={saving}
             className="px-5 py-2.5 text-sm font-semibold transition"
             style={{ color: "#5a6b65" }}
             onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = "#1a1f1e")}
@@ -345,10 +358,11 @@ export function AddHabitModal({
           </button>
           <button
             onClick={handleSubmit}
-            className="px-6 py-2.5 rounded-full text-sm font-bold text-white transition hover:opacity-90"
+            disabled={saving}
+            className="px-6 py-2.5 rounded-full text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-60"
             style={{ background: "#1a2b24" }}
           >
-            {isEdit ? "Save Changes" : "Add to Plan"}
+            {saving ? "Saving..." : isEdit ? "Save Changes" : "Add to Plan"}
           </button>
         </div>
       </div>

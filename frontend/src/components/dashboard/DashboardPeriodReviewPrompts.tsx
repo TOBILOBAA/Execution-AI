@@ -14,6 +14,7 @@ import {
 } from "@/lib/reportAvailability";
 import { getWeekNumber } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
+import { describeSyncError } from "@/lib/apiErrors";
 import type { DashboardRecapEntry, FoundationalHabit, MonthlyGoal, WeeklyGoal, YearlyGoal } from "@/lib/types";
 
 type ReviewType = "weekly" | "monthly" | "quarterly" | "yearly";
@@ -1245,7 +1246,7 @@ export function DashboardPeriodReviewPrompts() {
     setGoalEditor(null);
   }
 
-  function handleHabitSubmit({
+  async function handleHabitSubmit({
     name,
     icon,
     categoryId,
@@ -1264,30 +1265,49 @@ export function DashboardPeriodReviewPrompts() {
   }) {
     setPlanSectionUnlocked(true);
     if (habitEditor?.habit) {
-      updateHabit(habitEditor.habit.id, {
-        name,
-        icon,
-        categoryId: categoryId || undefined,
-        frequency,
-        yearlyGoalId,
-        monthlyGoalId,
-        weeklyGoalId,
-        active: true,
-      });
+      const ok = await updateHabit(
+        habitEditor.habit.id,
+        {
+          name,
+          icon,
+          categoryId: categoryId || undefined,
+          frequency,
+          yearlyGoalId,
+          monthlyGoalId,
+          weeklyGoalId,
+          active: true,
+        },
+        { persistMode: "blocking" },
+      );
+      if (!ok) {
+        const banner = useAppStore.getState().syncError;
+        throw new Error(
+          banner ? describeSyncError(banner).message : "Couldn't save this routine.",
+        );
+      }
       setSavedNotice("Routine updated.");
     } else {
-      addHabit({
-        name,
-        icon,
-        categoryId: categoryId || undefined,
-        frequency,
-        yearlyGoalId,
-        monthlyGoalId,
-        weeklyGoalId,
-        completedToday: false,
-        streak: 0,
-        active: true,
-      });
+      const ok = await addHabit(
+        {
+          name,
+          icon,
+          categoryId: categoryId || undefined,
+          frequency,
+          yearlyGoalId,
+          monthlyGoalId,
+          weeklyGoalId,
+          completedToday: false,
+          streak: 0,
+          active: true,
+        },
+        { persistMode: "blocking" },
+      );
+      if (!ok) {
+        const banner = useAppStore.getState().syncError;
+        throw new Error(
+          banner ? describeSyncError(banner).message : "Couldn't save this routine.",
+        );
+      }
       setSavedNotice("Routine added.");
     }
     setHabitEditor(null);
