@@ -325,7 +325,7 @@ export function AddDailyPriorityModal({ open, onClose, mode = "add", initialData
 
         {/* Footer */}
         <div
-          className="px-8 py-5 flex items-center justify-end gap-4 flex-shrink-0"
+          className="px-8 py-5 flex items-center justify-between gap-4 flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
           <div>

@@ -108,6 +108,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     categories,
     yearlyGoals,
     monthlyGoals,
+    activeDashboardDate,
     addMonthlyGoal,
     updateMonthlyGoal,
     removeMonthlyGoal,
@@ -123,6 +124,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       categories: state.categories,
       yearlyGoals: state.yearlyGoals,
       monthlyGoals: state.monthlyGoals,
+      activeDashboardDate: state.activeDashboardDate,
       addMonthlyGoal: state.addMonthlyGoal,
       updateMonthlyGoal: state.updateMonthlyGoal,
       removeMonthlyGoal: state.removeMonthlyGoal,
@@ -169,6 +171,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
     return n;
   }, [aiDraft, aiRowKeys]);
 
+  const currentYear = Number(activeDashboardDate.slice(0, 4)) || getCurrentYear();
+  const currentMonth = Number(activeDashboardDate.slice(5, 7)) || getCurrentMonth();
+
   const toggleAiRow = (key: string) => {
     setAiRowKeys((prev) => {
       const next = new Set(prev);
@@ -182,7 +187,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateMonthlyPlan(getCurrentYear(), getCurrentMonth());
+    const result = await generateMonthlyPlan(currentYear, currentMonth);
     if (result.ok && result.draft) {
       const draft = result.draft as AIDraft;
       setAiDraft(draft);
@@ -219,7 +224,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false, priority: "medium" });
     });
     setAiAccepting(true);
-    const ok = await approveMonthlyPlan(getCurrentYear(), getCurrentMonth(), goals);
+    const ok = await approveMonthlyPlan(currentYear, currentMonth, goals);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -227,7 +232,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiAccepting(false);
   };
 
-  const currentGoals = monthlyGoals.filter((g) => g.month === getCurrentMonth() && g.year === getCurrentYear());
+  const currentGoals = monthlyGoals.filter((g) => g.month === currentMonth && g.year === currentYear);
   const mainGoals = currentGoals.filter((g) => g.isMain);
   const secondaryGoals = currentGoals.filter((g) => !g.isMain);
   const activeHabits = habits.filter((h) => h.active);
@@ -264,8 +269,8 @@ export function StepMonthly({ onNext, onBack }: Props) {
         ...(desc ? { description: desc } : {}),
         ...(wl ? { workload: wl } : {}),
         isMain: addMode === "main",
-        month: getCurrentMonth(),
-        year: getCurrentYear(),
+        month: currentMonth,
+        year: currentYear,
         status: "active",
         progress: 0,
         priority: addMode === "main" ? "high" : "medium",
@@ -317,8 +322,8 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
   const handleLeaveMonthly = async () => {
     setLeaveError(null);
-    const mainGoalsCount = monthlyGoals.filter(g => g.month === getCurrentMonth() && g.year === getCurrentYear() && g.isMain).length;
-    const secondaryGoalsCount = monthlyGoals.filter(g => g.month === getCurrentMonth() && g.year === getCurrentYear() && !g.isMain).length;
+    const mainGoalsCount = monthlyGoals.filter((g) => g.month === currentMonth && g.year === currentYear && g.isMain).length;
+    const secondaryGoalsCount = monthlyGoals.filter((g) => g.month === currentMonth && g.year === currentYear && !g.isMain).length;
     if (mainGoalsCount !== 1) {
       setLeaveError("You need exactly one main goal for the month before continuing.");
       return;
@@ -327,7 +332,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       setLeaveError("You can have at most two secondary goals for the month.");
       return;
     }
-    const ok = await syncMonthlyGoalsToServer(getCurrentYear(), getCurrentMonth());
+    const ok = await syncMonthlyGoalsToServer(currentYear, currentMonth);
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Monthly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -342,7 +347,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
         {/* Heading */}
         <div className="text-center">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight mb-2.5" style={{ color: "#1a1f1e" }}>
-            Plan {MONTH_NAMES[getCurrentMonth() - 1]}.
+            Plan {MONTH_NAMES[currentMonth - 1]}.
           </h1>
           <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#6b7b74" }}>
             Pick 1 main goal, up to 2 secondary goals, and the foundational habits you&apos;ll hold this month. Each goal
@@ -621,7 +626,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
         <AddMonthlyGoalModal
           mode={isEditMode ? ((goalModal as MonthlyGoal).isMain ? "main" : "secondary") : (addMode as "main" | "secondary")}
           categories={categories}
-          yearlyGoals={yearlyGoals.filter((g) => g.year === getCurrentYear())}
+          yearlyGoals={yearlyGoals.filter((g) => g.year === currentYear)}
           initialTitle={isEditMode ? (goalModal as MonthlyGoal).title : ""}
           initialCategoryId={isEditMode ? (goalModal as MonthlyGoal).categoryId : undefined}
           initialYearlyGoalId={isEditMode ? (goalModal as MonthlyGoal).yearlyGoalId : undefined}

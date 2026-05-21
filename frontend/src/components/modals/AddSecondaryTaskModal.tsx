@@ -148,7 +148,7 @@ export function AddSecondaryTaskModal({ open, onClose, initialData }: Props) {
 
         {/* Body */}
         <div className="px-8 py-7 space-y-6 overflow-y-auto">
-          {/* Secondary Goal */}
+          {/* Goal Name */}
           <div className="space-y-2">
             <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
               Secondary Goal
