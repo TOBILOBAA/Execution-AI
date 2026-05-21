@@ -39,36 +39,42 @@ export function MonthlyAIGuidancePanel() {
       <div className="space-y-5">
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>layers</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Anchor The Month</p>
+            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>looks_one</span>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Pick One Main Goal</p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Anchor the month around <strong style={{ color: "#1a1f1e" }}>1 main goal</strong>. Add up to{" "}
-            <strong style={{ color: "#1a1f1e" }}>2 secondary goals</strong> only when they strengthen, de-risk, or unblock that main goal.
+            Your main goal is the most important outcome to move meaningfully this month.
           </p>
         </div>
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>bolt</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Think In Milestones</p>
+            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>adjust</span>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Use Secondary Goals For Other Progress</p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            If a project lasts longer than one month, make this month&apos;s goal a milestone. Define the most important progress the project must make now, not the whole project at once.
+            Secondary goals are other goals that still deserve attention this month.
           </p>
         </div>
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>stacked_line_chart</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Routine Support</p>
+            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>stairs</span>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Break Long Projects Into Milestones</p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Choose routines that make the main goal easier to execute. If the month depends on focus, recovery, study, or spiritual consistency, your routines should reinforce that directly.
+            If a project takes several months, your monthly goal should be one meaningful phase of it, not the whole thing.
           </p>
         </div>
       </div>
-      <div className="rounded-xl p-4" style={{ background: "#f4f6f4" }}>
-        <p className="text-xs italic leading-relaxed" style={{ color: "#6b7b74" }}>
-          &ldquo;The secret of your future is hidden in your daily routine.&rdquo; — Mike Murdock
+      <div className="rounded-xl p-4 space-y-2.5" style={{ background: "#f4f6f4" }}>
+        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Example</p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          <strong style={{ color: "#1a1f1e" }}>Yearly:</strong> Earn the AWS Solutions Architect certification this year.
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          <strong style={{ color: "#1a1f1e" }}>Monthly main goal:</strong> Complete the core architecture modules and finish two timed practice sets this month.
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          If a project lasts longer than one month, ask: <strong style={{ color: "#1a1f1e" }}>what must be meaningfully advanced this month?</strong>
         </p>
       </div>
     </div>
@@ -98,8 +104,12 @@ function SectionHeader({ label, action, onAction }: { label: string; action: str
 // ── AI Draft Preview ──────────────────────────────────────────────────────────
 interface AIDraft {
   reasoning: string;
-  main_goals: { title: string; description: string; estimated_effort?: string; target_date?: string }[];
-  secondary_goals: { title: string; description: string; estimated_effort?: string; target_date?: string }[];
+  main_goals: { title: string; description: string; estimated_effort?: string; target_date?: string; yearly_goal_ref?: string | null }[];
+  secondary_goals: { title: string; description: string; estimated_effort?: string; target_date?: string; yearly_goal_ref?: string | null }[];
+}
+
+function normalizeGoalTitle(value: string | undefined) {
+  return (value ?? "").trim().toLowerCase();
 }
 
 // ── Main step ─────────────────────────────────────────────────────────────────
@@ -217,12 +227,28 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
   const handleAIAccept = async () => {
     if (!aiDraft || aiSelectedCount === 0) return;
-    const goals: Record<string, unknown>[] = [];
+    const goals: Record<string, unknown>[] = currentGoals.map((goal) => ({
+      title: goal.title,
+      description: goal.description,
+      yearly_goal_id: goal.yearlyGoalId,
+      category_id: goal.categoryId,
+      target_date: goal.targetDate,
+      estimated_effort: goal.workload,
+      is_main: goal.isMain,
+      priority: goal.priority,
+    }));
+    const existingTitles = new Set(
+      currentGoals.map((goal) => normalizeGoalTitle(goal.title)).filter(Boolean),
+    );
     aiDraft.main_goals?.forEach((g, i) => {
-      if (aiRowKeys.has(`m:${i}`)) goals.push({ ...g, is_main: true, priority: "high" });
+      if (aiRowKeys.has(`m:${i}`) && !existingTitles.has(normalizeGoalTitle(g.title))) {
+        goals.push({ ...g, is_main: true, priority: "high" });
+      }
     });
     aiDraft.secondary_goals?.forEach((g, i) => {
-      if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false, priority: "medium" });
+      if (aiRowKeys.has(`s:${i}`) && !existingTitles.has(normalizeGoalTitle(g.title))) {
+        goals.push({ ...g, is_main: false, priority: "medium" });
+      }
     });
     setAiAccepting(true);
     const ok = await approveMonthlyPlan(currentYear, currentMonth, goals);
@@ -326,8 +352,8 @@ export function StepMonthly({ onNext, onBack }: Props) {
             Plan {MONTH_NAMES[currentMonth - 1]}.
           </h1>
           <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#6b7b74" }}>
-            Pick 1 main goal, up to 2 secondary goals, and the routines you&apos;ll hold this month. Each goal
-            connects to a yearly goal.
+            Pick 1 main goal, up to 2 secondary goals, and the routines you&apos;ll hold this month. Link each
+            goal to the yearly direction it belongs to.
           </p>
         </div>
 

@@ -195,6 +195,8 @@ class AIGoalItem(BaseModel):
     priority: str = "medium"
     is_main: bool = False
     yearly_goal_ref: str | None = None   # hint text only
+    monthly_goal_ref: str | None = None  # hint text only
+    weekly_goal_ref: str | None = None   # hint text only
     estimated_effort: str | None = None
     # Target completion date YYYY-MM-DD (monthly: within that month; weekly: within week)
     target_date: str | None = None
