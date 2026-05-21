@@ -429,13 +429,13 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           </div>
 
           {selectedDayIsCurrent ? (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
               <button
                 type="button"
                 onClick={() => {
                   void openCurrentDayModal("add-daily-priority");
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow-[0_12px_28px_rgba(0,108,74,0.16)]"
+                className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow-[0_12px_28px_rgba(0,108,74,0.16)] sm:w-auto"
                 style={{ background: "#006c4a", color: "#fff" }}
               >
                 <span className="material-symbols-outlined text-[16px]">add</span>
@@ -446,7 +446,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 onClick={() => {
                   void openCurrentDayModal("add-secondary-task");
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+                className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold sm:w-auto"
                 style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
               >
                 <span className="material-symbols-outlined text-[16px]">playlist_add</span>
@@ -457,7 +457,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 onClick={() => {
                   void openCurrentDayModal("manage-habits");
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+                className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold sm:w-auto"
                 style={{ background: "#fff", color: "#006c4a", border: "1px solid rgba(0,108,74,0.18)" }}
               >
                 <span className="material-symbols-outlined text-[16px]">settings</span>
@@ -466,7 +466,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
             </div>
           ) : (
             <span
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+              className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold sm:w-auto"
               style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
             >
               <span className="material-symbols-outlined text-[16px]">lock</span>

@@ -173,7 +173,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
             <button
               type="button"
               onClick={() => openModal("add-weekly-goal", { yearOverride: year, weekOverride: selectedWeek, defaultIsMain: selectedWeekMainGoals.length === 0 })}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow-[0_12px_28px_rgba(0,108,74,0.16)]"
+              className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow-[0_12px_28px_rgba(0,108,74,0.16)] sm:w-auto"
               style={{ background: "#006c4a", color: "#fff" }}
             >
               <span className="material-symbols-outlined text-[16px]">add</span>
@@ -181,7 +181,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
             </button>
           ) : (
             <span
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+              className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold sm:w-auto"
               style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
             >
               <span className="material-symbols-outlined text-[16px]">lock</span>
