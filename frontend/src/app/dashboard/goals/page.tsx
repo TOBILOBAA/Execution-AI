@@ -140,7 +140,68 @@ export default function GoalsOverviewPage() {
       )}
 
       <div
-        className="rounded-[28px] p-6"
+        className="rounded-[28px] p-5 space-y-5 md:hidden"
+        style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#8a9e97" }}>
+              Current year
+            </p>
+            <h2 className="font-headline font-extrabold text-[28px] leading-[1.05] mt-2" style={{ color: "#1a1f1e" }}>
+              {currentYear} goals
+            </h2>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: "#6b7c75" }}>
+              Keep this year simple on phone: review progress, then jump straight into editing.
+            </p>
+          </div>
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: progressRing }}
+          >
+            <div className="w-[58px] h-[58px] rounded-full bg-white flex flex-col items-center justify-center">
+              <span className="font-headline font-extrabold text-lg" style={{ color: "#1a1f1e" }}>
+                {averageYearProgress}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: "Yearly Goals", value: yearlyGoals.length, color: "#1a1f1e" },
+            { label: "On Track", value: stateCounts["on-track"], color: "#0b7a53" },
+            { label: "At Risk", value: stateCounts["at-risk"], color: "#d97706" },
+            { label: "Weeks Left in Q", value: remainingWeeks, color: "#1a1f1e" },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-[22px] px-4 py-3"
+              style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.05)" }}
+            >
+              <p className="text-[26px] font-headline font-extrabold leading-none" style={{ color: stat.color }}>
+                {stat.value}
+              </p>
+              <p className="text-[11px] mt-2 font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => router.push(`/dashboard/goals/${currentYear}`)}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-[22px] px-4 py-3.5 text-sm font-bold"
+          style={{ background: "#006c4a", color: "#fff", boxShadow: "0 16px 32px rgba(0,108,74,0.18)" }}
+        >
+          <span className="material-symbols-outlined text-[18px]">edit_calendar</span>
+          Open yearly goals
+        </button>
+      </div>
+
+      <div
+        className="hidden rounded-[28px] p-6 md:block"
         style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
       >
         <div className="flex items-start justify-between gap-4 flex-wrap">

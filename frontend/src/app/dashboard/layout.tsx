@@ -68,7 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="px-6 md:px-8 shrink-0">
           <SyncErrorBanner />
         </div>
-        <main className="flex-1 pb-20 md:pb-0">{children}</main>
+        <main className="flex-1 pb-28 md:pb-0">{children}</main>
         <BottomNav />
       </div>
       <ModalController />

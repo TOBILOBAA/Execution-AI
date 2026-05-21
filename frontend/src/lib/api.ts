@@ -22,6 +22,7 @@ type RequestOptions = RequestInit & { timeoutMs?: number };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { timeoutMs, signal: outerSignal, ...fetchOpts } = options;
+  const method = fetchOpts.method ?? "GET";
   const controller = typeof timeoutMs === "number" ? new AbortController() : null;
   const timeoutId =
     controller && timeoutMs
@@ -46,6 +47,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         "Request timed out. The server took too long to respond (often the AI step). Try again, or set GEMINI_MODEL to a supported Gemini model like gemini-2.5-flash on the backend.",
       );
     }
+    if (typeof console !== "undefined") {
+      console.error("[api network error]", {
+        method,
+        path,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
     throw e;
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
@@ -53,11 +61,28 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
+    let rawBody = "";
     try {
-      const body = await res.json();
-      detail = body?.detail ?? detail;
+      rawBody = await res.text();
+      if (rawBody) {
+        try {
+          const body = JSON.parse(rawBody);
+          detail = body?.detail ?? body?.message ?? rawBody;
+        } catch {
+          detail = rawBody;
+        }
+      }
     } catch {
       /* ignore */
+    }
+    if (typeof console !== "undefined") {
+      console.error("[api request failed]", {
+        method,
+        path,
+        status: res.status,
+        detail,
+        body: rawBody ? rawBody.slice(0, 800) : "",
+      });
     }
     throw new ApiError(res.status, detail);
   }
@@ -90,102 +115,9 @@ export interface Session {
   timezone: string;
   week_starts_on: "sunday" | "monday";
   created_at: string;
-  last_seen_at?: string;
-  last_active_at?: string;
-  last_opened_date_local?: string;
   auth_user_id?: string;
-  auth_name?: string;
-  auth_email?: string;
   pending_recaps?: ApiRecapQueueEntry[];
   handled_recaps?: string[];
-}
-
-export interface ApiDailyUserActivity {
-  session_id: string;
-  auth_user_id?: string;
-  activity_date: string;
-  timezone: string;
-  first_seen_at?: string;
-  last_seen_at?: string;
-  opened_app: boolean;
-  completed_onboarding: boolean;
-  created_yearly_goal: boolean;
-  created_monthly_goal: boolean;
-  created_weekly_goal: boolean;
-  created_daily_plan: boolean;
-  opened_next_day_review: boolean;
-  approved_next_day_review: boolean;
-  opened_reports: boolean;
-  handled_recap: boolean;
-  completed_tasks_count: number;
-  completed_habits_count: number;
-}
-
-export interface ApiActivityOverview {
-  session_id: string;
-  auth_user_id?: string;
-  auth_name?: string;
-  auth_email?: string;
-  last_seen_at?: string;
-  last_active_at?: string;
-  last_opened_date_local?: string;
-  current_stage:
-    | "onboarding"
-    | "planning_foundation"
-    | "daily_planning"
-    | "executing"
-    | "reviewing"
-    | "inactive";
-  days_since_last_seen?: number;
-  onboarding_evidence: {
-    has_yearly_goals: boolean;
-    has_monthly_goals: boolean;
-    has_weekly_goals: boolean;
-    has_daily_plan: boolean;
-    complete: boolean;
-  };
-  recent_days: ApiDailyUserActivity[];
-}
-
-export interface ApiActivityWorkspaceSummary {
-  session_id: string;
-  auth_user_id?: string;
-  auth_name?: string;
-  auth_email?: string;
-  device_hint?: string;
-  timezone: string;
-  onboarding_done: boolean;
-  current_stage:
-    | "onboarding"
-    | "planning_foundation"
-    | "daily_planning"
-    | "executing"
-    | "reviewing"
-    | "inactive";
-  days_since_last_seen?: number;
-  last_seen_at?: string;
-  last_active_at?: string;
-  last_opened_date_local?: string;
-  onboarding_evidence_complete: boolean;
-  active_days_in_range: number;
-  absent_days_in_range: number;
-  tasks_completed_in_range: number;
-  habits_completed_in_range: number;
-  reports_opened_in_range: number;
-}
-
-export interface ApiAdminActivityOverview {
-  total_users: number;
-  total_signed_up: number;
-  completed_onboarding: number;
-  total_workspaces: number;
-  active_today: number;
-  onboarding_incomplete: number;
-  inactive: number;
-  dropped_recently: number;
-  executing_now: number;
-  reviewing_now: number;
-  workspaces: ApiActivityWorkspaceSummary[];
 }
 
 export interface ApiRecapQueueEntry {
@@ -297,6 +229,9 @@ export interface ApiHabit {
   frequency: string;
   active: boolean;
   category_id?: string;
+  yearly_goal_id?: string;
+  monthly_goal_id?: string;
+  weekly_goal_id?: string;
   sort_order: number;
   completed_today: boolean;
   streak: number;
@@ -421,16 +356,12 @@ export const sessionsApi = {
   create: (
     timezone = "UTC",
     authUserId?: string,
-    authName?: string,
-    authEmail?: string,
     deviceHint?: string,
     weekStartsOn?: "sunday" | "monday",
   ) =>
     post<Session>("/session/start", {
       timezone,
       auth_user_id: authUserId,
-      auth_name: authName,
-      auth_email: authEmail,
       device_hint: deviceHint,
       week_starts_on: weekStartsOn,
     }),
@@ -444,8 +375,6 @@ export const sessionsApi = {
       onboarding_step?: number;
       onboarding_done?: boolean;
       auth_user_id?: string;
-      auth_name?: string;
-      auth_email?: string;
       timezone?: string;
       week_starts_on?: "sunday" | "monday";
       pending_recaps?: ApiRecapQueueEntry[];
@@ -453,36 +382,6 @@ export const sessionsApi = {
     },
   ) =>
     patch<Session>(`/session/${sessionId}`, updates),
-};
-
-// ─── Activity ────────────────────────────────────────────────────────────────
-
-export const activityApi = {
-  getOverview: (sessionId: string, days = 30) =>
-    get<ApiActivityOverview>(`/activity/${sessionId}?days=${days}`),
-
-  getAdminOverview: (days = 14, limit = 50) =>
-    get<ApiAdminActivityOverview>(
-      `/activity/admin/overview?days=${days}&limit=${limit}`,
-    ),
-
-  touch: (
-    sessionId: string,
-    data: {
-      event:
-        | "app_opened"
-        | "onboarding_completed"
-        | "yearly_goal_created"
-        | "monthly_goal_created"
-        | "weekly_goal_created"
-        | "daily_plan_created"
-        | "next_day_review_opened"
-        | "next_day_review_approved"
-        | "reports_opened"
-        | "recap_handled";
-      activity_date?: string;
-    },
-  ) => post<ApiDailyUserActivity>(`/activity/${sessionId}/touch`, data),
 };
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -665,6 +564,9 @@ export const habitsApi = {
     icon: string;
     frequency: string;
     category_id?: string;
+    yearly_goal_id?: string;
+    monthly_goal_id?: string;
+    weekly_goal_id?: string;
   }) => post<ApiHabit>(`/habits/${sessionId}`, data),
 
   update: (sessionId: string, habitId: string, data: Partial<{
@@ -672,7 +574,10 @@ export const habitsApi = {
     icon: string;
     frequency: string;
     active: boolean;
-    category_id: string;
+    category_id: string | null;
+    yearly_goal_id: string | null;
+    monthly_goal_id: string | null;
+    weekly_goal_id: string | null;
   }>) => patch<ApiHabit>(`/habits/${sessionId}/${habitId}`, data),
 
   delete: (sessionId: string, habitId: string) =>

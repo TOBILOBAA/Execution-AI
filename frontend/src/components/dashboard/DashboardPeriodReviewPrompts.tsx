@@ -14,6 +14,7 @@ import {
 } from "@/lib/reportAvailability";
 import { getWeekNumber } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
+import { describeSyncError } from "@/lib/apiErrors";
 import type { DashboardRecapEntry, FoundationalHabit, MonthlyGoal, WeeklyGoal, YearlyGoal } from "@/lib/types";
 
 type ReviewType = "weekly" | "monthly" | "quarterly" | "yearly";
@@ -43,8 +44,6 @@ interface PeriodPlanGoalPayload extends DraftGoal {
   priority: "high" | "medium";
   is_main: boolean;
 }
-
-const MAX_PERIOD_MAIN_GOALS = 3;
 
 type GoalEditorState =
   | null
@@ -210,6 +209,21 @@ function extractTailoredInsight(report: ApiReport | null) {
   return { tailoredPattern, tailoredAction };
 }
 
+function extractReviewSignal(report: ApiReport | null) {
+  const raw = report?.metrics?.review_signal;
+  const signal = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const toStringList = (value: unknown) =>
+    Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+  return {
+    completedMainTitles: toStringList(signal.completed_main_titles),
+    unfinishedSecondaryTitles: toStringList(signal.unfinished_secondary_titles),
+    notStartedTitles: toStringList(signal.not_started_titles),
+    routinesKeptNames: toStringList(signal.routines_kept_names),
+    routinesSkippedNames: toStringList(signal.routines_skipped_names),
+    losingAttentionTitles: toStringList(signal.losing_attention_titles),
+  };
+}
+
 function recapKey(entry: {
   type: ReviewType;
   periodYear: number;
@@ -286,21 +300,9 @@ function buildDraftRowKeys(draft: PeriodPlanDraft) {
   return next;
 }
 
-function normalizePlanDraft(draft: PeriodPlanDraft): PeriodPlanDraft {
-  return {
-    ...draft,
-    main_goals: (draft.main_goals ?? []).slice(0, MAX_PERIOD_MAIN_GOALS),
-    secondary_goals: draft.secondary_goals ?? [],
-  };
-}
-
-function reviewQueueSignature(entries: ReviewCandidate[]) {
-  return entries.map((entry) => entry.key).join("|");
-}
-
 function normalizePlanGoals(draft: PeriodPlanDraft, selectedKeys: Set<string>): PeriodPlanGoalPayload[] {
   const goals: PeriodPlanGoalPayload[] = [];
-  (draft.main_goals ?? []).slice(0, MAX_PERIOD_MAIN_GOALS).forEach((goal, index) => {
+  draft.main_goals?.forEach((goal, index) => {
     if (!selectedKeys.has(`m:${index}`)) return;
     goals.push({
       title: goal.title,
@@ -353,11 +355,11 @@ function planButtonLabel(type: ReviewType) {
   return "Prepare next year";
 }
 
-function returnHomeLabel(type: ReviewType) {
-  if (type === "weekly") return "Return home for next week";
-  if (type === "monthly") return "Return home for next month";
-  if (type === "quarterly") return "Return home for next quarter";
-  return "Return home for next year";
+function openBoardLabel(type: ReviewType) {
+  if (type === "weekly") return "Open next week board";
+  if (type === "monthly") return "Open next month board";
+  if (type === "quarterly") return "Open next quarter board";
+  return "Open next year board";
 }
 
 function aiButtonLabel(type: ReviewType) {
@@ -367,7 +369,7 @@ function aiButtonLabel(type: ReviewType) {
 
 function supportCopy(type: ReviewType) {
   if (type === "weekly") {
-    return "Keep only the main weekly goal and the secondary goals that actually deserve space on the board.";
+    return "Keep only the main weekly goal and the supporting moves that actually deserve space on the board.";
   }
   if (type === "monthly") {
     return "Group the month around a few meaningful anchors, then let the board carry the detail.";
@@ -376,31 +378,6 @@ function supportCopy(type: ReviewType) {
     return "Use the next quarter handoff to check whether the upcoming months already have a clear backbone.";
   }
   return "Use the next year handoff to check whether the yearly outcomes are defined clearly enough to break down.";
-}
-
-function startOfNextWeekIso(entry: DashboardRecapEntry, weekStartsOn: "sunday" | "monday") {
-  const reviewWeek = entry.periodWeek ?? 1;
-  const weekOneStart = startOfLocalWeek(new Date(entry.periodYear, 0, 1), weekStartsOn);
-  const nextWeekStart = new Date(weekOneStart);
-  nextWeekStart.setDate(nextWeekStart.getDate() + reviewWeek * 7);
-  return `${nextWeekStart.getFullYear()}-${String(nextWeekStart.getMonth() + 1).padStart(2, "0")}-${String(nextWeekStart.getDate()).padStart(2, "0")}`;
-}
-
-function firstDayOfNextMonthIso(entry: DashboardRecapEntry) {
-  const reviewMonth = entry.periodMonth ?? 1;
-  const nextMonthDate = new Date(entry.periodYear, reviewMonth, 1);
-  return `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
-}
-
-function firstDayOfNextQuarterIso(entry: DashboardRecapEntry) {
-  const reviewQuarter = entry.periodQuarter ?? 1;
-  const nextQuarterStartMonth = reviewQuarter === 4 ? 1 : (reviewQuarter * 3) + 1;
-  const nextQuarterYear = reviewQuarter === 4 ? entry.periodYear + 1 : entry.periodYear;
-  return `${nextQuarterYear}-${String(nextQuarterStartMonth).padStart(2, "0")}-01`;
-}
-
-function firstDayOfNextYearIso(entry: DashboardRecapEntry) {
-  return `${entry.periodYear + 1}-01-01`;
 }
 
 function cardPalette(tone: "default" | "soft" | "accent") {
@@ -478,6 +455,65 @@ function EmptyBlock({ copy }: { copy: string }) {
     >
       {copy}
     </div>
+  );
+}
+
+function ReviewGroup({ label, items, tone = "default" }: { label: string; items: string[]; tone?: "default" | "success" | "warning" }) {
+  const palette =
+    tone === "success"
+      ? { background: "rgba(0,108,74,0.08)", border: "1px solid rgba(0,108,74,0.10)", bullet: "#006c4a" }
+      : tone === "warning"
+        ? { background: "rgba(180,83,9,0.08)", border: "1px solid rgba(180,83,9,0.12)", bullet: "#b45309" }
+        : { background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.06)", bullet: "#5d6d67" };
+
+  return (
+    <div className="rounded-2xl p-4" style={{ background: palette.background, border: palette.border }}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: "#8a9e97" }}>
+        {label}
+      </p>
+      <div className="mt-2 space-y-2">
+        {items.map((item) => (
+          <div key={`${label}:${item}`} className="flex items-start gap-2">
+            <span className="mt-[5px] h-1.5 w-1.5 rounded-full" style={{ background: palette.bullet }} />
+            <p className="min-w-0 text-sm leading-relaxed" style={{ color: "#1a1f1e" }}>
+              {item}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReviewSummaryCard({
+  eyebrow,
+  title,
+  description,
+  groups,
+  emptyCopy,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  groups: Array<{ label: string; items: string[] }>;
+  emptyCopy: string;
+}) {
+  const visibleGroups = groups.filter((group) => group.items.length > 0);
+  const tone = eyebrow === "What landed" ? "success" : "warning";
+  return (
+    <SectionCard eyebrow={eyebrow} title={title} description={description} tone="soft">
+      {visibleGroups.length === 0 ? (
+        <p className="text-sm" style={{ color: "#8a9e97" }}>
+          {emptyCopy}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {visibleGroups.map((group) => (
+            <ReviewGroup key={group.label} label={group.label} items={group.items} tone={tone} />
+          ))}
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -677,6 +713,7 @@ function formatHabitFrequencyLabel(value: FoundationalHabit["frequency"]) {
   if (value === "5x_week") return "5x per week";
   if (value === "weekdays") return "Weekdays";
   if (value === "weekends") return "Weekends";
+  if (value === "flexible") return "Flexible";
   return "Daily";
 }
 
@@ -711,8 +748,6 @@ export function DashboardPeriodReviewPrompts() {
     generateMonthlyPlan,
     approveWeeklyPlan,
     approveMonthlyPlan,
-    setActiveDashboardDate,
-    loadDashboard,
   } = useAppStore(
     useShallow((state) => ({
       sessionId: state.sessionId,
@@ -742,8 +777,6 @@ export function DashboardPeriodReviewPrompts() {
       generateMonthlyPlan: state.generateMonthlyPlan,
       approveWeeklyPlan: state.approveWeeklyPlan,
       approveMonthlyPlan: state.approveMonthlyPlan,
-      setActiveDashboardDate: state.setActiveDashboardDate,
-      loadDashboard: state.loadDashboard,
     })),
   );
 
@@ -765,8 +798,6 @@ export function DashboardPeriodReviewPrompts() {
   const [now, setNow] = useState(() => new Date());
   /** Bumps when the modal closes so in-flight AI/report calls cannot mutate state afterward. */
   const modalAiEpochRef = useRef(0);
-  const [queuedCandidates, setQueuedCandidates] = useState<ReviewCandidate[]>([]);
-  const [pausedQueueSignature, setPausedQueueSignature] = useState<string | null>(null);
   const forcedReview = parseForcedReview(searchParams?.get("review_test") ?? null);
 
   useEffect(() => {
@@ -886,39 +917,30 @@ export function DashboardPeriodReviewPrompts() {
                   firedAt: new Date().toISOString(),
                 }
               : null;
-    const queueEntries = forcedEntry
-      ? [forcedEntry, ...pendingRecaps.filter((entry) => recapKey(entry) !== recapKey(forcedEntry))]
-      : pendingRecaps;
-    const nextCandidates: ReviewCandidate[] = queueEntries.map((entry) => ({
-      type: entry.type,
-      key: recapKey(entry),
-      periodLabel: buildRecapLabel(entry),
-      entry,
+    const nextEntry = forcedEntry ?? pendingRecaps[0];
+    if (!nextEntry) return;
+
+    const chosen: ReviewCandidate = {
+      type: nextEntry.type,
+      key: recapKey(nextEntry),
+      periodLabel: buildRecapLabel(nextEntry),
+      entry: nextEntry,
       generate: async () => {
-        if (entry.type === "weekly" && entry.periodWeek) {
-          return generateWeeklyReport(entry.periodYear, entry.periodWeek);
+        if (nextEntry.type === "weekly" && nextEntry.periodWeek) {
+          return generateWeeklyReport(nextEntry.periodYear, nextEntry.periodWeek);
         }
-        if (entry.type === "monthly" && entry.periodMonth) {
-          return generateMonthlyReport(entry.periodYear, entry.periodMonth);
+        if (nextEntry.type === "monthly" && nextEntry.periodMonth) {
+          return generateMonthlyReport(nextEntry.periodYear, nextEntry.periodMonth);
         }
-        if (entry.type === "quarterly" && entry.periodQuarter) {
-          return generateQuarterlyReport(entry.periodYear, entry.periodQuarter);
+        if (nextEntry.type === "quarterly" && nextEntry.periodQuarter) {
+          return generateQuarterlyReport(nextEntry.periodYear, nextEntry.periodQuarter);
         }
-        if (entry.type === "yearly") {
-          return generateYearlyReport(entry.periodYear);
+        if (nextEntry.type === "yearly") {
+          return generateYearlyReport(nextEntry.periodYear);
         }
         return null;
       },
-    }));
-
-    setQueuedCandidates(nextCandidates);
-    const queueSignature = reviewQueueSignature(nextCandidates);
-    if (!forcedReview && pausedQueueSignature && pausedQueueSignature === queueSignature) {
-      return;
-    }
-    if (!nextCandidates.length) return;
-
-    const chosen = nextCandidates[0];
+    };
     const epoch = modalAiEpochRef.current;
     setCandidate(chosen);
     setLoading(true);
@@ -954,7 +976,6 @@ export function DashboardPeriodReviewPrompts() {
     generateYearlyReport,
     kickoffPending,
     onboardingComplete,
-    pausedQueueSignature,
     pendingRecaps,
     sessionId,
     weekContext.reviewWeek,
@@ -980,14 +1001,10 @@ export function DashboardPeriodReviewPrompts() {
 
   if (!candidate) return null;
   const activeCandidate = candidate;
-  const remainingCandidates = queuedCandidates.filter((entry) => entry.key !== activeCandidate.key);
-  const remainingReviewCount = remainingCandidates.length;
-  const nextQueuedCandidate = remainingCandidates[0] ?? null;
-  const remainingQueueSignature = reviewQueueSignature(remainingCandidates);
-  const visibleQueuedLabels = remainingCandidates.slice(0, 3).map((entry) => entry.periodLabel);
 
   const narrative = extractNarrative(report);
   const { tailoredPattern, tailoredAction } = extractTailoredInsight(report);
+  const reviewSignal = extractReviewSignal(report);
 
   const nextPeriodLabel =
     activeCandidate.type === "weekly" && activeWeekContext
@@ -1036,8 +1053,6 @@ export function DashboardPeriodReviewPrompts() {
         }))
       : [];
 
-  const mainGoalCapReached = existingMainGoals.length >= MAX_PERIOD_MAIN_GOALS;
-
   const nextQuarterCards = nextQuarterMonths.map((month) => {
     const goals = nextQuarterGoals.filter((goal) => goal.month === month);
     const mainGoal = goals.find((goal) => goal.isMain) ?? goals[0] ?? null;
@@ -1057,14 +1072,14 @@ export function DashboardPeriodReviewPrompts() {
     monthlyByYearly.set(goal.yearlyGoalId, list);
   }
 
-  const nextHomeDate =
-    activeCandidate.type === "weekly"
-      ? startOfNextWeekIso(activeCandidate.entry, sessionWeekStartsOn)
-      : activeCandidate.type === "monthly"
-      ? firstDayOfNextMonthIso(activeCandidate.entry)
-      : activeCandidate.type === "quarterly"
-      ? firstDayOfNextQuarterIso(activeCandidate.entry)
-      : firstDayOfNextYearIso(activeCandidate.entry);
+  const nextBoardPath =
+    activeCandidate.type === "weekly" && activeWeekContext
+      ? `/dashboard/goals/${activeWeekContext.nextYear}/weekly`
+      : activeCandidate.type === "monthly" && activeMonthContext
+      ? `/dashboard/goals/${activeMonthContext.nextYear}/monthly`
+      : activeCandidate.type === "quarterly" && activeQuarterContext
+      ? `/dashboard/goals/${activeQuarterContext.nextYear}/q/q${activeQuarterContext.nextQuarter}`
+      : `/dashboard/goals/${activeYearContext?.nextYear ?? yearContext.nextYear}`;
 
   function acknowledgePrompt(closedCandidate: ReviewCandidate) {
     if (!sessionId) return;
@@ -1098,7 +1113,9 @@ export function DashboardPeriodReviewPrompts() {
       });
   }
 
-  function resetPromptState() {
+  function closePrompt() {
+    modalAiEpochRef.current += 1;
+    if (candidate) acknowledgePrompt(candidate);
     setCandidate(null);
     setReport(null);
     setError(null);
@@ -1115,19 +1132,6 @@ export function DashboardPeriodReviewPrompts() {
     setPlanSaving(false);
   }
 
-  function completePrompt({ pauseRemainingQueue = false }: { pauseRemainingQueue?: boolean } = {}) {
-    modalAiEpochRef.current += 1;
-    if (candidate) acknowledgePrompt(candidate);
-    setPausedQueueSignature(pauseRemainingQueue ? remainingQueueSignature || null : null);
-    resetPromptState();
-  }
-
-  function closePromptForNow() {
-    modalAiEpochRef.current += 1;
-    setPausedQueueSignature(reviewQueueSignature(queuedCandidates) || null);
-    resetPromptState();
-  }
-
   function toggleDraftRow(key: string) {
     setDraftKeys((previous) => {
       const next = new Set(previous);
@@ -1139,10 +1143,6 @@ export function DashboardPeriodReviewPrompts() {
 
   function openMainGoalEditor() {
     setPlanSectionUnlocked(true);
-    if (mainGoalCapReached) {
-      setSavedNotice("Main goals are capped at 3 for each period.");
-      return;
-    }
     if (activeCandidate.type === "weekly") {
       setGoalEditor({ type: "weekly", defaultIsMain: true });
       return;
@@ -1246,13 +1246,68 @@ export function DashboardPeriodReviewPrompts() {
     setGoalEditor(null);
   }
 
-  function handleHabitSubmit(name: string, icon: string, categoryId: string, frequency: FoundationalHabit["frequency"]) {
+  async function handleHabitSubmit({
+    name,
+    icon,
+    categoryId,
+    frequency,
+    yearlyGoalId,
+    monthlyGoalId,
+    weeklyGoalId,
+  }: {
+    name: string;
+    icon: string;
+    categoryId: string;
+    frequency: FoundationalHabit["frequency"];
+    yearlyGoalId?: string;
+    monthlyGoalId?: string;
+    weeklyGoalId?: string;
+  }) {
     setPlanSectionUnlocked(true);
     if (habitEditor?.habit) {
-      updateHabit(habitEditor.habit.id, { name, icon, categoryId: categoryId || undefined, frequency, active: true });
+      const ok = await updateHabit(
+        habitEditor.habit.id,
+        {
+          name,
+          icon,
+          categoryId: categoryId || undefined,
+          frequency,
+          yearlyGoalId,
+          monthlyGoalId,
+          weeklyGoalId,
+          active: true,
+        },
+        { persistMode: "blocking" },
+      );
+      if (!ok) {
+        const banner = useAppStore.getState().syncError;
+        throw new Error(
+          banner ? describeSyncError(banner).message : "Couldn't save this routine.",
+        );
+      }
       setSavedNotice("Routine updated.");
     } else {
-      addHabit({ name, icon, categoryId: categoryId || undefined, frequency, completedToday: false, streak: 0, active: true });
+      const ok = await addHabit(
+        {
+          name,
+          icon,
+          categoryId: categoryId || undefined,
+          frequency,
+          yearlyGoalId,
+          monthlyGoalId,
+          weeklyGoalId,
+          completedToday: false,
+          streak: 0,
+          active: true,
+        },
+        { persistMode: "blocking" },
+      );
+      if (!ok) {
+        const banner = useAppStore.getState().syncError;
+        throw new Error(
+          banner ? describeSyncError(banner).message : "Couldn't save this routine.",
+        );
+      }
       setSavedNotice("Routine added.");
     }
     setHabitEditor(null);
@@ -1272,7 +1327,7 @@ export function DashboardPeriodReviewPrompts() {
 
   function removeExistingHabit(habitId: string) {
     removeHabit(habitId);
-    setSavedNotice("Routine removed.");
+    setSavedNotice("Foundational habit removed.");
   }
 
   async function handleGenerateDraft() {
@@ -1306,7 +1361,7 @@ export function DashboardPeriodReviewPrompts() {
                     : apiDetail ?? "We couldn’t generate the next week yet.";
           throw new Error(msg);
         }
-        const draft = normalizePlanDraft(generated.draft as PeriodPlanDraft);
+        const draft = generated.draft as PeriodPlanDraft;
         setPlanDraft(draft);
         setDraftKeys(buildDraftRowKeys(draft));
         setPlanSectionUnlocked(true);
@@ -1333,7 +1388,7 @@ export function DashboardPeriodReviewPrompts() {
       if (!generated.ok) {
         throw new Error("We couldn’t generate the next month yet.");
       }
-      const draft = normalizePlanDraft(generated.draft as PeriodPlanDraft);
+      const draft = generated.draft as PeriodPlanDraft;
       setPlanDraft(draft);
       setDraftKeys(buildDraftRowKeys(draft));
       setPlanSectionUnlocked(true);
@@ -1380,12 +1435,10 @@ export function DashboardPeriodReviewPrompts() {
     }
   }
 
-  function handleReturnHome() {
-    completePrompt({ pauseRemainingQueue: true });
-    setActiveDashboardDate(nextHomeDate);
-    void loadDashboard(nextHomeDate);
+  function handleOpenBoard() {
+    closePrompt();
     startTransition(() => {
-      router.push("/dashboard");
+      router.push(nextBoardPath);
     });
   }
 
@@ -1456,6 +1509,38 @@ export function DashboardPeriodReviewPrompts() {
           <InfoPill>{planButtonLabel(activeCandidate.type)}</InfoPill>
         </div>
       </SectionCard>
+
+      {(reviewSignal.completedMainTitles.length > 0 ||
+        reviewSignal.unfinishedSecondaryTitles.length > 0 ||
+        reviewSignal.routinesKeptNames.length > 0 ||
+        reviewSignal.routinesSkippedNames.length > 0 ||
+        reviewSignal.notStartedTitles.length > 0 ||
+        reviewSignal.losingAttentionTitles.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <ReviewSummaryCard
+            eyebrow="What landed"
+            title="What got done"
+            description="Keep the finished signal visible so the next period does not start from amnesia."
+            groups={[
+              { label: "Completed main goals", items: reviewSignal.completedMainTitles },
+              { label: "Routines kept", items: reviewSignal.routinesKeptNames },
+            ]}
+            emptyCopy="No completed signal was saved for this period."
+          />
+          <ReviewSummaryCard
+            eyebrow="What needs care"
+            title="What still needs attention"
+            description="These are the items that still need a decision before they quietly disappear."
+            groups={[
+              { label: "Still open", items: reviewSignal.unfinishedSecondaryTitles },
+              { label: "Not started", items: reviewSignal.notStartedTitles },
+              { label: "Routines skipped", items: reviewSignal.routinesSkippedNames },
+              { label: "Losing attention", items: reviewSignal.losingAttentionTitles },
+            ]}
+            emptyCopy="No loose signal was saved for this period."
+          />
+        </div>
+      )}
     </div>
   );
 
@@ -1504,9 +1589,9 @@ export function DashboardPeriodReviewPrompts() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               {planSectionUnlocked ? (
                 <div className="flex min-w-0 flex-wrap gap-2">
-                  <InfoPill>{existingMainGoals.length} main goal{existingMainGoals.length === 1 ? "" : "s"}</InfoPill>
-                  <InfoPill>{existingSecondaryGoals.length} secondary goal{existingSecondaryGoals.length === 1 ? "" : "s"}</InfoPill>
-                  <InfoPill>{activeHabits.length} routine{activeHabits.length === 1 ? "" : "s"}</InfoPill>
+                  <InfoPill>{existingMainGoals.length} main</InfoPill>
+                  <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
+                  <InfoPill>{activeHabits.length} habit{activeHabits.length === 1 ? "" : "s"}</InfoPill>
                 </div>
               ) : (
                 <p className="min-w-0 flex-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
@@ -1536,12 +1621,8 @@ export function DashboardPeriodReviewPrompts() {
                 <button
                   type="button"
                   onClick={openMainGoalEditor}
-                  disabled={mainGoalCapReached}
                   className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
-                  style={{
-                    background: mainGoalCapReached ? "rgba(0,0,0,0.04)" : "rgba(0,108,74,0.08)",
-                    color: mainGoalCapReached ? "#9ca9a4" : "#006c4a",
-                  }}
+                  style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
                   Add main goal
@@ -1553,7 +1634,7 @@ export function DashboardPeriodReviewPrompts() {
                   style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add secondary goal
+                  Add supporting
                 </button>
                 <button
                   type="button"
@@ -1565,7 +1646,7 @@ export function DashboardPeriodReviewPrompts() {
                   style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add routine
+                  Add habit
                 </button>
               </div>
             </div>
@@ -1607,7 +1688,7 @@ export function DashboardPeriodReviewPrompts() {
               )}
             </Subsection>
 
-            <Subsection label="Secondary goals">
+            <Subsection label="Supporting goals">
               {planDraft.secondary_goals?.length ? (
                 <div className="space-y-3">
                   {planDraft.secondary_goals.map((goal, index) => (
@@ -1620,7 +1701,7 @@ export function DashboardPeriodReviewPrompts() {
                   ))}
                 </div>
               ) : (
-                <EmptyBlock copy="The draft did not return any secondary goals." />
+                <EmptyBlock copy="The draft did not return any supporting goals." />
               )}
             </Subsection>
 
@@ -1648,19 +1729,15 @@ export function DashboardPeriodReviewPrompts() {
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
-                <InfoPill>{existingMainGoals.length} main goal{existingMainGoals.length === 1 ? "" : "s"}</InfoPill>
-                <InfoPill>{existingSecondaryGoals.length} secondary goal{existingSecondaryGoals.length === 1 ? "" : "s"}</InfoPill>
+                <InfoPill>{existingMainGoals.length} main</InfoPill>
+                <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={openMainGoalEditor}
-                  disabled={mainGoalCapReached}
                   className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold"
-                  style={{
-                    background: mainGoalCapReached ? "rgba(0,0,0,0.04)" : "rgba(0,108,74,0.08)",
-                    color: mainGoalCapReached ? "#9ca9a4" : "#006c4a",
-                  }}
+                  style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
                   Add main goal
@@ -1672,7 +1749,7 @@ export function DashboardPeriodReviewPrompts() {
                   style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add secondary goal
+                  Add supporting
                 </button>
               </div>
             </div>
@@ -1714,9 +1791,9 @@ export function DashboardPeriodReviewPrompts() {
               )}
             </Subsection>
 
-            <Subsection label="Secondary goals">
+            <Subsection label="Supporting goals">
               {existingSecondaryGoals.length === 0 ? (
-                <EmptyBlock copy="No secondary goals are saved for this period yet." />
+                <EmptyBlock copy="No supporting goals are saved for this period yet." />
               ) : (
                 <div className="space-y-3">
                   {existingSecondaryGoals.map((goal) => (
@@ -1756,15 +1833,15 @@ export function DashboardPeriodReviewPrompts() {
 
       {planSectionUnlocked && (activeCandidate.type === "weekly" || activeCandidate.type === "monthly") && (
         <SectionCard
-          eyebrow="Routines"
+          eyebrow="Foundational habits"
           title="Keep the repeatable layer visible"
-          description="Routine upkeep sits beside board goals, not inside AI drafts."
+          description="Habit upkeep sits beside board goals—not inside AI drafts."
           tone="soft"
         >
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
-                <InfoPill>{activeHabits.length} active routine{activeHabits.length === 1 ? "" : "s"}</InfoPill>
+                <InfoPill>{activeHabits.length} active habit{activeHabits.length === 1 ? "" : "s"}</InfoPill>
               </div>
               <button
                 type="button"
@@ -1773,12 +1850,12 @@ export function DashboardPeriodReviewPrompts() {
                 style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
               >
                 <span className="material-symbols-outlined text-[15px]">add</span>
-                Add routine
+                Add habit
               </button>
             </div>
 
             {activeHabits.length === 0 ? (
-              <EmptyBlock copy="No active routines yet. Add only the ones that should still carry this period." />
+              <EmptyBlock copy="No active foundational habits yet. Add only the ones that should still carry this period." />
             ) : (
               <div className="grid gap-3 md:grid-cols-2">
                 {activeHabits.map((habit) => (
@@ -1839,7 +1916,7 @@ export function DashboardPeriodReviewPrompts() {
                   {card.mainGoal?.description ?? "This month still needs a clear anchor before the quarter feels intentional."}
                 </p>
                 <p className="mt-2 text-[11px]" style={{ color: "#8a9e97" }}>
-                  {card.supportCount} secondary goal{card.supportCount === 1 ? "" : "s"}
+                  {card.supportCount} supporting goal{card.supportCount === 1 ? "" : "s"}
                 </p>
               </div>
             ))}
@@ -1924,7 +2001,7 @@ export function DashboardPeriodReviewPrompts() {
       className="fixed inset-0 z-[90] flex items-end justify-center p-2 sm:items-center sm:p-4"
       style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}
       role="presentation"
-      onClick={closePromptForNow}
+      onClick={closePrompt}
     >
       <div
         className="flex max-h-[calc(100dvh-1rem)] w-full max-w-[760px] flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
@@ -1978,7 +2055,7 @@ export function DashboardPeriodReviewPrompts() {
 
             <button
               type="button"
-              onClick={closePromptForNow}
+              onClick={closePrompt}
               className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
               style={{ color: "#8a9e97" }}
               aria-label="Close review prompt"
@@ -2013,36 +2090,6 @@ export function DashboardPeriodReviewPrompts() {
             {screen === "review" ? reviewBody : planningBody}
           </div>
 
-          {remainingReviewCount > 0 && (
-            <div
-              className="mt-4 rounded-2xl px-4 py-4"
-              style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)" }}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                    More Reviews Waiting
-                  </p>
-                  <p className="mt-1 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
-                    {remainingReviewCount} more review{remainingReviewCount === 1 ? "" : "s"} are queued after this one.
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
-                    We move through overlapping report boundaries one at a time so the handoff stays clean.
-                    {nextQueuedCandidate ? ` Up next: ${nextQueuedCandidate.periodLabel}.` : ""}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {visibleQueuedLabels.map((label) => (
-                    <InfoPill key={label}>{label}</InfoPill>
-                  ))}
-                  {remainingReviewCount > visibleQueuedLabels.length && (
-                    <InfoPill>{`+${remainingReviewCount - visibleQueuedLabels.length} more`}</InfoPill>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {(error || savedNotice) && (
             <div className="mt-4 space-y-3">
               {error && (
@@ -2072,24 +2119,12 @@ export function DashboardPeriodReviewPrompts() {
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={closePromptForNow}
+              onClick={closePrompt}
               className="rounded-xl px-5 py-3 text-sm font-semibold"
               style={{ border: "1.5px solid #e2e8e4", color: "#5a6b65", background: "white" }}
             >
               Close for now
             </button>
-
-            {screen === "review" && remainingReviewCount > 0 && (
-              <button
-                type="button"
-                onClick={() => completePrompt()}
-                disabled={loading}
-                className="rounded-xl px-5 py-3 text-sm font-semibold disabled:opacity-60"
-                style={{ border: "1.5px solid rgba(0,108,74,0.16)", color: "#006c4a", background: "#f7faf8" }}
-              >
-                Continue to next review
-              </button>
-            )}
 
             {screen === "review" ? (
               <button
@@ -2109,11 +2144,11 @@ export function DashboardPeriodReviewPrompts() {
             ) : (
               <button
                 type="button"
-                onClick={handleReturnHome}
+                onClick={handleOpenBoard}
                 className="flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white"
                 style={{ background: "#003d2b", boxShadow: "0 2px 12px rgba(0,108,74,0.25)" }}
               >
-                {returnHomeLabel(activeCandidate.type)}
+                {openBoardLabel(activeCandidate.type)}
                 <span className="material-symbols-outlined text-[18px]">east</span>
               </button>
             )}
@@ -2159,6 +2194,9 @@ export function DashboardPeriodReviewPrompts() {
             initialIcon={habitEditor.habit?.icon}
             initialCategoryId={habitEditor.habit?.categoryId}
             initialFrequency={habitEditor.habit?.frequency}
+            initialYearlyGoalId={habitEditor.habit?.yearlyGoalId}
+            initialMonthlyGoalId={habitEditor.habit?.monthlyGoalId}
+            initialWeeklyGoalId={habitEditor.habit?.weeklyGoalId}
             onSubmit={handleHabitSubmit}
             onClose={() => setHabitEditor(null)}
           />

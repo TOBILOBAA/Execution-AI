@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { getCurrentYear } from "@/lib/mockData";
+import { getCurrentYear, getToday } from "@/lib/mockData";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
 import { AddGoalModal } from "./AddGoalModal";
 import { AddCategoryModal } from "./AddCategoryModal";
@@ -76,6 +76,7 @@ export function StepYearly({ onNext }: Props) {
   const {
     categories,
     yearlyGoals,
+    sessionTimezone,
     addYearlyGoal,
     updateYearlyGoal,
     removeYearlyGoal,
@@ -86,6 +87,7 @@ export function StepYearly({ onNext }: Props) {
     useShallow((state) => ({
       categories: state.categories,
       yearlyGoals: state.yearlyGoals,
+      sessionTimezone: state.sessionTimezone,
       addYearlyGoal: state.addYearlyGoal,
       updateYearlyGoal: state.updateYearlyGoal,
       removeYearlyGoal: state.removeYearlyGoal,
@@ -102,16 +104,11 @@ export function StepYearly({ onNext }: Props) {
   const [showCatModal, setShowCatModal] = useState(false);
   const [leaveBusy, setLeaveBusy] = useState(false);
   const [leaveError, setLeaveError] = useState("");
+  const currentYear = Number(getToday(sessionTimezone).slice(0, 4)) || getCurrentYear();
 
   const getGoalsForCat = (catId: string) =>
-    yearlyGoals.filter(
-      (g) =>
-        g.year === getCurrentYear() &&
-        g.categoryId === catId,
-    );
-  const uncategorizedGoals = yearlyGoals.filter(
-    (g) => g.year === getCurrentYear() && !g.categoryId,
-  );
+    yearlyGoals.filter((g) => g.year === currentYear && g.categoryId === catId);
+  const uncategorizedGoals = yearlyGoals.filter((g) => g.year === currentYear && !g.categoryId);
 
   const openAddGoal = (catId: string) => {
     setModalCatId(catId);
@@ -123,21 +120,27 @@ export function StepYearly({ onNext }: Props) {
     setGoalModal(goal);
   };
 
-  const handleModalSubmit = (title: string, targetDate: string, description: string) => {
+  const handleModalSubmit = async (title: string, targetDate: string, description: string) => {
     if (typeof goalModal === "string") {
       // "new" → add
-      addYearlyGoal({
+      const ok = await addYearlyGoal({
         title,
         categoryId: modalCatId,
         ...(description ? { description } : {}),
-        year: getCurrentYear(),
+        year: currentYear,
         status: "active",
         progress: 0,
         targetDate,
-      });
+      }, { persistMode: "blocking" });
+      if (!ok) return;
     } else if (goalModal) {
       // YearlyGoal object → edit
-      updateYearlyGoal(goalModal.id, { title, description: description || undefined, targetDate });
+      const ok = await updateYearlyGoal(
+        goalModal.id,
+        { title, description: description || undefined, targetDate },
+        { persistMode: "blocking" },
+      );
+      if (!ok) return;
     }
     setGoalModal(null);
   };
@@ -145,13 +148,25 @@ export function StepYearly({ onNext }: Props) {
   const isEditMode = goalModal !== null && typeof goalModal !== "string";
 
   const handleLeaveYearly = async () => {
-    if (yearlyGoals.filter(g => g.year === getCurrentYear()).length < 1) {
+    if (yearlyGoals.filter((g) => g.year === currentYear).length < 1) {
       setLeaveError("Add at least one yearly goal before continuing.");
+      return;
+    }
+    const emptyCategories = categories.filter((category) => getGoalsForCat(category.id).length === 0);
+    if (emptyCategories.length > 0) {
+      const [firstEmptyCategory] = emptyCategories;
+      setExpanded(firstEmptyCategory.id);
+      const categoryNames = emptyCategories.map((category) => category.name).join(", ");
+      setLeaveError(
+        emptyCategories.length === 1
+          ? `${firstEmptyCategory.name} does not have a goal yet. Add a goal or delete the category before continuing.`
+          : `${categoryNames} do not have goals yet. Add a goal to each one or delete the empty categories before continuing.`,
+      );
       return;
     }
     setLeaveError("");
     setLeaveBusy(true);
-    const ok = await syncYearlyGoalsToServer();
+    const ok = await syncYearlyGoalsToServer({ mode: "verify" });
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveBusy(false);
@@ -187,12 +202,13 @@ export function StepYearly({ onNext }: Props) {
                 goals={goals}
                 isOpen={isOpen}
                 onToggle={() => setExpanded(isOpen ? "" : cat.id)}
-                onDelete={() => { removeCategory(cat.id); if (expanded === cat.id) setExpanded(""); }}
+                onDelete={async () => {
+                  const ok = await removeCategory(cat.id, { persistMode: "blocking" });
+                  if (ok && expanded === cat.id) setExpanded("");
+                }}
                 onAddGoal={() => openAddGoal(cat.id)}
                 onEditGoal={openEditGoal}
-                onRemoveGoal={removeYearlyGoal}
-                showDeleteButton
-                showAddGoalButton
+                onRemoveGoal={async (id) => { await removeYearlyGoal(id, { persistMode: "blocking" }); }}
               />
             );
           })}
@@ -202,13 +218,11 @@ export function StepYearly({ onNext }: Props) {
               cat={{ id: UNCATEGORIZED_CATEGORY_ID, name: "Uncategorized", icon: "inventory_2" }}
               goals={uncategorizedGoals}
               isOpen={expanded === UNCATEGORIZED_CATEGORY_ID}
-              onToggle={() =>
-                setExpanded(expanded === UNCATEGORIZED_CATEGORY_ID ? "" : UNCATEGORIZED_CATEGORY_ID)
-              }
+              onToggle={() => setExpanded(expanded === UNCATEGORIZED_CATEGORY_ID ? "" : UNCATEGORIZED_CATEGORY_ID)}
               onDelete={() => undefined}
               onAddGoal={() => undefined}
               onEditGoal={openEditGoal}
-              onRemoveGoal={removeYearlyGoal}
+              onRemoveGoal={async (id) => { await removeYearlyGoal(id, { persistMode: "blocking" }); }}
               showDeleteButton={false}
               showAddGoalButton={false}
             />
@@ -275,7 +289,10 @@ export function StepYearly({ onNext }: Props) {
       {/* New category modal */}
       {showCatModal && (
         <AddCategoryModal
-          onAdd={(name, icon) => { addCategory({ name, icon }); setShowCatModal(false); }}
+          onAdd={async (name, icon) => {
+            const ok = await addCategory({ name, icon }, { persistMode: "blocking" });
+            if (ok) setShowCatModal(false);
+          }}
           onClose={() => setShowCatModal(false)}
         />
       )}

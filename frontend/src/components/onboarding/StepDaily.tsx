@@ -5,7 +5,6 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { DailyPriority, FoundationalHabit, HabitFrequency } from "@/lib/types";
 import { getToday } from "@/lib/mockData";
-import { DAILY_MAIN_GOAL_CAP, DAILY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 import { AddDailyPriorityModal } from "./AddDailyPriorityModal";
 import { AddSecondaryTaskModal } from "./AddSecondaryTaskModal";
 import { AddHabitModal } from "./AddHabitModal";
@@ -234,6 +233,7 @@ function HabitRow({
     "3x_week": "3× / Week",
     "5x_week": "5× / Week",
     weekends: "Weekends",
+    flexible: "Flexible",
   };
 
   return (
@@ -405,7 +405,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
           : null;
       const msg =
         result.code === "no_weekly_or_habits"
-          ? "Add weekly goals or at least one active routine, commit so they sync, then try again."
+          ? "Add weekly goals or at least one active habit, commit so they sync, then try again."
           : result.code === "weekly_sync_failed"
             ? "Weekly goals are still syncing. Fix any sync banner above, then try again."
             : result.code === "invalid_date"
@@ -413,7 +413,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
               : result.code === "no_session"
                 ? "Sign in or refresh your session, then try again."
                 : apiDetail ??
-                  "AI generation failed. Add weekly goals (or use AI on the previous step and accept), click “Commit Plan” so they save, and add at least one routine if you have no weekly goals — then try again.";
+                  "AI generation failed. Add weekly goals (or use AI on the previous step and accept), click “Commit Plan” so they save, and add at least one habit if you have no weeklies — then try again.";
       setAiError(msg);
     } else {
       const draft = result.draft as DailyAIDraft;
@@ -479,17 +479,17 @@ export function StepDaily({ onFinish, onBack }: Props) {
     const todayPrioritiesCount = dailyPriorities.filter((p) => p.date === todayStr).length;
     const todayTasksCount = secondaryTasks.filter((t) => t.date === todayStr).length;
     if (todayPrioritiesCount !== 1) {
-      setLeaveError("You need exactly one main goal for today before continuing.");
+      setLeaveError("You need exactly one main priority for today before continuing.");
       return;
     }
-    if (todayTasksCount > DAILY_SECONDARY_GOAL_CAP) {
-      setLeaveError("You can have at most three secondary goals for today.");
+    if (todayTasksCount > 3) {
+      setLeaveError("You can have at most three secondary tasks for today.");
       return;
     }
     const ok = await syncDailySetupToServer(todayStr);
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
-      setLeaveError("Your daily goals and routines have not finished saving to the server yet. Fix the sync error above, then try again.");
+      setLeaveError("Daily tasks and habits have not finished saving to the server yet. Fix the sync error above, then try again.");
       return;
     }
     await onFinish();
@@ -572,7 +572,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 Tap the circle on each row to include or exclude it before saving.
               </p>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Main Goals</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Top Priorities</p>
                 <div className="space-y-1.5">
                   {aiDraft.top_priorities?.map((p, i) => {
                     const key = `p:${i}`;
@@ -609,7 +609,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
               </div>
               {(aiDraft.secondary_tasks?.length ?? 0) > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Secondary Goals</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Secondary Tasks</p>
                   <div className="space-y-1.5">
                     {(aiDraft.secondary_tasks ?? []).map((t, i) => {
                       const key = `t:${i}`;
@@ -670,13 +670,13 @@ export function StepDaily({ onFinish, onBack }: Props) {
           </div>
         )}
 
-        {/* ── 01. Main Goal ── */}
+        {/* ── 01. Essential Priorities ── */}
         <section>
           <SectionHeader
             number="01"
-            title="Main Goal"
-            subtitle="The goal that matters most in the day."
-            action="Add Main Goal"
+            title="Essential Priorities"
+            subtitle="The three non-negotiables for a successful day."
+            action="Add Priority"
             onAction={() => setPriorityModal(true)}
           />
           <div
@@ -686,7 +686,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             {todayPriorities.length === 0 ? (
               <div className="py-8 text-center">
                 <p className="text-sm" style={{ color: "#a8b5af" }}>
-                  No main goal yet.
+                  No priorities yet — add your top 3 for today.
                 </p>
               </div>
             ) : (
@@ -704,13 +704,13 @@ export function StepDaily({ onFinish, onBack }: Props) {
           </div>
         </section>
 
-        {/* ── 02. Secondary Goals ── */}
+        {/* ── 02. Supporting Priorities ── */}
         <section>
           <SectionHeader
             number="02"
-            title="Secondary Goals"
-            subtitle="Additional goals to work on after the main goal."
-            action="Add Secondary Goal"
+            title="Supporting Priorities"
+            subtitle="Supporting tasks to be addressed after primary focus."
+            action="Add Task"
             onAction={() => setTaskModal(true)}
           />
           <div
@@ -720,7 +720,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             {todayTasks.length === 0 ? (
               <div className="py-8 text-center">
                 <p className="text-sm" style={{ color: "#a8b5af" }}>
-                  No secondary goals yet.
+                  No supporting tasks — add tasks to stay on top of everything.
                 </p>
               </div>
             ) : (
@@ -738,13 +738,13 @@ export function StepDaily({ onFinish, onBack }: Props) {
           </div>
         </section>
 
-        {/* ── 03. Routines ── */}
+        {/* ── 03. High-Performance Habits ── */}
         <section>
           <SectionHeader
             number="03"
-            title="Routines"
-            subtitle="Repeatable actions you want to keep in the day."
-            action="Add Routine"
+            title="High-Performance Habits"
+            subtitle="Micro-actions that fuel your long-term output."
+            action="Add Habit"
             onAction={() => setHabitModal(true)}
           />
           <div className="space-y-2.5">
@@ -768,7 +768,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 onMouseLeave={(e) => { e.currentTarget.style.border = "1.5px dashed rgba(0,108,74,0.25)"; e.currentTarget.style.color = "#8a9e97"; }}
               >
                 <span className="material-symbols-outlined text-[18px]">add</span>
-                Define your first routine
+                Define your first habit
               </button>
             )}
           </div>
@@ -777,7 +777,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
         {/* Bottom CTA */}
         <div className="text-center space-y-4 pt-2 pb-2">
           <p className="text-sm leading-relaxed" style={{ color: "#8a9e97" }}>
-            Ready to begin your day with precision? All goals and<br />routines are synced to your dashboard.
+            Ready to begin your day with precision? All tasks and<br />habits are synced to your dashboard.
           </p>
         </div>
 
@@ -814,8 +814,6 @@ export function StepDaily({ onFinish, onBack }: Props) {
         <AddDailyPriorityModal
           categories={categories}
           weeklyGoals={weeklyGoals}
-          mainGoalCapReached={!isEditingPriority && todayPriorities.length >= DAILY_MAIN_GOAL_CAP}
-          mainGoalCapMessage="You can only save 1 main goal for this day."
           initialTitle={isEditingPriority ? (priorityModal as DailyPriority).title : ""}
           initialCategoryId={
             isEditingPriority
@@ -859,8 +857,6 @@ export function StepDaily({ onFinish, onBack }: Props) {
         <AddSecondaryTaskModal
           categories={categories}
           weeklyGoals={weeklyGoals}
-          secondaryGoalCapReached={!isEditingTask && todayTasks.length >= DAILY_SECONDARY_GOAL_CAP}
-          secondaryGoalCapMessage="You can only save up to 3 secondary goals for this day."
           initialTitle={isEditingTask ? (taskModal as DailyPriority).title : ""}
           initialCategoryId={isEditingTask
             ? categories.find((c) => c.name === (taskModal as DailyPriority).tag)?.id
@@ -905,11 +901,23 @@ export function StepDaily({ onFinish, onBack }: Props) {
           initialIcon={isEditingHabit ? (habitModal as FoundationalHabit).icon : undefined}
           initialCategoryId={isEditingHabit ? (habitModal as FoundationalHabit).categoryId : undefined}
           initialFrequency={isEditingHabit ? (habitModal as FoundationalHabit).frequency : undefined}
-          onSubmit={(name, icon, categoryId, frequency) => {
+          initialYearlyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).yearlyGoalId : undefined}
+          initialMonthlyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).monthlyGoalId : undefined}
+          initialWeeklyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).weeklyGoalId : undefined}
+          onSubmit={async ({ name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId }) => {
             if (isEditingHabit) {
-              updateHabit((habitModal as FoundationalHabit).id, { name, icon, categoryId, frequency });
+              const ok = await updateHabit(
+                (habitModal as FoundationalHabit).id,
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             } else {
-              addHabit({ name, icon, categoryId, frequency, active: true, completedToday: false, streak: 0 });
+              const ok = await addHabit(
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId, active: true, completedToday: false, streak: 0 },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             }
             setHabitModal(null);
           }}

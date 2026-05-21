@@ -4,9 +4,8 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { WeeklyGoal } from "@/lib/types";
-import { getCurrentMonth, getCurrentYear, getToday } from "@/lib/mockData";
+import { getCurrentMonth, getCurrentYear } from "@/lib/mockData";
 import { getWeekNumber } from "@/lib/goalsView";
-import { WEEKLY_MAIN_GOAL_CAP, WEEKLY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 import { AddWeeklyGoalModal } from "./AddWeeklyGoalModal";
 import { AddHabitModal } from "./AddHabitModal";
 import { isAuthLocalOnly, isCloudSupabaseConfigured } from "@/lib/authMode";
@@ -170,7 +169,7 @@ function SecondaryGoalCard({
             color: goal.aiSuggested ? "#006c4a" : "#8a9e97",
           }}
         >
-          {goal.aiSuggested ? "AI Suggested" : "Secondary Goal"}
+          {goal.aiSuggested ? "AI Suggested" : "Supporting Goal"}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -351,7 +350,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
     generateWeeklyPlan,
     approveWeeklyPlan,
     syncWeeklyGoalsToServer,
-    sessionTimezone,
+    activeDashboardDate,
     sessionWeekStartsOn,
   } = useAppStore(
     useShallow((state) => ({
@@ -368,18 +367,17 @@ export function StepWeekly({ onNext, onBack }: Props) {
       generateWeeklyPlan: state.generateWeeklyPlan,
       approveWeeklyPlan: state.approveWeeklyPlan,
       syncWeeklyGoalsToServer: state.syncWeeklyGoalsToServer,
-      sessionTimezone: state.sessionTimezone,
+      activeDashboardDate: state.activeDashboardDate,
       sessionWeekStartsOn: state.sessionWeekStartsOn,
     })),
   );
 
-  const today = getToday(sessionTimezone);
-  const currentYear = Number(today.slice(0, 4)) || getCurrentYear();
-  const currentMonth = Number(today.slice(5, 7)) || getCurrentMonth();
-  const todayReference = new Date(`${today}T12:00:00`);
-  const currentWeek = Number.isNaN(todayReference.getTime())
+  const currentYear = Number(activeDashboardDate.slice(0, 4)) || getCurrentYear();
+  const currentMonth = Number(activeDashboardDate.slice(5, 7)) || getCurrentMonth();
+  const activeDashboardReference = new Date(`${activeDashboardDate}T12:00:00`);
+  const currentWeek = Number.isNaN(activeDashboardReference.getTime())
     ? getWeekNumber(new Date(), sessionWeekStartsOn)
-    : getWeekNumber(todayReference, sessionWeekStartsOn);
+    : getWeekNumber(activeDashboardReference, sessionWeekStartsOn);
 
   const currentWeekGoals = weeklyGoals.filter(
     (g) => g.weekNumber === currentWeek && g.year === currentYear
@@ -512,8 +510,8 @@ export function StepWeekly({ onNext, onBack }: Props) {
       setLeaveError("You need exactly one main goal for the week before continuing.");
       return;
     }
-    if (secondaryGoalsCount > WEEKLY_SECONDARY_GOAL_CAP) {
-      setLeaveError("You can have at most two secondary goals for the week.");
+    if (secondaryGoalsCount > 3) {
+      setLeaveError("You can have at most three secondary goals for the week.");
       return;
     }
     const ok = await syncWeeklyGoalsToServer(currentYear, currentWeek);
@@ -751,7 +749,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       <section>
         <SectionHeader
           title="Secondary Weekly Goals"
-          action="Add Goal"
+          action="Add Target"
           actionIcon="add"
           onAction={() => { setEditGoal(null); setAddSecOpen(true); }}
         />
@@ -805,7 +803,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       {/* ── ROUTINES ── */}
       <section>
         <SectionHeader
-          title="Routines"
+          title="Foundational Habits"
           action="Define Routine"
           actionIcon="add_circle"
           onAction={() => { setEditHabitId(null); setAddHabitOpen(true); }}
@@ -829,7 +827,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               }}
             >
               <span className="material-symbols-outlined text-[18px]">add</span>
-              Define your first routine
+              Define your first foundational habit
             </button>
           )}
         </div>
@@ -870,9 +868,6 @@ export function StepWeekly({ onNext, onBack }: Props) {
         <AddWeeklyGoalModal
           mode="main"
           monthlyGoals={currentMonthlyGoals}
-          currentCount={editGoal ? 0 : mainGoals.length}
-          maxCount={WEEKLY_MAIN_GOAL_CAP}
-          limitMessage="You can only save 1 main goal for this week."
           initialTitle={editGoal?.title}
           initialMonthlyGoalId={editGoal?.monthlyGoalId}
           initialTargetDay={editGoal?.targetDay}
@@ -904,9 +899,6 @@ export function StepWeekly({ onNext, onBack }: Props) {
         <AddWeeklyGoalModal
           mode="secondary"
           monthlyGoals={currentMonthlyGoals}
-          currentCount={editGoal ? 0 : secondaryGoals.length}
-          maxCount={WEEKLY_SECONDARY_GOAL_CAP}
-          limitMessage="You can only save up to 2 secondary goals for this week."
           initialTitle={editGoal?.title}
           initialMonthlyGoalId={editGoal?.monthlyGoalId}
           initialTargetDay={editGoal?.targetDay}
@@ -941,11 +933,23 @@ export function StepWeekly({ onNext, onBack }: Props) {
           initialIcon={editHabitData?.icon}
           initialCategoryId={editHabitData?.categoryId}
           initialFrequency={editHabitData?.frequency}
-          onSubmit={(name, icon, categoryId, frequency) => {
+          initialYearlyGoalId={editHabitData?.yearlyGoalId}
+          initialMonthlyGoalId={editHabitData?.monthlyGoalId}
+          initialWeeklyGoalId={editHabitData?.weeklyGoalId}
+          onSubmit={async ({ name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId }) => {
             if (editHabitId) {
-              updateHabit(editHabitId, { name, icon, categoryId, frequency });
+              const ok = await updateHabit(
+                editHabitId,
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             } else {
-              addHabit({ name, icon, categoryId, frequency, active: true, completedToday: false, streak: 0 });
+              const ok = await addHabit(
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId, active: true, completedToday: false, streak: 0 },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             }
             setAddHabitOpen(false);
             setEditHabitId(null);

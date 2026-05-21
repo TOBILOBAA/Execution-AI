@@ -86,7 +86,7 @@ export default function OnboardingPage() {
 
   const handleNext = async () => {
     if (onboardingStep < 4) {
-      setOnboardingStep(onboardingStep + 1);
+      await setOnboardingStep(onboardingStep + 1);
     } else {
       const ok = await completeOnboarding();
       if (ok) {
@@ -95,8 +95,10 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleBack = () => {
-    if (onboardingStep > 1) setOnboardingStep(onboardingStep - 1);
+  const handleBack = async () => {
+    if (onboardingStep > 1) {
+      await setOnboardingStep(onboardingStep - 1);
+    }
   };
 
   const rightPanel =

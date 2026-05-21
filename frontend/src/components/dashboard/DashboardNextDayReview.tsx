@@ -8,6 +8,7 @@ import { AddSecondaryTaskModal } from "@/components/onboarding/AddSecondaryTaskM
 import { AddHabitModal } from "@/components/onboarding/AddHabitModal";
 import type { Category, FoundationalHabit, HabitFrequency, MonthlyGoal, WeeklyGoal } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
+import { describeSyncError } from "@/lib/apiErrors";
 
 type EditableReviewItem = ApiNextDayReviewItem & { localId: string; yearly_goal_ref?: string };
 
@@ -470,6 +471,7 @@ function HabitSection({
     "3x_week": "3x / Week",
     "5x_week": "5x / Week",
     weekends: "Weekends",
+    flexible: "Flexible",
   };
 
   return (
@@ -1307,19 +1309,44 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
           initialIcon={plannerModal.habit?.icon}
           initialCategoryId={plannerModal.habit?.categoryId}
           initialFrequency={plannerModal.habit?.frequency}
-          onSubmit={(name, icon, categoryId, frequency) => {
+          initialYearlyGoalId={plannerModal.habit?.yearlyGoalId}
+          initialMonthlyGoalId={plannerModal.habit?.monthlyGoalId}
+          initialWeeklyGoalId={plannerModal.habit?.weeklyGoalId}
+          onSubmit={async ({ name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId }) => {
             if (plannerModal.habit) {
-              updateHabit(plannerModal.habit.id, { name, icon, categoryId, frequency });
+              const ok = await updateHabit(
+                plannerModal.habit.id,
+                { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId },
+                { persistMode: "blocking" },
+              );
+              if (!ok) {
+                const banner = useAppStore.getState().syncError;
+                throw new Error(
+                  banner ? describeSyncError(banner).message : "Couldn't save this routine.",
+                );
+              }
             } else {
-              addHabit({
-                name,
-                icon,
-                categoryId,
-                frequency,
-                completedToday: false,
-                streak: 0,
-                active: true,
-              });
+              const ok = await addHabit(
+                {
+                  name,
+                  icon,
+                  categoryId,
+                  frequency,
+                  yearlyGoalId,
+                  monthlyGoalId,
+                  weeklyGoalId,
+                  completedToday: false,
+                  streak: 0,
+                  active: true,
+                },
+                { persistMode: "blocking" },
+              );
+              if (!ok) {
+                const banner = useAppStore.getState().syncError;
+                throw new Error(
+                  banner ? describeSyncError(banner).message : "Couldn't save this routine.",
+                );
+              }
             }
             setPlannerModal(null);
           }}

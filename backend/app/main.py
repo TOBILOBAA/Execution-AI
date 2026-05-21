@@ -11,7 +11,6 @@ from pydantic import ValidationError
 from app.core.config import get_settings
 from app.core.logging import configure_logging, logger
 from app.api.routes import (
-    activity,
     sessions,
     yearly_goals,
     plans,
@@ -135,7 +134,6 @@ def health_check():
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.include_router(sessions.router)
-app.include_router(activity.router)
 app.include_router(yearly_goals.router)
 app.include_router(plans.router)
 app.include_router(execution.router)

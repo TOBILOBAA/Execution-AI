@@ -108,6 +108,16 @@ def _parse_completed_at(value: str | None) -> datetime | None:
         return None
 
 
+def _parse_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
 def _expected_habit_occurrences(
     habit: dict,
     period_start: date,
@@ -129,6 +139,8 @@ def _expected_habit_occurrences(
         return week_count * 3
     if frequency == "5x_week":
         return week_count * 5
+    if frequency == "flexible":
+        return 0
     return len(days)
 
 
@@ -326,6 +338,9 @@ def build_report_prompt_context(session_id: UUID, period_start: date, period_end
             "name": habit["name"],
             "frequency": habit.get("frequency", "daily"),
             "category": category_lookup.get(habit.get("category_id"), "Uncategorized"),
+            "yearly_goal_id": habit.get("yearly_goal_id"),
+            "monthly_goal_id": habit.get("monthly_goal_id"),
+            "weekly_goal_id": habit.get("weekly_goal_id"),
         }
         for habit in loaded["habits"]
         if habit.get("active", True)
@@ -339,4 +354,103 @@ def build_report_prompt_context(session_id: UUID, period_start: date, period_end
         "weekly_goals_full": weekly_full,
         "weekly_goals_summary": weekly_summary,
         "active_habits": active_habits,
+    }
+
+
+def _goal_is_completed(goal: dict) -> bool:
+    return goal.get("status") == "completed" or int(goal.get("progress") or 0) >= 100
+
+
+def _goal_is_not_started(goal: dict) -> bool:
+    status = (goal.get("status") or "").lower()
+    return (status in {"pending", "locked"}) or (not _goal_is_completed(goal) and int(goal.get("progress") or 0) <= 0)
+
+
+def build_period_review_signal(
+    session_id: UUID,
+    period_start: date,
+    period_end: date,
+    db: Client,
+    report_type: str,
+) -> dict:
+    loaded = _load_goals_and_habits(db, session_id, period_start, period_end)
+    priorities = plans_db.list_daily_priorities_for_range(db, session_id, period_start, period_end)
+    habit_logs = habits_db.list_habit_logs_for_session(db, session_id, period_start, period_end)
+    week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
+
+    logs_by_habit: dict[str, list[dict]] = defaultdict(list)
+    for log in habit_logs:
+        logs_by_habit[log["habit_id"]].append(log)
+
+    routines_kept_names: list[str] = []
+    routines_skipped_names: list[str] = []
+    for habit in loaded["habits"]:
+        created_at = _parse_timestamp(habit.get("created_at"))
+        if created_at and created_at.date() > period_end:
+            continue
+        if not habit.get("active", True):
+            continue
+        completed_count = sum(1 for log in logs_by_habit.get(habit["id"], []) if log.get("completed"))
+        expected_total = _expected_habit_occurrences(habit, period_start, period_end, week_starts_on)
+        if completed_count > 0:
+            routines_kept_names.append(habit["name"])
+        if (habit.get("frequency") or "").lower() != "flexible" and expected_total > completed_count:
+            routines_skipped_names.append(habit["name"])
+
+    completed_main_titles: list[str] = []
+    unfinished_secondary_titles: list[str] = []
+    not_started_titles: list[str] = []
+    losing_attention_titles: list[str] = []
+
+    if report_type == "weekly":
+        goals = loaded["weekly_goals"]
+        priority_goal_ids = {item.get("weekly_goal_id") for item in priorities if item.get("weekly_goal_id")}
+        for goal in goals:
+            if goal.get("is_main") and _goal_is_completed(goal):
+                completed_main_titles.append(goal["title"])
+            if (not goal.get("is_main")) and not _goal_is_completed(goal):
+                unfinished_secondary_titles.append(goal["title"])
+            if _goal_is_not_started(goal):
+                not_started_titles.append(goal["title"])
+            if str(goal["id"]) not in priority_goal_ids:
+                losing_attention_titles.append(goal["title"])
+    elif report_type in {"monthly", "quarterly"}:
+        goals = loaded["monthly_goals"]
+        weekly_by_monthly: dict[str, list[dict]] = defaultdict(list)
+        for goal in loaded["weekly_goals"]:
+            if goal.get("monthly_goal_id"):
+                weekly_by_monthly[str(goal["monthly_goal_id"])].append(goal)
+        for goal in goals:
+            if goal.get("is_main") and _goal_is_completed(goal):
+                completed_main_titles.append(goal["title"])
+            if (not goal.get("is_main")) and not _goal_is_completed(goal):
+                unfinished_secondary_titles.append(goal["title"])
+            if _goal_is_not_started(goal):
+                not_started_titles.append(goal["title"])
+            if not weekly_by_monthly.get(str(goal["id"])):
+                losing_attention_titles.append(goal["title"])
+    elif report_type == "yearly":
+        goals = [goal for goal in loaded["yearly_goals"] if goal.get("year") == period_start.year]
+        monthly_by_yearly: dict[str, list[dict]] = defaultdict(list)
+        for goal in loaded["monthly_goals"]:
+            if goal.get("yearly_goal_id"):
+                monthly_by_yearly[str(goal["yearly_goal_id"])].append(goal)
+        for goal in goals:
+            completed_children = monthly_by_yearly.get(str(goal["id"]), [])
+            if _goal_is_completed(goal):
+                completed_main_titles.append(goal["title"])
+            elif completed_children and any(_goal_is_completed(child) for child in completed_children):
+                completed_main_titles.append(goal["title"])
+            if _goal_is_not_started(goal):
+                not_started_titles.append(goal["title"])
+            if not completed_children:
+                losing_attention_titles.append(goal["title"])
+
+    return {
+        "completed_main_titles": list(dict.fromkeys(completed_main_titles)),
+        "unfinished_secondary_titles": list(dict.fromkeys(unfinished_secondary_titles)),
+        "not_started_titles": list(dict.fromkeys(not_started_titles)),
+        "routines_kept_names": list(dict.fromkeys(routines_kept_names)),
+        "routines_skipped_names": list(dict.fromkeys(routines_skipped_names)),
+        "losing_attention_titles": list(dict.fromkeys(losing_attention_titles)),
     }

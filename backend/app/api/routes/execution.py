@@ -9,7 +9,7 @@ from supabase import Client
 from app.api.deps import get_db
 from app.core.exceptions import ConflictError
 from app.schemas.goals import DailyPriorityCreate, DailyPriorityUpdate
-from app.services import activity_service, execution_service
+from app.services import execution_service
 import app.db.plans as plans_db
 import app.db.sessions as sessions_db
 from app.utils.date_utils import week_number_for
@@ -119,9 +119,7 @@ def create_task(
     }
     if data.get("weekly_goal_id"):
         data["weekly_goal_id"] = str(data["weekly_goal_id"])
-    created = plans_db.create_daily_priority(db, data)
-    activity_service.mark_event(db, session_id, "daily_plan_created", activity_date=plan_date)
-    return created
+    return plans_db.create_daily_priority(db, data)
 
 
 @router.delete("/tasks/{task_id}", status_code=204)
@@ -135,7 +133,6 @@ def delete_task(
     if item:
         assert_period_current_daily(session_id, date.fromisoformat(item["date"]), db)
         plans_db.delete_daily_priority(db, task_id, session_id)
-        activity_service.sync_daily_execution_counts(db, session_id, activity_date=date.fromisoformat(item["date"]))
     return None
 
 

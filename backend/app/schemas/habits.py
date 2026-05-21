@@ -1,6 +1,6 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from .common import HabitFrequency
 
 
@@ -9,7 +9,17 @@ class HabitCreate(BaseModel):
     icon: str = "check_circle"
     frequency: HabitFrequency = HabitFrequency.daily
     category_id: UUID | None = None
+    yearly_goal_id: UUID | None = None
+    monthly_goal_id: UUID | None = None
+    weekly_goal_id: UUID | None = None
     sort_order: int = 0
+
+    @model_validator(mode="after")
+    def validate_single_goal_link(self) -> "HabitCreate":
+        links = [self.yearly_goal_id, self.monthly_goal_id, self.weekly_goal_id]
+        if sum(link is not None for link in links) > 1:
+            raise ValueError("A routine can link to only one goal level at a time.")
+        return self
 
 
 class HabitUpdate(BaseModel):
@@ -18,7 +28,17 @@ class HabitUpdate(BaseModel):
     frequency: HabitFrequency | None = None
     active: bool | None = None
     category_id: UUID | None = None
+    yearly_goal_id: UUID | None = None
+    monthly_goal_id: UUID | None = None
+    weekly_goal_id: UUID | None = None
     sort_order: int | None = None
+
+    @model_validator(mode="after")
+    def validate_single_goal_link(self) -> "HabitUpdate":
+        links = [self.yearly_goal_id, self.monthly_goal_id, self.weekly_goal_id]
+        if sum(link is not None for link in links) > 1:
+            raise ValueError("A routine can link to only one goal level at a time.")
+        return self
 
 
 class HabitResponse(BaseModel):
@@ -29,6 +49,9 @@ class HabitResponse(BaseModel):
     frequency: HabitFrequency
     active: bool
     category_id: UUID | None = None
+    yearly_goal_id: UUID | None = None
+    monthly_goal_id: UUID | None = None
+    weekly_goal_id: UUID | None = None
     sort_order: int
     # Computed fields (joined from habit_logs)
     completed_today: bool = False

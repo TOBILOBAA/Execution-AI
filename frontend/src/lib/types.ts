@@ -11,7 +11,7 @@ export type PriorityLevel = "high" | "medium" | "low";
 
 export type TimeHorizon = "yearly" | "monthly" | "weekly" | "daily";
 
-export type HabitFrequency = "daily" | "weekdays" | "3x_week" | "5x_week" | "weekends";
+export type HabitFrequency = "daily" | "weekdays" | "3x_week" | "5x_week" | "weekends" | "flexible";
 export type WeekStartsOn = "sunday" | "monday";
 export type RecapType = "weekly" | "monthly" | "quarterly" | "yearly";
 
@@ -98,6 +98,9 @@ export interface FoundationalHabit {
   name: string;
   icon: string; // Material Symbol name
   categoryId?: string;
+  yearlyGoalId?: string;
+  monthlyGoalId?: string;
+  weeklyGoalId?: string;
   frequency: HabitFrequency;
   completedToday: boolean;
   streak: number;

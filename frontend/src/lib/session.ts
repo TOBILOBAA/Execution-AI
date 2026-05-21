@@ -10,6 +10,12 @@
 
 import type { Session } from "./api";
 
+export interface BackendSessionIdentity {
+  id: string;
+  name?: string;
+  email?: string;
+}
+
 const SESSION_KEY_PREFIX = "execution-ai-session-";
 const pendingSessionRequests = new Map<string, Promise<Session>>();
 
@@ -32,8 +38,8 @@ export function clearSessionId(userId: string): void {
  * Ensure a backend session exists for this user.
  * Creates one if not found, returns the existing one if present.
  */
-export async function ensureBackendSession(user: SessionIdentity): Promise<Session> {
-  const userId = user.id;
+export async function ensureBackendSession(identity: string | BackendSessionIdentity): Promise<Session> {
+  const userId = typeof identity === "string" ? identity : identity.id;
   const inflight = pendingSessionRequests.get(userId);
   if (inflight) {
     return inflight;
@@ -45,19 +51,6 @@ export async function ensureBackendSession(user: SessionIdentity): Promise<Sessi
     if (existing) {
       try {
         const session = await sessionsApi.get(existing);
-        const needsIdentitySync =
-          !session.auth_user_id ||
-          session.auth_user_id !== userId ||
-          (user.name?.trim() && session.auth_name !== user.name.trim()) ||
-          (user.email?.trim().toLowerCase() && session.auth_email !== user.email.trim().toLowerCase());
-        if (needsIdentitySync) {
-          const updated = await sessionsApi.update(existing, {
-            auth_user_id: userId,
-            auth_name: user.name?.trim() || undefined,
-            auth_email: user.email?.trim().toLowerCase() || undefined,
-          });
-          return updated;
-        }
         if (session.auth_user_id === userId) {
           return session;
         }
@@ -68,12 +61,7 @@ export async function ensureBackendSession(user: SessionIdentity): Promise<Sessi
 
     // Create or recover a session on the backend for this auth user
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
-    const session = await sessionsApi.create(
-      timezone,
-      userId,
-      user.name?.trim() || undefined,
-      user.email?.trim().toLowerCase() || undefined,
-    );
+    const session = await sessionsApi.create(timezone, userId);
     setSessionId(userId, session.id);
     return session;
   })();
@@ -85,8 +73,3 @@ export async function ensureBackendSession(user: SessionIdentity): Promise<Sessi
     pendingSessionRequests.delete(userId);
   }
 }
-type SessionIdentity = {
-  id: string;
-  name?: string | null;
-  email?: string | null;
-};
