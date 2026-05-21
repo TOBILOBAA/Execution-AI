@@ -443,71 +443,80 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
           {paginatedRows.map((row) => {
             const progressTone = getProgressTone(row.progress);
             const current = row.weekNumber === currentWeekNumber && year === liveYear;
+            const selected = selectedWeek === row.weekNumber;
             return (
-              <button
-                key={row.weekNumber}
-                type="button"
-                onClick={() => pushWeek(row.weekNumber)}
-                className="w-full rounded-[22px] p-4 text-left"
-                style={{
-                  background: current ? "rgba(0,108,74,0.03)" : "#fff",
-                  border: current ? "1.5px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.06)",
-                }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-base font-semibold" style={{ color: current ? "#006c4a" : "#1a1f1e" }}>
-                      Week {row.weekNumber}
-                    </p>
-                    <p className="mt-1 text-xs" style={{ color: "#8a9e97" }}>
-                      {getMonthShortName(row.month)} · {formatWeekWindow(new Date(`${row.start}T00:00:00Z`), new Date(`${row.end}T00:00:00Z`))}
-                    </p>
+              <Fragment key={row.weekNumber}>
+                <button
+                  type="button"
+                  onClick={() => pushWeek(row.weekNumber)}
+                  className="w-full rounded-[22px] p-4 text-left"
+                  style={{
+                    background: current ? "rgba(0,108,74,0.03)" : "#fff",
+                    border: current ? "1.5px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.06)",
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold" style={{ color: current ? "#006c4a" : "#1a1f1e" }}>
+                        Week {row.weekNumber}
+                      </p>
+                      <p className="mt-1 text-xs" style={{ color: "#8a9e97" }}>
+                        {getMonthShortName(row.month)} · {formatWeekWindow(new Date(`${row.start}T00:00:00Z`), new Date(`${row.end}T00:00:00Z`))}
+                      </p>
+                    </div>
+                    <span
+                      className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest"
+                      style={{ background: "rgba(0,108,74,0.08)", color: progressTone }}
+                    >
+                      {row.progress}%
+                    </span>
                   </div>
-                  <span
-                    className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest"
-                    style={{ background: "rgba(0,108,74,0.08)", color: progressTone }}
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        Goals
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: "#1a1f1e" }}>
+                        {row.goalsSet}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        Completed
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("completed").text }}>
+                        {row.completed}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        In Progress
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("on-track").text }}>
+                        {row.inProgress}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        At Risk
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("at-risk").text }}>
+                        {row.atRisk}
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-xs font-semibold"
+                    style={{ borderColor: "rgba(0,0,0,0.06)", color: current ? "#006c4a" : "#6b7c75" }}
                   >
-                    {row.progress}%
-                  </span>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                      Goals
-                    </p>
-                    <p className="mt-1 font-semibold" style={{ color: "#1a1f1e" }}>
-                      {row.goalsSet}
-                    </p>
+                    <span>{current ? "Open this week to edit goals" : "Tap to review this week"}</span>
+                    <span className="material-symbols-outlined text-[16px]">{selected ? "expand_less" : "chevron_right"}</span>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                      Completed
-                    </p>
-                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("completed").text }}>
-                      {row.completed}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                      In Progress
-                    </p>
-                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("on-track").text }}>
-                      {row.inProgress}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                      At Risk
-                    </p>
-                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("at-risk").text }}>
-                      {row.atRisk}
-                    </p>
-                  </div>
-                </div>
-              </button>
+                </button>
+                {selected ? renderSelectedWeekDetail() : null}
+              </Fragment>
             );
           })}
-          {selectedWeek !== null ? renderSelectedWeekDetail() : null}
         </div>
 
         <div className="mt-5 hidden overflow-x-auto rounded-[22px] md:block" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>

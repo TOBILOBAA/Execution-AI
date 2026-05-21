@@ -829,71 +829,80 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           {paginatedRows.map((row) => {
             const progressTone = getProgressTone(row.progress);
             const current = row.date === today && year === liveYear;
+            const selected = selectedDay === row.date;
             return (
-              <button
-                key={row.date}
-                type="button"
-                onClick={() => pushDay(row.date)}
-                className="w-full rounded-[22px] p-4 text-left"
-                style={{
-                  background: current ? "rgba(0,108,74,0.03)" : "#fff",
-                  border: current ? "1.5px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.06)",
-                }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-base font-semibold" style={{ color: current ? "#006c4a" : "#1a1f1e" }}>
-                      {formatGoalDay(row.date)}
-                    </p>
-                    <p className="mt-1 text-xs" style={{ color: "#8a9e97" }}>
-                      {row.prioritiesCount} planned main goal{row.prioritiesCount === 1 ? "" : "s"}
-                    </p>
+              <Fragment key={row.date}>
+                <button
+                  type="button"
+                  onClick={() => pushDay(row.date)}
+                  className="w-full rounded-[22px] p-4 text-left"
+                  style={{
+                    background: current ? "rgba(0,108,74,0.03)" : "#fff",
+                    border: current ? "1.5px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.06)",
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold" style={{ color: current ? "#006c4a" : "#1a1f1e" }}>
+                        {formatGoalDay(row.date)}
+                      </p>
+                      <p className="mt-1 text-xs" style={{ color: "#8a9e97" }}>
+                        {row.prioritiesCount} planned main goal{row.prioritiesCount === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <span
+                      className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest"
+                      style={{ background: "rgba(0,108,74,0.08)", color: progressTone }}
+                    >
+                      {row.progress}%
+                    </span>
                   </div>
-                  <span
-                    className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest"
-                    style={{ background: "rgba(0,108,74,0.08)", color: progressTone }}
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        Completed
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("completed").text }}>
+                        {row.completed}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        In Progress
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("on-track").text }}>
+                        {row.inProgress}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        At Risk
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("at-risk").text }}>
+                        {row.atRisk}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        Not Started
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("not-started").text }}>
+                        {row.notStarted}
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-xs font-semibold"
+                    style={{ borderColor: "rgba(0,0,0,0.06)", color: current ? "#006c4a" : "#6b7c75" }}
                   >
-                    {row.progress}%
-                  </span>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                      Completed
-                    </p>
-                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("completed").text }}>
-                      {row.completed}
-                    </p>
+                    <span>{current ? "Open today to edit goals and routines" : "Tap to review this day"}</span>
+                    <span className="material-symbols-outlined text-[16px]">{selected ? "expand_less" : "chevron_right"}</span>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                      In Progress
-                    </p>
-                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("on-track").text }}>
-                      {row.inProgress}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                      At Risk
-                    </p>
-                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("at-risk").text }}>
-                      {row.atRisk}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                      Not Started
-                    </p>
-                    <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("not-started").text }}>
-                      {row.notStarted}
-                    </p>
-                  </div>
-                </div>
-              </button>
+                </button>
+                {selected ? renderSelectedDayDetail() : null}
+              </Fragment>
             );
           })}
-          {selectedDay !== null ? renderSelectedDayDetail() : null}
         </div>
 
         <div className="mt-5 hidden overflow-x-auto rounded-[22px] md:block" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
