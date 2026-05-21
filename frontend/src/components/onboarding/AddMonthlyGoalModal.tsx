@@ -117,7 +117,7 @@ export function AddMonthlyGoalModal({
           <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
             {isMain
               ? "Define a major objective for your month tied to your long-term vision."
-              : "Add a secondary goal to strengthen the month without crowding the main goal."}
+              : "Add another meaningful goal for the month without overloading your focus."}
           </p>
 
           {/* Category selector */}

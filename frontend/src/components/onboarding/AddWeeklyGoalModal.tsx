@@ -111,7 +111,7 @@ export function AddWeeklyGoalModal({
               <p className="text-xs leading-relaxed mt-1" style={{ color: "#8a9e97" }}>
                 {isMain
                   ? "Define a high-impact objective for the next seven days to maintain momentum."
-                  : "Define a secondary objective to support your main weekly goal and maintain momentum."}
+                  : "Define another meaningful objective for this week without overloading your focus."}
               </p>
             </div>
             <button

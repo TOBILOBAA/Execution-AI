@@ -357,7 +357,7 @@ export const MOCK_SECONDARY_TASKS: DailyPriority[] = [
   },
 ];
 
-// ─── Foundational habits ──────────────────────────────────────────────────────
+// ─── Routines ────────────────────────────────────────────────────────────────
 export const MOCK_HABITS: FoundationalHabit[] = [
   {
     id: "hab-1",

@@ -326,8 +326,12 @@ function SectionHeader({
 // ─── AI Draft types ────────────────────────────────────────────────────────────
 interface WeeklyAIDraft {
   reasoning: string;
-  main_goals: { title: string; description?: string; estimated_effort?: string }[];
-  secondary_goals: { title: string; description?: string; estimated_effort?: string }[];
+  main_goals: { title: string; description?: string; estimated_effort?: string; monthly_goal_ref?: string | null }[];
+  secondary_goals: { title: string; description?: string; estimated_effort?: string; monthly_goal_ref?: string | null }[];
+}
+
+function normalizeGoalTitle(value: string | undefined) {
+  return (value ?? "").trim().toLowerCase();
 }
 
 // ─── Main Step ────────────────────────────────────────────────────────────────
@@ -468,12 +472,26 @@ export function StepWeekly({ onNext, onBack }: Props) {
 
   const handleAIAccept = async () => {
     if (!aiDraft || aiSelectedCount === 0) return;
-    const goals: Record<string, unknown>[] = [];
+    const goals: Record<string, unknown>[] = currentWeekGoals.map((goal) => ({
+      title: goal.title,
+      description: goal.description,
+      monthly_goal_id: goal.monthlyGoalId,
+      estimated_effort: goal.workload,
+      is_main: goal.isMain,
+      priority: goal.isMain ? "high" : "medium",
+    }));
+    const existingTitles = new Set(
+      currentWeekGoals.map((goal) => normalizeGoalTitle(goal.title)).filter(Boolean),
+    );
     aiDraft.main_goals?.forEach((g, i) => {
-      if (aiRowKeys.has(`m:${i}`)) goals.push({ ...g, is_main: true });
+      if (aiRowKeys.has(`m:${i}`) && !existingTitles.has(normalizeGoalTitle(g.title))) {
+        goals.push({ ...g, is_main: true });
+      }
     });
     aiDraft.secondary_goals?.forEach((g, i) => {
-      if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false });
+      if (aiRowKeys.has(`s:${i}`) && !existingTitles.has(normalizeGoalTitle(g.title))) {
+        goals.push({ ...g, is_main: false });
+      }
     });
     setAiAccepting(true);
     const ok = await approveWeeklyPlan(currentYear, currentWeek, goals);
@@ -516,7 +534,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
           Plan week {currentWeek}.
         </h1>
         <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#8a9e97" }}>
-          1 main goal, up to 3 secondary goals. Each connects to a monthly goal.
+          1 main goal, up to 2 secondary goals. Link each weekly goal to the monthly direction it belongs to.
         </p>
       </div>
 
@@ -782,7 +800,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
         </div>
       </section>
 
-      {/* ── FOUNDATIONAL HABITS ── */}
+      {/* ── ROUTINES ── */}
       <section>
         <SectionHeader
           title="Foundational Habits"
@@ -973,42 +991,23 @@ export function WeeklyAIGuidancePanel() {
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>bolt</span>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              Protect The Main Goal
+              Make The Week Carry The Month Forward
             </p>
           </div>
-          <p className="text-xs leading-relaxed mb-3" style={{ color: "#6b7b74" }}>
-            Your weekly main goal should be the clearest advancement on this month&apos;s main goal. Secondary goals should support that priority, not compete with it.
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+            Your weekly main goal should move the monthly main goal in a concrete way.
           </p>
-            <div className="space-y-2.5">
-              {[
-                { num: "1", text: "Main goal that moves the month forward." },
-                { num: "2", text: "Secondary goals that remove friction or carry useful momentum." },
-                { num: "3+", text: "Routines that protect your focus, energy, and follow-through." },
-              ].map((item) => (
-              <div key={item.num} className="flex items-start gap-2.5">
-                <span
-                  className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
-                  style={{ background: "rgba(0,108,74,0.1)", color: "#006c4a" }}
-                >
-                  {item.num}
-                </span>
-                <p className="text-xs leading-snug" style={{ color: "#4a5c54" }}>
-                  {item.text}
-                </p>
-              </div>
-            ))}
-          </div>
         </div>
 
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>trending_up</span>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              Weekly Prioritisation
+              Keep Secondary Goals Honest
             </p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            When the week is overloaded, the monthly main goal usually slips. Keep the main goal obvious so your time and attention know where to go first.
+            Secondary goals can come from other meaningful areas of life. They do not need to connect to the weekly main goal.
           </p>
         </div>
 
@@ -1016,11 +1015,21 @@ export function WeeklyAIGuidancePanel() {
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>stacked_line_chart</span>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              Habit Continuity
+              Choose Routines You Can Actually Keep
             </p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Let routines carry the pressure that goals shouldn&apos;t. Consistent routines keep the week stable while your goals absorb the harder execution work.
+            Routines should support your week, not overload it.
+          </p>
+        </div>
+
+        <div className="rounded-xl p-4 space-y-2.5" style={{ background: "#f4f6f4" }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Example</p>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+            <strong style={{ color: "#1a1f1e" }}>Monthly main goal:</strong> Complete the core architecture modules and finish two timed practice sets this month.
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+            <strong style={{ color: "#1a1f1e" }}>Weekly main goal:</strong> Finish this week&apos;s cloud networking and storage modules, and complete one practice test review.
           </p>
         </div>
       </div>
