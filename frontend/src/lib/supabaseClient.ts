@@ -11,7 +11,15 @@ export function getSupabaseBrowser(): SupabaseClient | null {
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) return null;
   if (!browserClient) {
-    browserClient = createClient(url, anon);
+    browserClient = createClient(url, anon, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        flowType: "pkce",
+        storageKey: "execution-ai-auth",
+      },
+    });
   }
   return browserClient;
 }
