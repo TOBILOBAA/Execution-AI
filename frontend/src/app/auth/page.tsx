@@ -4,13 +4,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { OtpCodeInput } from "@/components/OtpCodeInput";
 import { describeSyncError } from "@/lib/apiErrors";
-import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
+import { isAuthLocalOnly, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
 
-type Mode = "signin" | "signup" | "forgot";
+type Mode = "signin" | "signup" | "forgot" | "verify-email";
 
-const cloudOtpEnabled = isCloudOtpAuthEnabled();
 const cloudPassword = isCloudPasswordAuthEnabled();
 const authLocalOnly = isAuthLocalOnly();
 
@@ -24,8 +22,6 @@ export default function AuthPage() {
     currentUser,
     signIn,
     signUp,
-    sendEmailOtp,
-    verifyEmailOtp,
     sendPasswordReset,
     hydrateAuthFromSupabase,
     onboardingComplete,
@@ -38,8 +34,6 @@ export default function AuthPage() {
       currentUser: state.currentUser,
       signIn: state.signIn,
       signUp: state.signUp,
-      sendEmailOtp: state.sendEmailOtp,
-      verifyEmailOtp: state.verifyEmailOtp,
       sendPasswordReset: state.sendPasswordReset,
       hydrateAuthFromSupabase: state.hydrateAuthFromSupabase,
       onboardingComplete: state.onboardingComplete,
@@ -57,10 +51,6 @@ export default function AuthPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const [otpAwaitingCode, setOtpAwaitingCode] = useState(false);
-  const [otpDigits, setOtpDigits] = useState("");
-  const [resendIn, setResendIn] = useState(0);
   const [retryingWorkspace, setRetryingWorkspace] = useState(false);
   const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
   const backendAttachFailed =
@@ -79,12 +69,6 @@ export default function AuthPage() {
     }
     router.replace(onboardingComplete ? "/dashboard" : "/onboarding");
   }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router, serverPersistenceRequired]);
-
-  useEffect(() => {
-    if (resendIn <= 0) return;
-    const t = setInterval(() => setResendIn((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
-  }, [resendIn]);
 
   const handingOffToWorkspace = Boolean(currentUser);
 
@@ -148,18 +132,22 @@ export default function AuthPage() {
     setMode(m);
     setError("");
     setInfo("");
-    setName("");
-    setEmail("");
-    setPassword("");
-    setOtpAwaitingCode(false);
-    setOtpDigits("");
-    setResendIn(0);
+    if (m !== "verify-email") {
+      setName("");
+      setEmail("");
+      setPassword("");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setInfo("");
+
+    if (mode === "verify-email") {
+      switchMode("signin");
+      return;
+    }
 
     if (mode === "forgot") {
       const trimmedEmail = email.trim().toLowerCase();
@@ -191,25 +179,6 @@ export default function AuthPage() {
       setError("That doesn't look like a valid email.");
       return;
     }
-
-    if (mode === "signup" && cloudOtpEnabled && otpAwaitingCode) {
-      if (otpDigits.replace(/\D/g, "").length !== 6) {
-        setError("Enter the 8-digit code from your email.");
-        return;
-      }
-      setLoading(true);
-      const result = await verifyEmailOtp(trimmedEmail, otpDigits, {
-        intent: "signup",
-        fullName: name.trim() || undefined,
-      });
-      setLoading(false);
-      if (!result.success) {
-        setError(result.error ?? "Verification failed.");
-        return;
-      }
-      return;
-    }
-
     if (!password.trim()) {
       setError("Enter your password.");
       return;
@@ -239,16 +208,9 @@ export default function AuthPage() {
         setLoading(false);
         return;
       }
-      if (result.needsCodeVerification) {
-        setOtpAwaitingCode(true);
-        setOtpDigits("");
-        setResendIn(56);
-        setInfo("We sent an 8-digit verification code to your inbox. Enter it below to continue to onboarding.");
-        setLoading(false);
-        return;
-      }
-      if (cloudOtpEnabled) {
-        setInfo("Check your inbox for your verification email, then return here to continue.");
+      if (result.needsEmailConfirmation) {
+        setMode("verify-email");
+        setInfo("We sent a verification link to your inbox. Open it to verify your account and continue to onboarding.");
         setLoading(false);
         return;
       }
@@ -256,13 +218,11 @@ export default function AuthPage() {
     setLoading(false);
   };
 
-  const cloudOtpVerify = cloudOtpEnabled && mode === "signup" && otpAwaitingCode;
-
   const heading =
     mode === "forgot"
       ? "Reset your password."
-      : cloudOtpVerify
-        ? "Verify your email."
+      : mode === "verify-email"
+        ? "Check your email."
         : mode === "signin"
           ? "Welcome back."
           : "Build your execution engine.";
@@ -270,31 +230,24 @@ export default function AuthPage() {
   const subline =
     mode === "forgot"
       ? "Enter the email you signed up with. We'll send a reset link."
-      : cloudOtpVerify
-        ? `Enter the 8-digit code sent to ${email.trim() || "your email"}. Once verified, we'll take you straight into yearly onboarding.`
-        : cloudOtpEnabled && mode === "signup" && !cloudOtpVerify
-          ? "Create your account, then verify the 8-digit code we send to your email before entering onboarding."
-          : cloudPassword && mode === "signin"
+      : mode === "verify-email"
+        ? `We sent a secure verification link to ${email.trim() || "your email"}. Open it to confirm your account and continue into yearly onboarding.`
+        : mode === "signup"
+          ? "Create your account, then verify your email through the secure link we send before entering onboarding."
+          : cloudPassword
             ? "Step back into your plans, protect your focus, and keep today moving."
-          : cloudPassword && mode === "signup"
-            ? "Create one workspace where your yearly, monthly, weekly, and daily goals stay connected."
             : authLocalOnly
-              ? mode === "signin"
-                ? "No company email domain needed. Use a seeded profile or sign up with any address — each user gets their own workspace on your API."
-                : "Creates another browser-only account (good for comparing onboarding or dashboard states)."
-              : mode === "signin"
-                ? "Sign in with email and password (local registry)."
-                : "Create a local account with email and password.";
+              ? "Sign in with your local account to continue."
+              : "Sign in with your email and password.";
 
   const submitLabel = () => {
     if (mode === "forgot") return "Send reset link";
-    if (cloudOtpVerify) return "Verify & continue";
+    if (mode === "verify-email") return "Back to sign in";
     return mode === "signup" ? "Begin" : "Sign in";
   };
 
   const loadingLabel = () => {
     if (mode === "forgot") return "Sending…";
-    if (cloudOtpVerify) return "Verifying…";
     if (mode === "signup") return "Setting up your account…";
     return "Signing in…";
   };
@@ -390,23 +343,25 @@ export default function AuthPage() {
         </div>
 
         <div className="bg-white rounded-3xl shadow-sm w-full" style={{ maxWidth: 460, border: "1.5px solid rgba(0,0,0,0.07)" }}>
-          <div className="flex p-1.5 m-5 mb-0 rounded-2xl" style={{ background: "#f4f6f4" }}>
-            {(["signin", "signup"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => switchMode(m)}
-                className="flex-1 py-2.5 text-sm font-bold rounded-xl transition-all"
-                style={{
-                  background: mode === m ? "#fff" : "transparent",
-                  color: mode === m ? "#1a1f1e" : "#8a9e97",
-                  boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                }}
-              >
-                {m === "signin" ? "Sign in" : "Sign up"}
-              </button>
-            ))}
-          </div>
+          {mode !== "verify-email" && (
+            <div className="flex p-1.5 m-5 mb-0 rounded-2xl" style={{ background: "#f4f6f4" }}>
+              {(["signin", "signup"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => switchMode(m)}
+                  className="flex-1 py-2.5 text-sm font-bold rounded-xl transition-all"
+                  style={{
+                    background: mode === m ? "#fff" : "transparent",
+                    color: mode === m ? "#1a1f1e" : "#8a9e97",
+                    boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                  }}
+                >
+                  {m === "signin" ? "Sign in" : "Sign up"}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="p-7 pt-6">
             <div className="mb-6">
@@ -418,49 +373,82 @@ export default function AuthPage() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {mode === "forgot" && (
+            {mode === "verify-email" ? (
+              <div className="space-y-4">
+                {info && (
+                  <div
+                    className="flex items-start gap-2 px-3 py-2.5 rounded-xl"
+                    style={{ background: "rgba(0,108,74,0.07)", border: "1px solid rgba(0,108,74,0.2)" }}
+                  >
+                    <span className="material-symbols-outlined text-[16px] shrink-0" style={{ color: "#006c4a" }}>
+                      mark_email_read
+                    </span>
+                    <p className="text-xs font-semibold" style={{ color: "#006c4a" }}>
+                      {info}
+                    </p>
+                  </div>
+                )}
+
+                <div
+                  className="rounded-2xl px-4 py-3 text-sm"
+                  style={{ background: "#f8faf9", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
+                >
+                  Once you open the link in your email, we&apos;ll verify your account and sign you in automatically.
+                </div>
+
                 <button
                   type="button"
                   onClick={() => switchMode("signin")}
-                  className="text-xs font-bold mb-2 flex items-center gap-1 transition-opacity hover:opacity-70"
-                  style={{ color: "#006c4a" }}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-bold text-white transition-all mt-2"
+                  style={{ background: "#006c4a" }}
                 >
-                  <span className="material-symbols-outlined text-[14px]">arrow_back</span>
                   Back to sign in
+                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </button>
-              )}
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {mode === "forgot" && (
+                  <button
+                    type="button"
+                    onClick={() => switchMode("signin")}
+                    className="text-xs font-bold mb-2 flex items-center gap-1 transition-opacity hover:opacity-70"
+                    style={{ color: "#006c4a" }}
+                  >
+                    <span className="material-symbols-outlined text-[14px]">arrow_back</span>
+                    Back to sign in
+                  </button>
+                )}
 
-              {mode === "signup" && !cloudOtpVerify && (
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: "#6b7c75" }}>
-                    Name
-                  </label>
-                  <div className="relative">
-                    <span
-                      className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px]"
-                      style={{ color: "#c4d0cb" }}
-                    >
-                      person
-                    </span>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => {
-                        setName(e.target.value);
-                        setError("");
-                      }}
-                      placeholder="Your full name"
-                      className="w-full pl-10 pr-4 py-3 rounded-xl text-sm outline-none transition-all"
-                      style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#1a1f1e", background: "#fafcfb" }}
-                      onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(0,108,74,0.5)")}
-                      onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)")}
-                    />
+                {mode === "signup" && (
+                  <div>
+                    <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: "#6b7c75" }}>
+                      Name
+                    </label>
+                    <div className="relative">
+                      <span
+                        className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px]"
+                        style={{ color: "#c4d0cb" }}
+                      >
+                        person
+                      </span>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => {
+                          setName(e.target.value);
+                          setError("");
+                        }}
+                        placeholder="Your full name"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl text-sm outline-none transition-all"
+                        style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#1a1f1e", background: "#fafcfb" }}
+                        onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(0,108,74,0.5)")}
+                        onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)")}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {!cloudOtpVerify && (
                 <div>
                   <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: "#6b7c75" }}>
                     Email
@@ -497,172 +485,119 @@ export default function AuthPage() {
                     </button>
                   )}
                 </div>
-              )}
 
-              {cloudOtpVerify && (
-                <div className="space-y-3">
-                  <label className="block text-xs font-bold text-center uppercase tracking-wider" style={{ color: "#6b7c75" }}>
-                    8-digit code
-                  </label>
-                  <OtpCodeInput value={otpDigits} onChange={setOtpDigits} disabled={loading} autoFocus />
-                  <p className="text-[10px] text-center leading-relaxed" style={{ color: "#a8b5af" }}>
-                    If the code does not arrive, check spam or request a new code.
-                  </p>
-                  <div className="flex flex-col gap-2 pt-1">
-                    <button
-                      type="button"
-                      disabled={loading || resendIn > 0}
-                      onClick={async () => {
-                        setError("");
-                        setInfo("");
-                        setLoading(true);
-                        const em = email.trim().toLowerCase();
-                        const r = await sendEmailOtp(em, {
-                          intent: "signup",
-                          fullName: name.trim() || undefined,
-                        });
-                        setLoading(false);
-                        if (!r.success) {
-                          setError(r.error);
-                          return;
-                        }
-                        setResendIn(56);
-                        setInfo("New code sent.");
-                      }}
-                      className="text-xs font-bold py-2 rounded-xl transition-opacity disabled:opacity-40"
-                      style={{ color: "#006c4a", background: "rgba(0,108,74,0.06)" }}
-                    >
-                      {resendIn > 0 ? `Resend code in ${resendIn}s` : "Resend code"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtpAwaitingCode(false);
-                        setOtpDigits("");
-                        setError("");
-                        setInfo("");
-                        setResendIn(0);
-                      }}
-                      className="text-xs font-semibold transition-opacity hover:opacity-70"
-                      style={{ color: "#8a9e97" }}
-                    >
-                      Use a different email
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {!cloudOtpVerify && mode !== "forgot" && (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-bold uppercase tracking-wider" style={{ color: "#6b7c75" }}>
-                      Password
-                    </label>
-                    {mode === "signin" && cloudPassword && (
+                {mode !== "forgot" && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold uppercase tracking-wider" style={{ color: "#6b7c75" }}>
+                        Password
+                      </label>
+                      {mode === "signin" && cloudPassword && (
+                        <button
+                          type="button"
+                          onClick={() => switchMode("forgot")}
+                          className="text-[11px] font-bold transition-opacity hover:opacity-70"
+                          style={{ color: "#006c4a" }}
+                        >
+                          Forgot password?
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <span
+                        className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px]"
+                        style={{ color: "#c4d0cb" }}
+                      >
+                        lock
+                      </span>
+                      <input
+                        type={showPw ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          setError("");
+                        }}
+                        placeholder={mode === "signin" ? "Your password" : "At least 8 characters"}
+                        className="w-full pl-10 pr-12 py-3 rounded-xl text-sm outline-none transition-all"
+                        style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#1a1f1e", background: "#fafcfb" }}
+                        onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(0,108,74,0.5)")}
+                        onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)")}
+                      />
                       <button
                         type="button"
-                        onClick={() => switchMode("forgot")}
-                        className="text-[11px] font-bold transition-opacity hover:opacity-70"
-                        style={{ color: "#006c4a" }}
+                        onClick={() => setShowPw((v) => !v)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg transition-all hover:opacity-70"
+                        style={{ color: "#a8b5af" }}
                       >
-                        Forgot password?
+                        <span className="material-symbols-outlined text-[18px]">{showPw ? "visibility_off" : "visibility"}</span>
                       </button>
+                    </div>
+                    {mode === "signup" && (
+                      <p className="text-[11px] mt-1.5" style={{ color: "#a8b5af" }}>
+                        Used to protect your data. Nothing more.
+                      </p>
                     )}
                   </div>
-                  <div className="relative">
-                    <span
-                      className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px]"
-                      style={{ color: "#c4d0cb" }}
-                    >
-                      lock
-                    </span>
-                    <input
-                      type={showPw ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        setError("");
-                      }}
-                      placeholder={mode === "signin" ? "Your password" : "At least 8 characters"}
-                      className="w-full pl-10 pr-12 py-3 rounded-xl text-sm outline-none transition-all"
-                      style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#1a1f1e", background: "#fafcfb" }}
-                      onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(0,108,74,0.5)")}
-                      onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)")}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPw((v) => !v)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg transition-all hover:opacity-70"
-                      style={{ color: "#a8b5af" }}
-                    >
-                      <span className="material-symbols-outlined text-[18px]">{showPw ? "visibility_off" : "visibility"}</span>
-                    </button>
-                  </div>
-                  {mode === "signup" && (
-                    <p className="text-[11px] mt-1.5" style={{ color: "#a8b5af" }}>
-                      Used to protect your data. Nothing more.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {error && (
-                <div
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-                  style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.2)" }}
-                >
-                  <span className="material-symbols-outlined text-[16px]" style={{ color: "#ef4444" }}>
-                    error
-                  </span>
-                  <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>
-                    {error}
-                  </p>
-                </div>
-              )}
-              {info && (
-                <div
-                  className="flex items-start gap-2 px-3 py-2.5 rounded-xl"
-                  style={{ background: "rgba(0,108,74,0.07)", border: "1px solid rgba(0,108,74,0.2)" }}
-                >
-                  <span className="material-symbols-outlined text-[16px] shrink-0" style={{ color: "#006c4a" }}>
-                    mark_email_read
-                  </span>
-                  <p className="text-xs font-semibold" style={{ color: "#006c4a" }}>
-                    {info}
-                  </p>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-bold text-white transition-all mt-2"
-                style={{ background: loading ? "#8ab5a0" : "#006c4a", cursor: loading ? "not-allowed" : "pointer" }}
-                onMouseEnter={(e) => {
-                  if (!loading) (e.currentTarget as HTMLElement).style.background = "#005f41";
-                }}
-                onMouseLeave={(e) => {
-                  if (!loading) (e.currentTarget as HTMLElement).style.background = "#006c4a";
-                }}
-              >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3" />
-                      <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round" />
-                    </svg>
-                    {loadingLabel()}
-                  </>
-                ) : (
-                  <>
-                    {submitLabel()}
-                    <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                  </>
                 )}
-              </button>
-            </form>
 
-            {mode !== "forgot" && (
+                {error && (
+                  <div
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                    style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.2)" }}
+                  >
+                    <span className="material-symbols-outlined text-[16px]" style={{ color: "#ef4444" }}>
+                      error
+                    </span>
+                    <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>
+                      {error}
+                    </p>
+                  </div>
+                )}
+                {info && (
+                  <div
+                    className="flex items-start gap-2 px-3 py-2.5 rounded-xl"
+                    style={{ background: "rgba(0,108,74,0.07)", border: "1px solid rgba(0,108,74,0.2)" }}
+                  >
+                    <span className="material-symbols-outlined text-[16px] shrink-0" style={{ color: "#006c4a" }}>
+                      mark_email_read
+                    </span>
+                    <p className="text-xs font-semibold" style={{ color: "#006c4a" }}>
+                      {info}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-bold text-white transition-all mt-2"
+                  style={{ background: loading ? "#8ab5a0" : "#006c4a", cursor: loading ? "not-allowed" : "pointer" }}
+                  onMouseEnter={(e) => {
+                    if (!loading) (e.currentTarget as HTMLElement).style.background = "#005f41";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!loading) (e.currentTarget as HTMLElement).style.background = "#006c4a";
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3" />
+                        <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round" />
+                      </svg>
+                      {loadingLabel()}
+                    </>
+                  ) : (
+                    <>
+                      {submitLabel()}
+                      <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {mode !== "forgot" && mode !== "verify-email" && (
               <p className="text-center text-sm mt-5" style={{ color: "#8a9e97" }}>
                 {mode === "signin" ? (
                   <>

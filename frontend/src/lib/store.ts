@@ -43,7 +43,7 @@ import { ensureBackendSession, clearSessionId } from "./session";
 import { formatApiError } from "./apiErrors";
 import { getSupabaseBrowser } from "./supabaseClient";
 import type { User } from "@supabase/supabase-js";
-import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudSupabaseConfigured } from "./authMode";
+import { isAuthLocalOnly, isCloudSupabaseConfigured } from "./authMode";
 import { getWeekNumber, listWeeksForYearThroughWeek } from "./goalsView";
 import { buildPublicUrl, describeSupabaseAuthError } from "./authRedirects";
 
@@ -65,7 +65,7 @@ function authUserFromSupabase(u: User, nameFallback?: string): AuthUser {
 
 /** Result of email/password auth (local demo or Supabase). */
 export type AuthActionResult =
-  | { success: true; needsCodeVerification?: boolean }
+  | { success: true; needsEmailConfirmation?: boolean }
   | { success: false; error: string };
 
 export type SendEmailOtpResult = { success: true } | { success: false; error: string };
@@ -1054,7 +1054,7 @@ export const useAppStore = create<AppState>()(
         if (!data.session) {
           return {
             success: true,
-            needsCodeVerification: isCloudOtpAuthEnabled(),
+            needsEmailConfirmation: true,
           };
         }
 
