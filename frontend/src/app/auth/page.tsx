@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAppStore, LOCAL_TEST_SIGNIN_HINTS } from "@/lib/store";
+import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { OtpCodeInput } from "@/components/OtpCodeInput";
 import { describeSyncError } from "@/lib/apiErrors";
@@ -13,8 +13,6 @@ type Mode = "signin" | "signup" | "forgot";
 const cloudOtpEnabled = isCloudOtpAuthEnabled();
 const cloudPassword = isCloudPasswordAuthEnabled();
 const authLocalOnly = isAuthLocalOnly();
-const showLocalSeedPanel = isAuthLocalOnly() || !isCloudSupabaseConfigured();
-const showDemoShortcut = cloudPassword || authLocalOnly;
 
 /** Format check only — does not verify the inbox exists or accepts mail. */
 const EMAIL_FORMAT =
@@ -196,7 +194,7 @@ export default function AuthPage() {
 
     if (mode === "signup" && cloudOtpEnabled && otpAwaitingCode) {
       if (otpDigits.replace(/\D/g, "").length !== 6) {
-        setError("Enter the 6-digit code from your email.");
+        setError("Enter the 8-digit code from your email.");
         return;
       }
       setLoading(true);
@@ -245,7 +243,7 @@ export default function AuthPage() {
         setOtpAwaitingCode(true);
         setOtpDigits("");
         setResendIn(56);
-        setInfo("We sent a 6-digit verification code to your inbox. Enter it below to continue to onboarding.");
+        setInfo("We sent an 8-digit verification code to your inbox. Enter it below to continue to onboarding.");
         setLoading(false);
         return;
       }
@@ -256,13 +254,6 @@ export default function AuthPage() {
       }
     }
     setLoading(false);
-  };
-
-  const fillDemo = async () => {
-    setError("");
-    setInfo("");
-    setEmail("alex@executionai.com");
-    setPassword("demo123");
   };
 
   const cloudOtpVerify = cloudOtpEnabled && mode === "signup" && otpAwaitingCode;
@@ -280,9 +271,9 @@ export default function AuthPage() {
     mode === "forgot"
       ? "Enter the email you signed up with. We'll send a reset link."
       : cloudOtpVerify
-        ? `Enter the 6-digit code sent to ${email.trim() || "your email"}. Once verified, we'll take you straight into yearly onboarding.`
+        ? `Enter the 8-digit code sent to ${email.trim() || "your email"}. Once verified, we'll take you straight into yearly onboarding.`
         : cloudOtpEnabled && mode === "signup" && !cloudOtpVerify
-          ? "Create your account, then verify the 6-digit code we send to your email before entering onboarding."
+          ? "Create your account, then verify the 8-digit code we send to your email before entering onboarding."
           : cloudPassword && mode === "signin"
             ? "Step back into your plans, protect your focus, and keep today moving."
           : cloudPassword && mode === "signup"
@@ -427,71 +418,6 @@ export default function AuthPage() {
               </p>
             </div>
 
-            {mode === "signin" && showDemoShortcut && (
-              <button
-                type="button"
-                onClick={() => void fillDemo()}
-                disabled={loading}
-                className="w-full flex items-center gap-2.5 px-4 py-3 rounded-2xl mb-5 text-left transition-all hover:opacity-80 disabled:opacity-50"
-                style={{ background: "rgba(0,108,74,0.06)", border: "1.5px dashed rgba(0,108,74,0.3)" }}
-              >
-                <span className="material-symbols-outlined text-[18px]" style={{ color: "#006c4a" }}>
-                  auto_awesome
-                </span>
-                <div>
-                  <p className="text-xs font-bold" style={{ color: "#006c4a" }}>
-                    Try the demo account
-                  </p>
-                  <p className="text-[11px]" style={{ color: "#6b9e88" }}>
-                    alex@executionai.com · demo123
-                  </p>
-                </div>
-              </button>
-            )}
-
-            {showLocalSeedPanel && !cloudOtpEnabled && mode !== "forgot" && (
-              <div
-                className="rounded-2xl p-4 mb-5 text-left space-y-2"
-                style={{ background: "#f8faf9", border: "1.5px solid rgba(0,108,74,0.12)" }}
-              >
-                <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "#006c4a" }}>
-                  {authLocalOnly ? "Seeded test profiles" : "Browser-only profiles"}
-                </p>
-                <p className="text-[10px] leading-relaxed" style={{ color: "#6b7c75" }}>
-                  Same flows as production: separate user id, backend session, onboarding, and goals per account. No email inbox
-                  required.
-                </p>
-                <ul className="space-y-1.5">
-                  {LOCAL_TEST_SIGNIN_HINTS.map((row) => (
-                    <li
-                      key={row.email}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5"
-                      style={{ background: "rgba(255,255,255,0.75)" }}
-                    >
-                      <span className="text-[11px] min-w-0" style={{ color: "#1a1f1e" }}>
-                        <span className="font-bold">{row.label}</span>
-                        <span style={{ color: "#8a9e97" }}> · {row.email}</span>
-                        <span style={{ color: "#8a9e97" }}> · pw: {row.password}</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEmail(row.email);
-                          setPassword(row.password);
-                          setError("");
-                          setInfo("");
-                        }}
-                        className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg shrink-0"
-                        style={{ background: "rgba(0,108,74,0.1)", color: "#006c4a" }}
-                      >
-                        Fill
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-4">
               {mode === "forgot" && (
                 <button
@@ -576,24 +502,11 @@ export default function AuthPage() {
               {cloudOtpVerify && (
                 <div className="space-y-3">
                   <label className="block text-xs font-bold text-center uppercase tracking-wider" style={{ color: "#6b7c75" }}>
-                    6-digit code
+                    8-digit code
                   </label>
                   <OtpCodeInput value={otpDigits} onChange={setOtpDigits} disabled={loading} autoFocus />
                   <p className="text-[10px] text-center leading-relaxed" style={{ color: "#a8b5af" }}>
-                    If the code does not arrive, check spam and confirm Supabase email templates include{" "}
-                    <code className="text-[10px] px-1 rounded" style={{ background: "#f0f3f1" }}>
-                      {`{{ .Token }}`}
-                    </code>{" "}
-                    in the Confirm sign up template.{" "}
-                    <a
-                      className="underline font-semibold"
-                      style={{ color: "#006c4a" }}
-                      href="https://supabase.com/docs/guides/auth/auth-email-passwordless#with-otp"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      OTP docs
-                    </a>
+                    If the code does not arrive, check spam or request a new code.
                   </p>
                   <div className="flex flex-col gap-2 pt-1">
                     <button
