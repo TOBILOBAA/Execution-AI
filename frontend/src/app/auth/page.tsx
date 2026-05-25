@@ -6,6 +6,7 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { describeSyncError } from "@/lib/apiErrors";
 import { isAuthLocalOnly, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
+import { PASSWORD_REQUIREMENTS_COPY, validateStrongPassword } from "@/lib/passwordRules";
 
 type Mode = "signin" | "signup" | "forgot" | "verify-email";
 
@@ -187,8 +188,9 @@ export default function AuthPage() {
       setError("Enter your name before continuing.");
       return;
     }
-    if (password.length < 8) {
-      setError("Use 8 characters or more.");
+    const passwordCheck = validateStrongPassword(password);
+    if (!passwordCheck.valid) {
+      setError(passwordCheck.message);
       return;
     }
 
@@ -534,7 +536,7 @@ export default function AuthPage() {
                     </div>
                     {mode === "signup" && (
                       <p className="text-[11px] mt-1.5" style={{ color: "#a8b5af" }}>
-                        Used to protect your data. Nothing more.
+                        {PASSWORD_REQUIREMENTS_COPY}
                       </p>
                     )}
                   </div>

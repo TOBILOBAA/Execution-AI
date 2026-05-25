@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabaseClient";
 import { useAppStore } from "@/lib/store";
 import { describeSupabaseAuthError, readSupabaseAuthErrorFromUrl } from "@/lib/authRedirects";
+import { PASSWORD_REQUIREMENTS_COPY, validateStrongPassword } from "@/lib/passwordRules";
 
 /**
  * Shown after the user follows the password reset link from email.
@@ -62,8 +63,9 @@ export default function UpdatePasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (password.length < 8) {
-      setError("Use 8 characters or more.");
+    const passwordCheck = validateStrongPassword(password);
+    if (!passwordCheck.valid) {
+      setError(passwordCheck.message);
       return;
     }
     if (password !== password2) {
@@ -100,7 +102,7 @@ export default function UpdatePasswordPage() {
       <div className="bg-white rounded-3xl w-full p-8 shadow-sm" style={{ maxWidth: 420, border: "1.5px solid rgba(0,0,0,0.07)" }}>
         <h1 className="font-headline font-extrabold text-xl mb-1" style={{ color: "#1a1f1e" }}>Set a new password.</h1>
         <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
-          {ready ? "Use 8 characters or more." : status}
+          {ready ? PASSWORD_REQUIREMENTS_COPY : status}
         </p>
         {!ready && (
           <div className="mb-5 flex items-center gap-2 text-xs font-semibold" style={{ color: "#6b7c75" }}>
