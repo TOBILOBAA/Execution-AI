@@ -306,7 +306,9 @@ export function ManageHabitsModal({ open, onClose }: Props) {
     <div
       className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.30)", backdropFilter: "blur(4px)" }}
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
