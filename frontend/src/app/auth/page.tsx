@@ -6,6 +6,7 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { describeSyncError } from "@/lib/apiErrors";
 import { isAuthLocalOnly, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
+import { PASSWORD_REQUIREMENTS_COPY, validateStrongPassword } from "@/lib/passwordRules";
 
 type Mode = "signin" | "signup" | "forgot" | "verify-email";
 
@@ -187,8 +188,9 @@ export default function AuthPage() {
       setError("Enter your name before continuing.");
       return;
     }
-    if (password.length < 8) {
-      setError("Use 8 characters or more.");
+    const passwordCheck = validateStrongPassword(password);
+    if (!passwordCheck.valid) {
+      setError(passwordCheck.message);
       return;
     }
 
@@ -474,16 +476,6 @@ export default function AuthPage() {
                       onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)")}
                     />
                   </div>
-                  {mode === "signin" && cloudPassword && (
-                    <button
-                      type="button"
-                      onClick={() => switchMode("forgot")}
-                      className="text-[11px] font-bold mt-2 transition-opacity hover:opacity-70"
-                      style={{ color: "#006c4a" }}
-                    >
-                      Forgot password? (email reset link)
-                    </button>
-                  )}
                 </div>
 
                 {mode !== "forgot" && (
@@ -534,7 +526,7 @@ export default function AuthPage() {
                     </div>
                     {mode === "signup" && (
                       <p className="text-[11px] mt-1.5" style={{ color: "#a8b5af" }}>
-                        Used to protect your data. Nothing more.
+                        {PASSWORD_REQUIREMENTS_COPY}
                       </p>
                     )}
                   </div>
