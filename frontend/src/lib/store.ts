@@ -78,7 +78,7 @@ interface AppState {
   registeredUsers: StoredUser[];
   signIn: (email: string, password: string) => Promise<AuthActionResult>;
   signUp: (name: string, email: string, password: string) => Promise<AuthActionResult>;
-  /** Supabase: send a 6-digit code (Magic Link email template must include `{{ .Token }}`). */
+  /** Supabase: send an email verification code during sign-up. */
   sendEmailOtp: (
     email: string,
     opts: { intent: "signin" | "signup"; fullName?: string },
@@ -1127,7 +1127,7 @@ export const useAppStore = create<AppState>()(
         const em = email.toLowerCase().trim();
         const clean = token.replace(/\D/g, "");
         if (clean.length !== 6) {
-          return { success: false, error: "Enter the 6-digit code from your email." };
+          return { success: false, error: "Enter the 8-digit code from your email." };
         }
 
         const tryTypes =
