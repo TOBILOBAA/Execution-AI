@@ -65,7 +65,7 @@ function authUserFromSupabase(u: User, nameFallback?: string): AuthUser {
 
 /** Result of email/password auth (local demo or Supabase). */
 export type AuthActionResult =
-  | { success: true; needsEmailConfirmation?: boolean }
+  | { success: true; needsCodeVerification?: boolean }
   | { success: false; error: string };
 
 export type SendEmailOtpResult = { success: true } | { success: false; error: string };
@@ -974,12 +974,6 @@ export const useAppStore = create<AppState>()(
               : "Invalid email or password, or configure Supabase (NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY) for cloud accounts.",
           };
         }
-        if (isCloudOtpAuthEnabled()) {
-          return {
-            success: false,
-            error: "Cloud accounts use an email code. Enter your email and tap “Send code”.",
-          };
-        }
         const { data, error } = await sb.auth.signInWithPassword({ email: em, password });
         if (error || !data.user) {
           return { success: false, error: error?.message ?? "Sign in failed." };
@@ -1036,13 +1030,6 @@ export const useAppStore = create<AppState>()(
           return { success: true };
         }
 
-        if (isCloudOtpAuthEnabled()) {
-          return {
-            success: false,
-            error: "Cloud sign-up uses a 6-digit email code. Use “Send code” on the sign-up tab.",
-          };
-        }
-
         const { data, error } = await sb.auth.signUp({
           email: em,
           password,
@@ -1067,7 +1054,7 @@ export const useAppStore = create<AppState>()(
         if (!data.session) {
           return {
             success: true,
-            needsEmailConfirmation: true,
+            needsCodeVerification: isCloudOtpAuthEnabled(),
           };
         }
 
