@@ -476,16 +476,6 @@ export default function AuthPage() {
                       onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)")}
                     />
                   </div>
-                  {mode === "signin" && cloudPassword && (
-                    <button
-                      type="button"
-                      onClick={() => switchMode("forgot")}
-                      className="text-[11px] font-bold mt-2 transition-opacity hover:opacity-70"
-                      style={{ color: "#006c4a" }}
-                    >
-                      Forgot password? (email reset link)
-                    </button>
-                  )}
                 </div>
 
                 {mode !== "forgot" && (
