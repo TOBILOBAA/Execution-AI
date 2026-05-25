@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from app.core.config import get_settings
 from app.core.logging import configure_logging, logger
 from app.api.routes import (
+    activity,
     sessions,
     yearly_goals,
     plans,
@@ -141,3 +142,4 @@ app.include_router(habits.router)
 app.include_router(dashboard.router)
 app.include_router(goals_hierarchy.router)
 app.include_router(reports.router)
+app.include_router(activity.router)

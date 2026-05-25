@@ -28,6 +28,9 @@ def _drop_unsupported_session_columns(payload: dict, exc: APIError) -> dict:
             "week_starts_on",
             "pending_recaps",
             "handled_recaps",
+            "last_seen_at",
+            "last_active_at",
+            "last_opened_date_local",
         )
         if key in payload and _is_missing_column(exc, key)
     }
