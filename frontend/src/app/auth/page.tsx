@@ -14,7 +14,7 @@ const cloudOtpEnabled = isCloudOtpAuthEnabled();
 const cloudPassword = isCloudPasswordAuthEnabled();
 const authLocalOnly = isAuthLocalOnly();
 const showLocalSeedPanel = isAuthLocalOnly() || !isCloudSupabaseConfigured();
-const showDemoShortcut = !cloudPassword || cloudOtpEnabled || authLocalOnly;
+const showDemoShortcut = cloudPassword || authLocalOnly;
 
 /** Format check only — does not verify the inbox exists or accepts mail. */
 const EMAIL_FORMAT =
@@ -194,44 +194,21 @@ export default function AuthPage() {
       return;
     }
 
-    if (cloudOtpEnabled) {
-      if (mode === "signup" && !otpAwaitingCode && !name.trim()) {
-        setError("Enter your name before continuing.");
+    if (mode === "signup" && cloudOtpEnabled && otpAwaitingCode) {
+      if (otpDigits.replace(/\D/g, "").length !== 6) {
+        setError("Enter the 6-digit code from your email.");
         return;
       }
-
-      if (otpAwaitingCode) {
-        if (otpDigits.replace(/\D/g, "").length !== 6) {
-          setError("Enter the 6-digit code from your email.");
-          return;
-        }
-        setLoading(true);
-        const result = await verifyEmailOtp(trimmedEmail, otpDigits, {
-          intent: mode === "signup" ? "signup" : "signin",
-          fullName: name.trim() || undefined,
-        });
-        setLoading(false);
-        if (!result.success) {
-          setError(result.error ?? "Verification failed.");
-          return;
-        }
-        return;
-      }
-
       setLoading(true);
-      const send = await sendEmailOtp(trimmedEmail, {
-        intent: mode === "signup" ? "signup" : "signin",
-        fullName: mode === "signup" ? name.trim() : undefined,
+      const result = await verifyEmailOtp(trimmedEmail, otpDigits, {
+        intent: "signup",
+        fullName: name.trim() || undefined,
       });
       setLoading(false);
-      if (!send.success) {
-        setError(send.error);
+      if (!result.success) {
+        setError(result.error ?? "Verification failed.");
         return;
       }
-      setOtpAwaitingCode(true);
-      setOtpDigits("");
-      setResendIn(56);
-      setInfo("We sent a 6-digit code to your inbox. Enter it below (check spam).");
       return;
     }
 
@@ -264,10 +241,16 @@ export default function AuthPage() {
         setLoading(false);
         return;
       }
-      if (result.needsEmailConfirmation) {
-        // Email confirmation is disabled for MVP — project-level Supabase setting controls this.
-        // If the user lands here it means they need to confirm; show a message rather than silently failing.
-        setInfo("Check your inbox for a confirmation link, then sign in here.");
+      if (result.needsCodeVerification) {
+        setOtpAwaitingCode(true);
+        setOtpDigits("");
+        setResendIn(56);
+        setInfo("We sent a 6-digit verification code to your inbox. Enter it below to continue to onboarding.");
+        setLoading(false);
+        return;
+      }
+      if (cloudOtpEnabled) {
+        setInfo("Check your inbox for your verification email, then return here to continue.");
         setLoading(false);
         return;
       }
@@ -278,24 +261,17 @@ export default function AuthPage() {
   const fillDemo = async () => {
     setError("");
     setInfo("");
-    if (cloudOtpEnabled) {
-      setLoading(true);
-      const r = await signIn("alex@executionai.com", "demo123");
-      setLoading(false);
-      if (!r.success) setError(r.error ?? "Demo sign-in failed.");
-      return;
-    }
     setEmail("alex@executionai.com");
     setPassword("demo123");
   };
 
-  const cloudOtpVerify = cloudOtpEnabled && (mode === "signin" || mode === "signup") && otpAwaitingCode;
+  const cloudOtpVerify = cloudOtpEnabled && mode === "signup" && otpAwaitingCode;
 
   const heading =
     mode === "forgot"
       ? "Reset your password."
       : cloudOtpVerify
-        ? "Enter your code"
+        ? "Verify your email."
         : mode === "signin"
           ? "Welcome back."
           : "Build your execution engine.";
@@ -304,11 +280,9 @@ export default function AuthPage() {
     mode === "forgot"
       ? "Enter the email you signed up with. We'll send a reset link."
       : cloudOtpVerify
-        ? `Code sent to ${email.trim() || "your email"}. It expires after a few minutes.`
-      : cloudOtpEnabled && mode === "signin" && !cloudOtpVerify
-        ? "We will email you a one-time 6-digit code. Or use the demo account below."
+        ? `Enter the 6-digit code sent to ${email.trim() || "your email"}. Once verified, we'll take you straight into yearly onboarding.`
         : cloudOtpEnabled && mode === "signup" && !cloudOtpVerify
-          ? "We will email you a one-time code to verify this address — no password to remember."
+          ? "Create your account, then verify the 6-digit code we send to your email before entering onboarding."
           : cloudPassword && mode === "signin"
             ? "Step back into your plans, protect your focus, and keep today moving."
           : cloudPassword && mode === "signup"
@@ -323,13 +297,13 @@ export default function AuthPage() {
 
   const submitLabel = () => {
     if (mode === "forgot") return "Send reset link";
-    if (cloudOtpEnabled) return cloudOtpVerify ? "Verify & continue" : "Send code";
+    if (cloudOtpVerify) return "Verify & continue";
     return mode === "signup" ? "Begin" : "Sign in";
   };
 
   const loadingLabel = () => {
     if (mode === "forgot") return "Sending…";
-    if (cloudOtpEnabled) return cloudOtpVerify ? "Verifying…" : "Sending code…";
+    if (cloudOtpVerify) return "Verifying…";
     if (mode === "signup") return "Setting up your account…";
     return "Signing in…";
   };
@@ -469,7 +443,7 @@ export default function AuthPage() {
                     Try the demo account
                   </p>
                   <p className="text-[11px]" style={{ color: "#6b9e88" }}>
-                    {cloudOtpEnabled ? "Instant sign-in — no password needed" : "alex@executionai.com · demo123"}
+                    alex@executionai.com · demo123
                   </p>
                 </div>
               </button>
@@ -586,7 +560,7 @@ export default function AuthPage() {
                       onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)")}
                     />
                   </div>
-                  {cloudOtpEnabled && mode === "signin" && (
+                  {mode === "signin" && cloudPassword && (
                     <button
                       type="button"
                       onClick={() => switchMode("forgot")}
@@ -606,11 +580,11 @@ export default function AuthPage() {
                   </label>
                   <OtpCodeInput value={otpDigits} onChange={setOtpDigits} disabled={loading} autoFocus />
                   <p className="text-[10px] text-center leading-relaxed" style={{ color: "#a8b5af" }}>
-                    In Supabase → Authentication → Email Templates, add{" "}
+                    If the code does not arrive, check spam and confirm Supabase email templates include{" "}
                     <code className="text-[10px] px-1 rounded" style={{ background: "#f0f3f1" }}>
                       {`{{ .Token }}`}
                     </code>{" "}
-                    to both the Magic link and Confirm sign up templates (new accounts may use Confirm sign up).{" "}
+                    in the Confirm sign up template.{" "}
                     <a
                       className="underline font-semibold"
                       style={{ color: "#006c4a" }}
@@ -631,8 +605,8 @@ export default function AuthPage() {
                         setLoading(true);
                         const em = email.trim().toLowerCase();
                         const r = await sendEmailOtp(em, {
-                          intent: mode === "signup" ? "signup" : "signin",
-                          fullName: mode === "signup" ? name.trim() : undefined,
+                          intent: "signup",
+                          fullName: name.trim() || undefined,
                         });
                         setLoading(false);
                         if (!r.success) {
@@ -665,7 +639,7 @@ export default function AuthPage() {
                 </div>
               )}
 
-              {!cloudOtpEnabled && mode !== "forgot" && (
+              {!cloudOtpVerify && mode !== "forgot" && (
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-bold uppercase tracking-wider" style={{ color: "#6b7c75" }}>
