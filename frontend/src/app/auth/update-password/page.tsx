@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabaseClient";
 import { useAppStore } from "@/lib/store";
+import { describeSupabaseAuthError, readSupabaseAuthErrorFromUrl } from "@/lib/authRedirects";
 
 /**
  * Shown after the user follows the password reset link from email.
@@ -23,6 +25,14 @@ export default function UpdatePasswordPage() {
     if (!sb) {
       return;
     }
+    const url = new URL(window.location.href);
+    const urlError = readSupabaseAuthErrorFromUrl(url);
+    if (urlError) {
+      setError(urlError);
+      setStatus("Reset link issue.");
+      setReady(false);
+      return;
+    }
     const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         setReady(true);
@@ -35,7 +45,18 @@ export default function UpdatePasswordPage() {
         setStatus("Reset link verified.");
       }
     });
-    return () => subscription.unsubscribe();
+    const timeout = window.setTimeout(() => {
+      setReady((currentReady) => {
+        if (currentReady) return currentReady;
+        setError("This reset link is invalid or has expired. Request a new reset email and try again.");
+        setStatus("Reset link issue.");
+        return currentReady;
+      });
+    }, 6000);
+    return () => {
+      subscription.unsubscribe();
+      window.clearTimeout(timeout);
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,7 +78,7 @@ export default function UpdatePasswordPage() {
     setLoading(false);
     if (upErr) {
       setStatus("Reset link verified.");
-      setError(upErr.message);
+      setError(describeSupabaseAuthError(upErr.message));
       return;
     }
     await useAppStore.getState().hydrateAuthFromSupabase();
@@ -87,6 +108,18 @@ export default function UpdatePasswordPage() {
             {status}
           </div>
         )}
+        {error && !ready && (
+          <div className="mb-5">
+            <p className="text-xs font-semibold mb-3" style={{ color: "#ef4444" }}>{error}</p>
+            <Link
+              href="/auth"
+              className="inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold text-white"
+              style={{ background: "#006c4a" }}
+            >
+              Back to sign in
+            </Link>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{ color: "#6b7c75" }}>New password</label>
@@ -110,7 +143,7 @@ export default function UpdatePasswordPage() {
               disabled={!ready || loading}
             />
           </div>
-          {error && <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>{error}</p>}
+          {error && ready && <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>{error}</p>}
           <button
             type="submit"
             disabled={!ready || loading}

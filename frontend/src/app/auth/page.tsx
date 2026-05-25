@@ -6,13 +6,11 @@ import { useAppStore, LOCAL_TEST_SIGNIN_HINTS } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { OtpCodeInput } from "@/components/OtpCodeInput";
 import { describeSyncError } from "@/lib/apiErrors";
-import { isAuthLocalOnly, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
+import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
 
 type Mode = "signin" | "signup" | "forgot";
 
-// OTP path is intentionally disabled for MVP. The code is preserved for post-MVP.
-// To re-enable: replace `false` with `isCloudOtpAuthEnabled()`.
-const cloudOtpEnabled = false;
+const cloudOtpEnabled = isCloudOtpAuthEnabled();
 const cloudPassword = isCloudPasswordAuthEnabled();
 const authLocalOnly = isAuthLocalOnly();
 const showLocalSeedPanel = isAuthLocalOnly() || !isCloudSupabaseConfigured();
@@ -364,18 +362,18 @@ export default function AuthPage() {
             >
               Your goals.
               <br />
-              Your momentum.
+              Your behavior.
               <br />
-              <span style={{ color: "#85f8c4" }}>Your record.</span>
+              <span style={{ color: "#85f8c4" }}>Your growth.</span>
             </h1>
           </div>
           <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.5)" }}>
-            Execution AI turns long-range direction into a living execution engine with linked planning, disciplined follow-through,
-            and a clear record of how your goals progress over time.
+            Execution AI helps you plan, execute, track, and understand your growth journey by turning goals into action
+            and revealing the habits and patterns shaping your progress.
           </p>
 
           <div className="flex flex-wrap gap-2">
-            {["AI Planning", "Goal Hierarchy", "Daily Focus", "Performance Reports"].map((f) => (
+            {["AI Planning", "Behavior Insights", "Execution Patterns", "Daily Focus", "Performance Reports"].map((f) => (
               <span
                 key={f}
                 className="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full"
@@ -471,7 +469,7 @@ export default function AuthPage() {
                     Try the demo account
                   </p>
                   <p className="text-[11px]" style={{ color: "#6b9e88" }}>
-                    {cloudOtpEnabled ? "Instant sign-in — no email code" : "alex@executionai.com · demo123"}
+                    {cloudOtpEnabled ? "Instant sign-in — no password needed" : "alex@executionai.com · demo123"}
                   </p>
                 </div>
               </button>

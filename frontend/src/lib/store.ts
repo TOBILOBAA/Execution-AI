@@ -45,6 +45,7 @@ import { getSupabaseBrowser } from "./supabaseClient";
 import type { User } from "@supabase/supabase-js";
 import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudSupabaseConfigured } from "./authMode";
 import { getWeekNumber, listWeeksForYearThroughWeek } from "./goalsView";
+import { buildPublicUrl, describeSupabaseAuthError } from "./authRedirects";
 
 // ── Auth types ─────────────────────────────────────────────────────────────────
 export interface AuthUser { id: string; name: string; email: string; plan: string }
@@ -1042,13 +1043,12 @@ export const useAppStore = create<AppState>()(
           };
         }
 
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
         const { data, error } = await sb.auth.signUp({
           email: em,
           password,
           options: {
             data: { full_name: name.trim() },
-            emailRedirectTo: origin ? `${origin}/auth/callback` : undefined,
+            emailRedirectTo: buildPublicUrl("/auth/callback"),
           },
         });
         if (error) {
@@ -1115,10 +1115,11 @@ export const useAppStore = create<AppState>()(
           email: em,
           options: {
             shouldCreateUser: opts.intent === "signup",
+            emailRedirectTo: buildPublicUrl("/auth/callback"),
           },
         });
         if (error) {
-          const msg = error.message;
+          const msg = describeSupabaseAuthError(error.message);
           const mailDown =
             /confirmation email|error sending|smtp|mailer|email.*fail/i.test(msg) ||
             error.status === 500;
@@ -1159,7 +1160,7 @@ export const useAppStore = create<AppState>()(
             data = res.data;
             break;
           }
-          if (res.error?.message) lastMessage = res.error.message;
+          if (res.error?.message) lastMessage = describeSupabaseAuthError(res.error.message);
         }
         if (!data?.user) {
           return { success: false, error: lastMessage };
@@ -1284,11 +1285,10 @@ export const useAppStore = create<AppState>()(
         if (!sb) {
           return { success: false, error: "Configure Supabase environment variables to reset passwords." };
         }
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
         const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-          redirectTo: origin ? `${origin}/auth/update-password` : undefined,
+          redirectTo: buildPublicUrl("/auth/update-password"),
         });
-        if (error) return { success: false, error: error.message };
+        if (error) return { success: false, error: describeSupabaseAuthError(error.message) };
         return { success: true };
       },
 
