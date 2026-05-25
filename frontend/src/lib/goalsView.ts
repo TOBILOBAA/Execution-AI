@@ -16,12 +16,39 @@ export const GOALS_MONTH_NAMES = [
 ] as const;
 
 export type GoalStateKey = "completed" | "on-track" | "at-risk" | "not-started";
+export type YearlyReviewStateKey =
+  | "completed"
+  | "ready-for-review"
+  | "in-progress"
+  | "at-risk"
+  | "not-started";
 
 type GoalLike = {
   status?: GoalStatus;
   progress?: number;
   targetDate?: string;
   completed?: boolean;
+};
+
+type MonthExecutionSummary = {
+  monthGoal: MonthlyGoal;
+  weeklyGoals: WeeklyGoal[];
+  dailyPriorities: DailyPriority[];
+  executionProgress: number;
+  monthClosed: boolean;
+  readyForReview: boolean;
+  recoverySignal: boolean;
+};
+
+export type YearlyGoalReviewSummary = {
+  state: YearlyReviewStateKey;
+  progress: number;
+  readyMonths: number;
+  unresolvedMissedMonths: number;
+  recoveredMissedMonths: number;
+  linkedMonthlyGoals: number;
+  canMarkComplete: boolean;
+  note: string | null;
 };
 
 export function getMonthName(month: number): string {
@@ -70,6 +97,201 @@ export function classifyGoalState(goal: GoalLike, todayIso = new Date().toISOStr
   return "on-track";
 }
 
+function isGoalComplete(goal: GoalLike): boolean {
+  return goal.completed || goal.status === "completed" || (goal.progress ?? 0) >= 100;
+}
+
+function goalProgress(goal: GoalLike): number {
+  return isGoalComplete(goal) ? 100 : Math.max(0, Math.min(100, goal.progress ?? 0));
+}
+
+function getYearMonthIndex(year: number, month: number): number {
+  return year * 12 + (month - 1);
+}
+
+function isMonthClosed(monthGoal: MonthlyGoal, todayIso: string): boolean {
+  const todayYear = Number(todayIso.slice(0, 4));
+  const todayMonth = Number(todayIso.slice(5, 7));
+  if (!todayYear || !todayMonth) return false;
+  return getYearMonthIndex(monthGoal.year, monthGoal.month) < getYearMonthIndex(todayYear, todayMonth);
+}
+
+function compareMonthlyGoals(a: MonthlyGoal, b: MonthlyGoal): number {
+  return getYearMonthIndex(a.year, a.month) - getYearMonthIndex(b.year, b.month);
+}
+
+function hasCompletedDailyPriority(priority: DailyPriority): boolean {
+  return priority.completed || priority.status === "completed";
+}
+
+function computeMonthlyExecutionProgress(
+  monthGoal: MonthlyGoal,
+  weeklyGoals: WeeklyGoal[],
+  dailyPriorities: DailyPriority[],
+): number {
+  const monthlySignal = goalProgress(monthGoal);
+  const weeklySignal = weeklyGoals.length
+    ? Math.round(weeklyGoals.reduce((sum, goal) => sum + goalProgress(goal), 0) / weeklyGoals.length)
+    : monthlySignal;
+  const dailySignal = dailyPriorities.length
+    ? Math.round(
+        (dailyPriorities.filter((priority) => hasCompletedDailyPriority(priority)).length / dailyPriorities.length) * 100,
+      )
+    : weeklySignal;
+  return Math.round(monthlySignal * 0.55 + weeklySignal * 0.25 + dailySignal * 0.2);
+}
+
+function isMonthReadyForReview(summary: MonthExecutionSummary): boolean {
+  const monthlyDone = isGoalComplete(summary.monthGoal);
+  const weeklyDone = summary.weeklyGoals.length > 0 && summary.weeklyGoals.every((goal) => isGoalComplete(goal));
+  const dailyDone =
+    summary.dailyPriorities.length > 0 &&
+    summary.dailyPriorities.every((priority) => hasCompletedDailyPriority(priority));
+
+  if (summary.dailyPriorities.length > 0) {
+    return (monthlyDone || weeklyDone) && dailyDone;
+  }
+  if (summary.weeklyGoals.length > 0) {
+    return monthlyDone || weeklyDone;
+  }
+  return monthlyDone;
+}
+
+function hasMonthRecoverySignal(summary: MonthExecutionSummary): boolean {
+  return (
+    summary.readyForReview ||
+    summary.executionProgress > 0 ||
+    summary.monthGoal.status === "active" ||
+    summary.weeklyGoals.length > 0 ||
+    summary.dailyPriorities.length > 0
+  );
+}
+
+export function deriveYearlyGoalReviewSummary(
+  yearlyGoal: YearlyGoal,
+  monthlyGoals: MonthlyGoal[],
+  weeklyGoalsByMonthly: Map<string, WeeklyGoal[]>,
+  dailyPrioritiesByWeekly: Map<string, DailyPriority[]>,
+  todayIso = new Date().toISOString().slice(0, 10),
+): YearlyGoalReviewSummary {
+  if (yearlyGoal.status === "completed") {
+    return {
+      state: "completed",
+      progress: 100,
+      readyMonths: 0,
+      unresolvedMissedMonths: 0,
+      recoveredMissedMonths: 0,
+      linkedMonthlyGoals: monthlyGoals.length,
+      canMarkComplete: true,
+      note: "Outcome confirmed.",
+    };
+  }
+
+  const sortedMonthlyGoals = [...monthlyGoals].sort(compareMonthlyGoals);
+  if (sortedMonthlyGoals.length === 0) {
+    return {
+      state: "not-started",
+      progress: 0,
+      readyMonths: 0,
+      unresolvedMissedMonths: 0,
+      recoveredMissedMonths: 0,
+      linkedMonthlyGoals: 0,
+      canMarkComplete: false,
+      note: "Link a monthly goal to start this yearly outcome.",
+    };
+  }
+
+  const monthSummaries: MonthExecutionSummary[] = sortedMonthlyGoals.map((monthGoal) => {
+    const weeklyGoals = weeklyGoalsByMonthly.get(monthGoal.id) ?? [];
+    const dailyPriorities = weeklyGoals.flatMap((goal) => dailyPrioritiesByWeekly.get(goal.id) ?? []);
+    const executionProgress = computeMonthlyExecutionProgress(monthGoal, weeklyGoals, dailyPriorities);
+    const monthClosed = isMonthClosed(monthGoal, todayIso);
+    const baseSummary: MonthExecutionSummary = {
+      monthGoal,
+      weeklyGoals,
+      dailyPriorities,
+      executionProgress,
+      monthClosed,
+      readyForReview: false,
+      recoverySignal: false,
+    };
+    const readyForReview = isMonthReadyForReview(baseSummary);
+    return {
+      ...baseSummary,
+      readyForReview,
+      recoverySignal: hasMonthRecoverySignal({ ...baseSummary, readyForReview, recoverySignal: false }),
+    };
+  });
+
+  const unresolvedMissedMonths: MonthExecutionSummary[] = [];
+  let recoveredMissedMonths = 0;
+
+  monthSummaries.forEach((summary, index) => {
+    if (!summary.monthClosed || summary.readyForReview) return;
+    const recoveredLater = monthSummaries
+      .slice(index + 1)
+      .some((futureMonth) => compareMonthlyGoals(futureMonth.monthGoal, summary.monthGoal) > 0 && futureMonth.recoverySignal);
+    if (recoveredLater) {
+      recoveredMissedMonths += 1;
+      return;
+    }
+    unresolvedMissedMonths.push(summary);
+  });
+
+  const readyMonths = monthSummaries.filter((summary) => summary.readyForReview).length;
+  const derivedProgress = averageProgress(
+    monthSummaries.map((summary) => ({
+      progress: summary.executionProgress,
+    })),
+  );
+  const progress = Math.max(yearlyGoal.progress ?? 0, derivedProgress);
+
+  if (unresolvedMissedMonths.length > 0) {
+    const missedCount = unresolvedMissedMonths.length;
+    return {
+      state: "at-risk",
+      progress,
+      readyMonths,
+      unresolvedMissedMonths: missedCount,
+      recoveredMissedMonths,
+      linkedMonthlyGoals: sortedMonthlyGoals.length,
+      canMarkComplete: false,
+      note: `${missedCount} missed month${missedCount === 1 ? "" : "s"} still need a recovery plan.`,
+    };
+  }
+
+  if (readyMonths > 0) {
+    const note =
+      recoveredMissedMonths > 0
+        ? `${recoveredMissedMonths} missed month${recoveredMissedMonths === 1 ? "" : "s"} recovered.`
+        : `${readyMonths} month${readyMonths === 1 ? "" : "s"} finished and ready to review.`;
+    return {
+      state: "ready-for-review",
+      progress,
+      readyMonths,
+      unresolvedMissedMonths: 0,
+      recoveredMissedMonths,
+      linkedMonthlyGoals: sortedMonthlyGoals.length,
+      canMarkComplete: true,
+      note,
+    };
+  }
+
+  return {
+    state: "in-progress",
+    progress,
+    readyMonths: 0,
+    unresolvedMissedMonths: 0,
+    recoveredMissedMonths,
+    linkedMonthlyGoals: sortedMonthlyGoals.length,
+    canMarkComplete: false,
+    note:
+      recoveredMissedMonths > 0
+        ? `${recoveredMissedMonths} missed month${recoveredMissedMonths === 1 ? "" : "s"} recovered.`
+        : "Aligned work is in motion.",
+  };
+}
+
 export function getGoalStateMeta(state: GoalStateKey) {
   switch (state) {
     case "completed":
@@ -96,6 +318,46 @@ export function getGoalStateMeta(state: GoalStateKey) {
     default:
       return {
         label: "On Track",
+        text: "#006c4a",
+        background: "rgba(0,108,74,0.1)",
+        border: "rgba(0,108,74,0.16)",
+      };
+  }
+}
+
+export function getYearlyGoalStateMeta(state: YearlyReviewStateKey) {
+  switch (state) {
+    case "completed":
+      return {
+        label: "Completed",
+        text: "#0b7a53",
+        background: "rgba(11,122,83,0.1)",
+        border: "rgba(11,122,83,0.18)",
+      };
+    case "ready-for-review":
+      return {
+        label: "Ready for Review",
+        text: "#1d4ed8",
+        background: "rgba(37,99,235,0.09)",
+        border: "rgba(37,99,235,0.16)",
+      };
+    case "at-risk":
+      return {
+        label: "At Risk",
+        text: "#b45309",
+        background: "rgba(217,119,6,0.12)",
+        border: "rgba(217,119,6,0.18)",
+      };
+    case "not-started":
+      return {
+        label: "Not Started",
+        text: "#667781",
+        background: "rgba(148,163,184,0.14)",
+        border: "rgba(148,163,184,0.18)",
+      };
+    default:
+      return {
+        label: "In Progress",
         text: "#006c4a",
         background: "rgba(0,108,74,0.1)",
         border: "rgba(0,108,74,0.16)",

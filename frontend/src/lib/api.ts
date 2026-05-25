@@ -22,6 +22,7 @@ type RequestOptions = RequestInit & { timeoutMs?: number };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { timeoutMs, signal: outerSignal, ...fetchOpts } = options;
+  const method = fetchOpts.method ?? "GET";
   const controller = typeof timeoutMs === "number" ? new AbortController() : null;
   const timeoutId =
     controller && timeoutMs
@@ -46,6 +47,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         "Request timed out. The server took too long to respond (often the AI step). Try again, or set GEMINI_MODEL to a supported Gemini model like gemini-2.5-flash on the backend.",
       );
     }
+    if (typeof console !== "undefined") {
+      console.error("[api network error]", {
+        method,
+        path,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
     throw e;
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
@@ -53,11 +61,28 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
+    let rawBody = "";
     try {
-      const body = await res.json();
-      detail = body?.detail ?? detail;
+      rawBody = await res.text();
+      if (rawBody) {
+        try {
+          const body = JSON.parse(rawBody);
+          detail = body?.detail ?? body?.message ?? rawBody;
+        } catch {
+          detail = rawBody;
+        }
+      }
     } catch {
       /* ignore */
+    }
+    if (typeof console !== "undefined") {
+      console.error("[api request failed]", {
+        method,
+        path,
+        status: res.status,
+        detail,
+        body: rawBody ? rawBody.slice(0, 800) : "",
+      });
     }
     throw new ApiError(res.status, detail);
   }
@@ -204,6 +229,9 @@ export interface ApiHabit {
   frequency: string;
   active: boolean;
   category_id?: string;
+  yearly_goal_id?: string;
+  monthly_goal_id?: string;
+  weekly_goal_id?: string;
   sort_order: number;
   completed_today: boolean;
   streak: number;
@@ -536,6 +564,9 @@ export const habitsApi = {
     icon: string;
     frequency: string;
     category_id?: string;
+    yearly_goal_id?: string;
+    monthly_goal_id?: string;
+    weekly_goal_id?: string;
   }) => post<ApiHabit>(`/habits/${sessionId}`, data),
 
   update: (sessionId: string, habitId: string, data: Partial<{
@@ -543,7 +574,10 @@ export const habitsApi = {
     icon: string;
     frequency: string;
     active: boolean;
-    category_id: string;
+    category_id: string | null;
+    yearly_goal_id: string | null;
+    monthly_goal_id: string | null;
+    weekly_goal_id: string | null;
   }>) => patch<ApiHabit>(`/habits/${sessionId}/${habitId}`, data),
 
   delete: (sessionId: string, habitId: string) =>

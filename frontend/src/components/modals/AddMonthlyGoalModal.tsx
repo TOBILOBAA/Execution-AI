@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import type { MonthlyGoal } from "@/lib/types";
 import { MONTH_NAMES } from "@/lib/mockData";
+import { MONTHLY_MAIN_GOAL_CAP, MONTHLY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 
 interface Props {
   open: boolean;
@@ -26,6 +27,7 @@ export function AddMonthlyGoalModal({
   const updateMonthlyGoal = useAppStore((state) => state.updateMonthlyGoal);
   const removeMonthlyGoal = useAppStore((state) => state.removeMonthlyGoal);
   const yearlyGoals = useAppStore((state) => state.yearlyGoals);
+  const monthlyGoals = useAppStore((state) => state.monthlyGoals);
   const activeDashboardDate = useAppStore((state) => state.activeDashboardDate);
   const isEdit = !!initialData;
   const titleId = isEdit ? "monthly-goal-edit-title" : "monthly-goal-add-title";
@@ -44,6 +46,19 @@ export function AddMonthlyGoalModal({
     () => yearlyGoals.filter((goal) => goal.year === effectiveYear),
     [effectiveYear, yearlyGoals],
   );
+  const siblingGoals = useMemo(
+    () =>
+      monthlyGoals.filter(
+        (goal) =>
+          goal.year === effectiveYear &&
+          goal.month === effectiveMonth &&
+          goal.id !== initialData?.id,
+      ),
+    [effectiveMonth, effectiveYear, initialData?.id, monthlyGoals],
+  );
+  const mainGoalCapReached = isMain && siblingGoals.filter((goal) => goal.isMain).length >= MONTHLY_MAIN_GOAL_CAP;
+  const secondaryGoalCapReached =
+    !isMain && siblingGoals.filter((goal) => !goal.isMain).length >= MONTHLY_SECONDARY_GOAL_CAP;
 
   useEffect(() => {
     if (!open) return;
@@ -79,6 +94,14 @@ export function AddMonthlyGoalModal({
       setError("Pick a yearly goal first");
       return;
     }
+    if (mainGoalCapReached) {
+      setError("You can only save 1 main goal for this month.");
+      return;
+    }
+    if (secondaryGoalCapReached) {
+      setError("You can only save up to 2 secondary goals for this month.");
+      return;
+    }
     if (isEdit && initialData) {
       updateMonthlyGoal(initialData.id, { title: title.trim(), description, isMain, yearlyGoalId });
     } else {
@@ -108,7 +131,7 @@ export function AddMonthlyGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.25)", backdropFilter: "blur(5px)" }}
       onClick={onClose}
       role="dialog"
@@ -116,7 +139,7 @@ export function AddMonthlyGoalModal({
       aria-labelledby={titleId}
     >
       <div
-        className="bg-white w-full max-w-[620px] max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+        className="bg-white w-full max-w-[620px] max-h-[calc(100vh-2rem)] sm:max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
         style={{ border: "1px solid rgba(0,0,0,0.07)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -281,7 +304,7 @@ export function AddMonthlyGoalModal({
         </div>
 
         <div
-          className="px-8 py-5 flex items-center justify-between"
+          className="px-8 py-5 flex items-center justify-between flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
           <div>

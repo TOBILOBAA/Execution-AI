@@ -48,10 +48,11 @@ def approve_next_day_review(
     If `plan_date` is omitted, the backend uses the current local date on the server.
     """
     effective_date = plan_date or get_session_today(db, session_id)
-    return dashboard_service.approve_next_day_review(
+    result = dashboard_service.approve_next_day_review(
         db,
         session_id,
         effective_date,
         [item.model_dump() for item in body.priorities],
         [item.model_dump() for item in body.tasks],
     )
+    return result

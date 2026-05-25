@@ -106,7 +106,8 @@ export function AddGoalModal({
               className="block mb-2"
               style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8a9e97" }}
             >
-              Target Completion Date
+              <span className="sm:hidden">Target Date</span>
+              <span className="hidden sm:inline">Target Completion Date</span>
             </label>
             <button
               type="button"

@@ -173,7 +173,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
             <button
               type="button"
               onClick={() => openModal("add-weekly-goal", { yearOverride: year, weekOverride: selectedWeek, defaultIsMain: selectedWeekMainGoals.length === 0 })}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow-[0_12px_28px_rgba(0,108,74,0.16)]"
+              className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow-[0_12px_28px_rgba(0,108,74,0.16)] sm:w-auto"
               style={{ background: "#006c4a", color: "#fff" }}
             >
               <span className="material-symbols-outlined text-[16px]">add</span>
@@ -181,7 +181,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
             </button>
           ) : (
             <span
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+              className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold sm:w-auto"
               style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
             >
               <span className="material-symbols-outlined text-[16px]">lock</span>
@@ -355,7 +355,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
   }
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6 p-4 sm:p-6 md:p-8">
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -430,7 +430,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
             </label>
 
             <div
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium"
+              className="hidden items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium md:inline-flex"
               style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#4b635b" }}
             >
               <span>Status guide</span>
@@ -439,7 +439,87 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
           </div>
         </div>
 
-        <div className="mt-5 overflow-x-auto rounded-[22px]" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
+        <div className="mt-5 space-y-3 md:hidden">
+          {paginatedRows.map((row) => {
+            const progressTone = getProgressTone(row.progress);
+            const current = row.weekNumber === currentWeekNumber && year === liveYear;
+            const selected = selectedWeek === row.weekNumber;
+            return (
+              <Fragment key={row.weekNumber}>
+                <button
+                  type="button"
+                  onClick={() => pushWeek(row.weekNumber)}
+                  className="w-full rounded-[22px] p-4 text-left"
+                  style={{
+                    background: current ? "rgba(0,108,74,0.03)" : "#fff",
+                    border: current ? "1.5px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.06)",
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold" style={{ color: current ? "#006c4a" : "#1a1f1e" }}>
+                        Week {row.weekNumber}
+                      </p>
+                      <p className="mt-1 text-xs" style={{ color: "#8a9e97" }}>
+                        {getMonthShortName(row.month)} · {formatWeekWindow(new Date(`${row.start}T00:00:00Z`), new Date(`${row.end}T00:00:00Z`))}
+                      </p>
+                    </div>
+                    <span
+                      className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest"
+                      style={{ background: "rgba(0,108,74,0.08)", color: progressTone }}
+                    >
+                      {row.progress}%
+                    </span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        Goals
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: "#1a1f1e" }}>
+                        {row.goalsSet}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        Completed
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("completed").text }}>
+                        {row.completed}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        In Progress
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("on-track").text }}>
+                        {row.inProgress}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                        At Risk
+                      </p>
+                      <p className="mt-1 font-semibold" style={{ color: getGoalStateMeta("at-risk").text }}>
+                        {row.atRisk}
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-xs font-semibold"
+                    style={{ borderColor: "rgba(0,0,0,0.06)", color: current ? "#006c4a" : "#6b7c75" }}
+                  >
+                    <span>{current ? "Open this week to edit goals" : "Tap to review this week"}</span>
+                    <span className="material-symbols-outlined text-[16px]">{selected ? "expand_less" : "chevron_right"}</span>
+                  </div>
+                </button>
+                {selected ? renderSelectedWeekDetail() : null}
+              </Fragment>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 hidden overflow-x-auto rounded-[22px] md:block" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
           <table className="min-w-full">
             <thead>
               <tr className="text-left" style={{ background: "#fbfcfb" }}>
@@ -516,7 +596,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
           </table>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-4 flex-wrap text-sm" style={{ color: "#6b7c75" }}>
+        <div className="mt-5 hidden items-center justify-between gap-4 flex-wrap text-sm md:flex" style={{ color: "#6b7c75" }}>
           <p>
             Showing {startRow} to {endRow} of {sortedRows.length} weeks
           </p>

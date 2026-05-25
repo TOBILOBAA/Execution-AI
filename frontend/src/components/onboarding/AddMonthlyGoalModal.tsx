@@ -9,6 +9,9 @@ interface Props {
   mode: "main" | "secondary";
   categories: Category[];
   yearlyGoals: YearlyGoal[];
+  currentCount?: number;
+  maxCount?: number;
+  limitMessage?: string;
   monthOverride?: number;
   yearOverride?: number;
   /** Pre-fill for edit */
@@ -51,6 +54,9 @@ export function AddMonthlyGoalModal({
   mode,
   categories,
   yearlyGoals,
+  currentCount = 0,
+  maxCount,
+  limitMessage,
   monthOverride,
   yearOverride,
   initialTitle = "",
@@ -81,18 +87,25 @@ export function AddMonthlyGoalModal({
 
   const handleSubmit = () => {
     if (!title.trim()) { setError("Goal name is required."); return; }
+    if (!isEdit && typeof maxCount === "number" && currentCount >= maxCount) {
+      setError(limitMessage ?? "You have reached the limit for this goal type.");
+      return;
+    }
     onSubmit(title.trim(), categoryId, yearlyGoalId, targetDate, description.trim(), workload.trim());
   };
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.35)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[88vh] overflow-hidden flex flex-col my-auto"
+        style={{ border: "1px solid rgba(0,0,0,0.06)" }}
+      >
         {/* Header */}
-        <div className="px-7 pt-7 pb-0">
+        <div className="px-7 pt-7 pb-0 overflow-y-auto min-h-0">
           <div className="flex items-start justify-between mb-1">
             <h2 className="font-headline text-xl font-bold" style={{ color: "#1a1f1e" }}>
               {isEdit ? "Edit Goal" : isMain ? "Add Main Goal" : "Add Secondary Goal"}
@@ -104,7 +117,7 @@ export function AddMonthlyGoalModal({
           <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
             {isMain
               ? "Define a major objective for your month tied to your long-term vision."
-              : "Add a secondary goal to strengthen the month without crowding the main goal."}
+              : "Add another meaningful goal for the month without overloading your focus."}
           </p>
 
           {/* Category selector */}
@@ -231,17 +244,18 @@ export function AddMonthlyGoalModal({
           {/* Target date */}
           <div className="mb-7">
             <label className="block mb-2" style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8a9e97" }}>
-              Target Completion Date
+              <span className="sm:hidden">Target Date</span>
+              <span className="hidden sm:inline">Target Completion Date</span>
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <input
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
-                className="px-4 py-3 rounded-xl border text-sm focus:outline-none focus:border-[#006c4a] transition"
+                className="w-full min-w-0 px-4 py-3 rounded-xl border text-[13px] focus:outline-none focus:border-[#006c4a] transition sm:w-auto sm:text-sm"
                 style={{ borderColor: "#e2e8e4", background: "#f7f9f8", color: "#1a1f1e" }}
               />
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-start gap-1.5 sm:items-center">
                 <span className="material-symbols-outlined text-[14px]" style={{ color: "#a8b5af" }}>info</span>
                 <span className="text-xs" style={{ color: "#8a9e97" }}>
                   {daysLeft} days remaining in {monthName}.
@@ -252,7 +266,7 @@ export function AddMonthlyGoalModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-7 py-5" style={{ borderTop: "1px solid #f0f3f1" }}>
+        <div className="flex items-center justify-end gap-3 px-7 py-5 flex-shrink-0" style={{ borderTop: "1px solid #f0f3f1" }}>
           <button
             onClick={onClose}
             className="px-5 py-2.5 text-sm font-semibold transition"

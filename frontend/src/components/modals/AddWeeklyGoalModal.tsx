@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import type { WeeklyGoal } from "@/lib/types";
 import { getWeekNumber } from "@/lib/goalsView";
+import { WEEKLY_MAIN_GOAL_CAP, WEEKLY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 
 interface Props {
   open: boolean;
@@ -28,6 +29,7 @@ export function AddWeeklyGoalModal({
   const updateWeeklyGoal = useAppStore((state) => state.updateWeeklyGoal);
   const removeWeeklyGoal = useAppStore((state) => state.removeWeeklyGoal);
   const monthlyGoals = useAppStore((state) => state.monthlyGoals);
+  const weeklyGoals = useAppStore((state) => state.weeklyGoals);
   const sessionWeekStartsOn = useAppStore((state) => state.sessionWeekStartsOn);
   const activeDashboardDate = useAppStore((state) => state.activeDashboardDate);
   const isEdit = !!initialData;
@@ -52,6 +54,19 @@ export function AddWeeklyGoalModal({
     () => monthlyGoals.filter((goal) => goal.year === effectiveYear && goal.month === effectiveMonth),
     [effectiveMonth, effectiveYear, monthlyGoals],
   );
+  const siblingGoals = useMemo(
+    () =>
+      weeklyGoals.filter(
+        (goal) =>
+          goal.year === effectiveYear &&
+          goal.weekNumber === effectiveWeek &&
+          goal.id !== initialData?.id,
+      ),
+    [effectiveWeek, effectiveYear, initialData?.id, weeklyGoals],
+  );
+  const mainGoalCapReached = isMain && siblingGoals.filter((goal) => goal.isMain).length >= WEEKLY_MAIN_GOAL_CAP;
+  const secondaryGoalCapReached =
+    !isMain && siblingGoals.filter((goal) => !goal.isMain).length >= WEEKLY_SECONDARY_GOAL_CAP;
 
   useEffect(() => {
     if (!open) return;
@@ -87,6 +102,14 @@ export function AddWeeklyGoalModal({
       setError("Pick a monthly goal first");
       return;
     }
+    if (mainGoalCapReached) {
+      setError("You can only save 1 main goal for this week.");
+      return;
+    }
+    if (secondaryGoalCapReached) {
+      setError("You can only save up to 2 secondary goals for this week.");
+      return;
+    }
     if (isEdit && initialData) {
       updateWeeklyGoal(initialData.id, { title: title.trim(), description, isMain, monthlyGoalId });
     } else {
@@ -114,7 +137,7 @@ export function AddWeeklyGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.25)", backdropFilter: "blur(5px)" }}
       onClick={onClose}
       role="dialog"
@@ -122,7 +145,7 @@ export function AddWeeklyGoalModal({
       aria-labelledby={titleId}
     >
       <div
-        className="bg-white w-full max-w-[620px] max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+        className="bg-white w-full max-w-[620px] max-h-[calc(100vh-2rem)] sm:max-h-[88vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
         style={{ border: "1px solid rgba(0,0,0,0.07)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -287,7 +310,7 @@ export function AddWeeklyGoalModal({
         </div>
 
         <div
-          className="px-8 py-5 flex items-center justify-between"
+          className="px-8 py-5 flex items-center justify-between flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
           <div>

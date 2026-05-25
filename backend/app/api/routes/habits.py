@@ -40,7 +40,7 @@ def update_habit(
     habit = habits_db.get_habit(db, habit_id, session_id)
     if not habit:
         raise NotFoundError("Habit", str(habit_id))
-    return habits_db.update_habit(db, habit_id, session_id, body.model_dump(exclude_none=True))
+    return habits_db.update_habit(db, habit_id, session_id, body.model_dump(exclude_unset=True))
 
 
 @router.delete("/{session_id}/{habit_id}", status_code=204)

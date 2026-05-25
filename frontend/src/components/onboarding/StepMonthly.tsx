@@ -20,6 +20,7 @@ const FREQ_LABELS: Record<HabitFrequency, string> = {
   "3x_week": "3x Per Week",
   "5x_week": "5x Per Week",
   weekends: "Weekends",
+  flexible: "Flexible",
 };
 
 // ── Right panel ───────────────────────────────────────────────────────────────
@@ -31,45 +32,49 @@ export function MonthlyAIGuidancePanel() {
           <span className="material-symbols-outlined text-[18px]" style={{ color: "#006c4a" }}>auto_awesome</span>
         </div>
         <div>
-          <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>AI Guidance</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>Planning Strategy</p>
+          <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>Planning Strategy</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>Monthly Focus</p>
         </div>
       </div>
       <div className="space-y-5">
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>layers</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Bedrock Structure</p>
+            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>looks_one</span>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Pick One Main Goal</p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            For a balanced month, use a &lsquo;Bedrock&rsquo; setup:{" "}
-            <strong style={{ color: "#1a1f1e" }}>1 Main Goal</strong> for focus and{" "}
-            <strong style={{ color: "#1a1f1e" }}>2 Secondary Goals</strong> for support.{" "}
-            Routines are yours to define below — AI only suggests the goals.
+            Your main goal is the most important outcome to move meaningfully this month.
           </p>
         </div>
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>bolt</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Avoid Overload</p>
+            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>adjust</span>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Use Secondary Goals For Other Progress</p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Most productivity failures happen when the monthly list is too long. By limiting your primary targets, you increase your completion probability by 40%.
+            Secondary goals are other goals that still deserve attention this month.
           </p>
         </div>
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>stacked_line_chart</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Routine Design</p>
+            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>stairs</span>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Break Long Projects Into Milestones</p>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Select routines that directly strengthen your goals. If your goal is financial, &ldquo;Daily Expense Logging&rdquo; is a critical routine.
+            If a project takes several months, your monthly goal should be one meaningful phase of it, not the whole thing.
           </p>
         </div>
       </div>
-      <div className="rounded-xl p-4" style={{ background: "#f4f6f4" }}>
-        <p className="text-xs italic leading-relaxed" style={{ color: "#6b7b74" }}>
-          &ldquo;The secret of your future is hidden in your daily routine.&rdquo; — Mike Murdock
+      <div className="rounded-xl p-4 space-y-2.5" style={{ background: "#f4f6f4" }}>
+        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Example</p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          <strong style={{ color: "#1a1f1e" }}>Yearly:</strong> Earn the AWS Solutions Architect certification this year.
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          <strong style={{ color: "#1a1f1e" }}>Monthly main goal:</strong> Complete the core architecture modules and finish two timed practice sets this month.
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          If a project lasts longer than one month, ask: <strong style={{ color: "#1a1f1e" }}>what must be meaningfully advanced this month?</strong>
         </p>
       </div>
     </div>
@@ -99,8 +104,12 @@ function SectionHeader({ label, action, onAction }: { label: string; action: str
 // ── AI Draft Preview ──────────────────────────────────────────────────────────
 interface AIDraft {
   reasoning: string;
-  main_goals: { title: string; description: string; estimated_effort?: string; target_date?: string }[];
-  secondary_goals: { title: string; description: string; estimated_effort?: string; target_date?: string }[];
+  main_goals: { title: string; description: string; estimated_effort?: string; target_date?: string; yearly_goal_ref?: string | null }[];
+  secondary_goals: { title: string; description: string; estimated_effort?: string; target_date?: string; yearly_goal_ref?: string | null }[];
+}
+
+function normalizeGoalTitle(value: string | undefined) {
+  return (value ?? "").trim().toLowerCase();
 }
 
 // ── Main step ─────────────────────────────────────────────────────────────────
@@ -109,6 +118,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     categories,
     yearlyGoals,
     monthlyGoals,
+    activeDashboardDate,
     addMonthlyGoal,
     updateMonthlyGoal,
     removeMonthlyGoal,
@@ -124,6 +134,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       categories: state.categories,
       yearlyGoals: state.yearlyGoals,
       monthlyGoals: state.monthlyGoals,
+      activeDashboardDate: state.activeDashboardDate,
       addMonthlyGoal: state.addMonthlyGoal,
       updateMonthlyGoal: state.updateMonthlyGoal,
       removeMonthlyGoal: state.removeMonthlyGoal,
@@ -170,6 +181,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
     return n;
   }, [aiDraft, aiRowKeys]);
 
+  const currentYear = Number(activeDashboardDate.slice(0, 4)) || getCurrentYear();
+  const currentMonth = Number(activeDashboardDate.slice(5, 7)) || getCurrentMonth();
+
   const toggleAiRow = (key: string) => {
     setAiRowKeys((prev) => {
       const next = new Set(prev);
@@ -183,7 +197,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateMonthlyPlan(getCurrentYear(), getCurrentMonth());
+    const result = await generateMonthlyPlan(currentYear, currentMonth);
     if (result.ok && result.draft) {
       const draft = result.draft as AIDraft;
       setAiDraft(draft);
@@ -212,15 +226,31 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
   const handleAIAccept = async () => {
     if (!aiDraft || aiSelectedCount === 0) return;
-    const goals: Record<string, unknown>[] = [];
+    const goals: Record<string, unknown>[] = currentGoals.map((goal) => ({
+      title: goal.title,
+      description: goal.description,
+      yearly_goal_id: goal.yearlyGoalId,
+      category_id: goal.categoryId,
+      target_date: goal.targetDate,
+      estimated_effort: goal.workload,
+      is_main: goal.isMain,
+      priority: goal.priority,
+    }));
+    const existingTitles = new Set(
+      currentGoals.map((goal) => normalizeGoalTitle(goal.title)).filter(Boolean),
+    );
     aiDraft.main_goals?.forEach((g, i) => {
-      if (aiRowKeys.has(`m:${i}`)) goals.push({ ...g, is_main: true, priority: "high" });
+      if (aiRowKeys.has(`m:${i}`) && !existingTitles.has(normalizeGoalTitle(g.title))) {
+        goals.push({ ...g, is_main: true, priority: "high" });
+      }
     });
     aiDraft.secondary_goals?.forEach((g, i) => {
-      if (aiRowKeys.has(`s:${i}`)) goals.push({ ...g, is_main: false, priority: "medium" });
+      if (aiRowKeys.has(`s:${i}`) && !existingTitles.has(normalizeGoalTitle(g.title))) {
+        goals.push({ ...g, is_main: false, priority: "medium" });
+      }
     });
     setAiAccepting(true);
-    const ok = await approveMonthlyPlan(getCurrentYear(), getCurrentMonth(), goals);
+    const ok = await approveMonthlyPlan(currentYear, currentMonth, goals);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -228,7 +258,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     setAiAccepting(false);
   };
 
-  const currentGoals = monthlyGoals.filter((g) => g.month === getCurrentMonth() && g.year === getCurrentYear());
+  const currentGoals = monthlyGoals.filter((g) => g.month === currentMonth && g.year === currentYear);
   const mainGoals = currentGoals.filter((g) => g.isMain);
   const secondaryGoals = currentGoals.filter((g) => !g.isMain);
   const activeHabits = habits.filter((h) => h.active);
@@ -265,8 +295,8 @@ export function StepMonthly({ onNext, onBack }: Props) {
         ...(desc ? { description: desc } : {}),
         ...(wl ? { workload: wl } : {}),
         isMain: addMode === "main",
-        month: getCurrentMonth(),
-        year: getCurrentYear(),
+        month: currentMonth,
+        year: currentYear,
         status: "active",
         progress: 0,
         priority: addMode === "main" ? "high" : "medium",
@@ -278,12 +308,37 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
   const isEditingHabit = habitModal !== null && habitModal !== true;
 
-  const handleHabitSubmit = (name: string, icon: string, categoryId: string, frequency: HabitFrequency) => {
+  const handleHabitSubmit = async ({
+    name,
+    icon,
+    categoryId,
+    frequency,
+    yearlyGoalId,
+    monthlyGoalId,
+    weeklyGoalId,
+  }: {
+    name: string;
+    icon: string;
+    categoryId: string;
+    frequency: HabitFrequency;
+    yearlyGoalId?: string;
+    monthlyGoalId?: string;
+    weeklyGoalId?: string;
+  }) => {
     if (isEditingHabit && habitModal) {
       const h = habitModal as FoundationalHabit;
-      updateHabit(h.id, { name, icon, categoryId, frequency });
+      const ok = await updateHabit(
+        h.id,
+        { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId },
+        { persistMode: "blocking" },
+      );
+      if (!ok) return;
     } else {
-      addHabit({ name, icon, categoryId, frequency, completedToday: false, streak: 0, active: true });
+      const ok = await addHabit(
+        { name, icon, categoryId, frequency, yearlyGoalId, monthlyGoalId, weeklyGoalId, completedToday: false, streak: 0, active: true },
+        { persistMode: "blocking" },
+      );
+      if (!ok) return;
     }
     setHabitModal(null);
   };
@@ -293,8 +348,8 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
   const handleLeaveMonthly = async () => {
     setLeaveError(null);
-    const mainGoalsCount = monthlyGoals.filter(g => g.month === getCurrentMonth() && g.year === getCurrentYear() && g.isMain).length;
-    const secondaryGoalsCount = monthlyGoals.filter(g => g.month === getCurrentMonth() && g.year === getCurrentYear() && !g.isMain).length;
+    const mainGoalsCount = monthlyGoals.filter((g) => g.month === currentMonth && g.year === currentYear && g.isMain).length;
+    const secondaryGoalsCount = monthlyGoals.filter((g) => g.month === currentMonth && g.year === currentYear && !g.isMain).length;
     if (mainGoalsCount !== 1) {
       setLeaveError("You need exactly one main goal for the month before continuing.");
       return;
@@ -303,7 +358,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       setLeaveError("You can have at most two secondary goals for the month.");
       return;
     }
-    const ok = await syncMonthlyGoalsToServer(getCurrentYear(), getCurrentMonth());
+    const ok = await syncMonthlyGoalsToServer(currentYear, currentMonth);
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Monthly goals have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -318,11 +373,11 @@ export function StepMonthly({ onNext, onBack }: Props) {
         {/* Heading */}
         <div className="text-center">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight mb-2.5" style={{ color: "#1a1f1e" }}>
-            Plan {MONTH_NAMES[getCurrentMonth() - 1]}.
+            Plan {MONTH_NAMES[currentMonth - 1]}.
           </h1>
           <p className="text-sm leading-relaxed max-w-lg mx-auto" style={{ color: "#6b7b74" }}>
-            Pick 1 main goal, up to 2 secondary goals, and the routines you&apos;ll hold this month. Each goal
-            connects to a yearly goal.
+            Pick 1 main goal, up to 2 secondary goals, and the routines you&apos;ll hold this month. Link each
+            goal to the yearly direction it belongs to.
           </p>
         </div>
 
@@ -506,7 +561,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
         {/* ── Main Goals ── */}
         <section>
-          <SectionHeader label="Main Goals" action="Add Goal" onAction={() => setGoalModal("main")} />
+          <SectionHeader label="Main Goals (High Priority)" action="Add Goal" onAction={() => setGoalModal("main")} />
           <div className="space-y-3">
             {mainGoals.map((goal) => (
               <MainGoalCard
@@ -525,7 +580,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
 
         {/* ── Secondary Goals ── */}
         <section>
-          <SectionHeader label="Secondary Goals" action="Add Goal" onAction={() => setGoalModal("secondary")} />
+          <SectionHeader label="Secondary Goals" action="Add Target" onAction={() => setGoalModal("secondary")} />
           <div className="grid grid-cols-2 gap-3">
             {secondaryGoals.map((goal) => (
               <SecondaryGoalCard
@@ -537,15 +592,15 @@ export function StepMonthly({ onNext, onBack }: Props) {
             ))}
             {secondaryGoals.length === 0 && (
               <div className="col-span-2">
-                <EmptySlot label="Add secondary goals" onAdd={() => setGoalModal("secondary")} />
+                <EmptySlot label="Add supporting goals" onAdd={() => setGoalModal("secondary")} />
               </div>
             )}
           </div>
         </section>
 
-        {/* ── Routines ── */}
+        {/* ── Foundational Habits ── */}
         <section>
-          <SectionHeader label="Routines" action="Define Routine" onAction={() => setHabitModal(true)} />
+          <SectionHeader label="Foundational Habits" action="Define Routine" onAction={() => setHabitModal(true)} />
           <div className="space-y-2">
             {activeHabits.map((habit) => (
               <HabitRow
@@ -558,7 +613,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
               />
             ))}
             {activeHabits.length === 0 && (
-              <EmptySlot label="Define your routines" onAdd={() => setHabitModal(true)} />
+              <EmptySlot label="Define your foundational habits" onAdd={() => setHabitModal(true)} />
             )}
           </div>
         </section>
@@ -597,7 +652,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
         <AddMonthlyGoalModal
           mode={isEditMode ? ((goalModal as MonthlyGoal).isMain ? "main" : "secondary") : (addMode as "main" | "secondary")}
           categories={categories}
-          yearlyGoals={yearlyGoals.filter((g) => g.year === getCurrentYear())}
+          yearlyGoals={yearlyGoals.filter((g) => g.year === currentYear)}
           initialTitle={isEditMode ? (goalModal as MonthlyGoal).title : ""}
           initialCategoryId={isEditMode ? (goalModal as MonthlyGoal).categoryId : undefined}
           initialYearlyGoalId={isEditMode ? (goalModal as MonthlyGoal).yearlyGoalId : undefined}
@@ -615,6 +670,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
           initialIcon={isEditingHabit ? (habitModal as FoundationalHabit).icon : undefined}
           initialCategoryId={isEditingHabit ? (habitModal as FoundationalHabit).categoryId : undefined}
           initialFrequency={isEditingHabit ? (habitModal as FoundationalHabit).frequency : undefined}
+          initialYearlyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).yearlyGoalId : undefined}
+          initialMonthlyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).monthlyGoalId : undefined}
+          initialWeeklyGoalId={isEditingHabit ? (habitModal as FoundationalHabit).weeklyGoalId : undefined}
           onSubmit={handleHabitSubmit}
           onClose={() => setHabitModal(null)}
         />

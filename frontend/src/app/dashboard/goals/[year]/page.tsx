@@ -4,12 +4,13 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoalCompletionButton } from "@/components/goals/GoalCompletionButton";
 import { GoalsHierarchyNav } from "@/components/goals/GoalsHierarchyNav";
+import { GoalsInfoTooltip } from "@/components/goals/GoalsInfoTooltip";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
 import {
-  classifyGoalState,
+  deriveYearlyGoalReviewSummary,
   formatGoalDate,
-  getGoalStateMeta,
+  getYearlyGoalStateMeta,
   getMonthName,
   getProgressTone,
   groupMonthlyGoalsByYearly,
@@ -17,7 +18,13 @@ import {
 } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
 
-type FilterKey = "all" | "on-track" | "at-risk" | "not-started" | "completed";
+type FilterKey = "all" | "in-progress" | "ready-for-review" | "at-risk" | "not-started" | "completed";
+
+const YEARLY_PROGRESS_DETAIL =
+  "Progress reflects aligned month, week, and day execution under this yearly goal. It shows motion, not final real-world proof.";
+
+const YEARLY_STATUS_DETAIL =
+  "Status shows where the goal stands right now: Not Started means no aligned month yet, In Progress means linked work is active, Ready for Review means enough aligned work is done to review, At Risk means a linked month slipped without recovery underway, and Completed means you confirmed the outcome.";
 
 function formatHeaderDate(todayIso: string) {
   const date = new Date(`${todayIso}T12:00:00`);
@@ -28,6 +35,10 @@ function formatHeaderDate(todayIso: string) {
     month: "short",
     year: "numeric",
   });
+}
+
+function clampProgress(value: number) {
+  return Math.max(0, Math.min(100, value));
 }
 
 export default function YearlyGoalsPage({ params }: { params: Promise<{ year: string }> }) {
@@ -48,6 +59,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
     yearlyGoals,
     monthlyGoals,
     weeklyGoals,
+    yearDailyPriorities,
     categories,
   } = useGoalsHierarchy(year);
 
@@ -57,6 +69,14 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
 
   const monthlyByYearly = useMemo(() => groupMonthlyGoalsByYearly(monthlyGoals), [monthlyGoals]);
   const weeklyByMonthly = useMemo(() => groupWeeklyGoalsByMonthly(weeklyGoals), [weeklyGoals]);
+  const dailyByWeekly = useMemo(() => {
+    const grouped = new Map<string, typeof yearDailyPriorities>();
+    yearDailyPriorities.forEach((priority) => {
+      if (!priority.weeklyGoalId) return;
+      grouped.set(priority.weeklyGoalId, [...(grouped.get(priority.weeklyGoalId) ?? []), priority]);
+    });
+    return grouped;
+  }, [yearDailyPriorities]);
   const yearEditable = year === Number(today.slice(0, 4));
 
   if (Number.isNaN(year)) {
@@ -87,19 +107,18 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
 
   const rows = yearlyGoals.map((goal) => {
     const linkedMonthly = monthlyByYearly.get(goal.id) ?? [];
-    const linkedWeeklyCount = linkedMonthly.reduce(
-      (sum, monthlyGoal) => sum + (weeklyByMonthly.get(monthlyGoal.id)?.length ?? 0),
-      0,
-    );
-    const state = classifyGoalState(goal, today);
+    const linkedWeekly = linkedMonthly.flatMap((monthlyGoal) => weeklyByMonthly.get(monthlyGoal.id) ?? []);
+    const review = deriveYearlyGoalReviewSummary(goal, linkedMonthly, weeklyByMonthly, dailyByWeekly, today);
     const category = categories.find((item) => item.id === goal.categoryId);
     const firstScheduledMonth = [...linkedMonthly].sort((a, b) => a.month - b.month)[0] ?? null;
     return {
       goal,
-      state,
+      state: review.state,
+      progress: review.progress,
+      review,
       category,
       linkedMonthlyCount: linkedMonthly.length,
-      linkedWeeklyCount,
+      linkedWeeklyCount: linkedWeekly.length,
       firstScheduledMonth,
     };
   });
@@ -110,7 +129,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
       acc[row.state] += 1;
       return acc;
     },
-    { all: 0, "on-track": 0, "at-risk": 0, "not-started": 0, completed: 0 },
+    { all: 0, "in-progress": 0, "ready-for-review": 0, "at-risk": 0, "not-started": 0, completed: 0 },
   );
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -138,7 +157,8 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
 
   const filterItems: Array<{ id: FilterKey; label: string }> = [
     { id: "all", label: "All" },
-    { id: "on-track", label: "On Track" },
+    { id: "in-progress", label: "In Progress" },
+    { id: "ready-for-review", label: "Ready for Review" },
     { id: "at-risk", label: "At Risk" },
     { id: "not-started", label: "Not Started" },
     { id: "completed", label: "Completed" },
@@ -221,7 +241,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
         style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}
       >
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {filterItems.map((item) => {
               const active = item.id === filter;
               return (
@@ -229,7 +249,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
                   key={item.id}
                   type="button"
                   onClick={() => setFilter(item.id)}
-                  className="px-3.5 py-2 rounded-[18px] text-sm font-bold"
+                  className="shrink-0 px-3.5 py-2 rounded-[18px] text-sm font-bold"
                   style={{
                     background: active ? "rgba(0,108,74,0.08)" : "#f7faf8",
                     color: active ? "#006c4a" : "#5d6d67",
@@ -257,19 +277,173 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
           </label>
         </div>
 
-        <div className="mt-5 overflow-x-auto">
+        <div className="mt-5 space-y-3 md:hidden">
+          {filteredRows.length === 0 ? (
+            <div
+              className="rounded-[24px] px-4 py-5 text-sm"
+              style={{ background: "#f9fbfa", border: "1px solid rgba(0,0,0,0.06)", color: "#8a9e97" }}
+            >
+              No yearly goals match this filter yet.
+            </div>
+          ) : (
+            paginatedRows.map((row) => {
+              const completed = row.state === "completed";
+              const stateMeta = getYearlyGoalStateMeta(row.state);
+              const progressTone = getProgressTone(row.progress);
+              const requiresRecovery = !completed && !row.review.canMarkComplete;
+              return (
+                <div
+                  key={row.goal.id}
+                  className="rounded-[24px] p-4"
+                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <span
+                        className="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
+                        style={{
+                          color: stateMeta.text,
+                          background: stateMeta.background,
+                          border: `1px solid ${stateMeta.border}`,
+                        }}
+                      >
+                        {stateMeta.label}
+                      </span>
+                      <h3 className="font-headline font-bold text-lg mt-3" style={{ color: "#1a1f1e" }}>
+                        {row.goal.title}
+                      </h3>
+                      <p className="text-sm mt-2 leading-relaxed" style={{ color: row.goal.description ? "#5d6d67" : "#8a9e97" }}>
+                        {row.goal.description || "No description saved yet."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          row.firstScheduledMonth
+                            ? `/dashboard/goals/${year}/monthly?month=${row.firstScheduledMonth.month}`
+                            : `/dashboard/goals/${year}/monthly`,
+                        )
+                      }
+                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl"
+                      style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
+                      aria-label="Open yearly goal breakdown"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">north_east</span>
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div
+                      className="rounded-2xl px-3.5 py-3"
+                      style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.05)" }}
+                    >
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                        Progress
+                      </p>
+                      <p className="mt-2 text-2xl font-headline font-extrabold" style={{ color: progressTone }}>
+                        {row.progress}%
+                      </p>
+                    </div>
+                    <div
+                      className="rounded-2xl px-3.5 py-3"
+                      style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.05)" }}
+                    >
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                        Category
+                      </p>
+                      <p className="mt-2 text-sm font-semibold" style={{ color: row.category?.color || "#1a1f1e" }}>
+                        {row.category?.name ?? "Uncategorised"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 h-2 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.06)" }}>
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${clampProgress(row.progress)}%`, background: progressTone }}
+                    />
+                  </div>
+
+                  <div className="mt-4 space-y-1.5 text-xs leading-relaxed" style={{ color: "#6b7c75" }}>
+                    <p>
+                      {row.firstScheduledMonth
+                        ? `${row.linkedMonthlyCount} linked month${row.linkedMonthlyCount === 1 ? "" : "s"} · ${row.linkedWeeklyCount} linked week${row.linkedWeeklyCount === 1 ? "" : "s"}`
+                        : "No monthly breakdown yet"}
+                    </p>
+                    <p style={{ color: "#8a9e97" }}>
+                      Due {formatGoalDate(row.goal.targetDate)}
+                    </p>
+                    {row.review.note ? (
+                      <p>{row.review.note}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-2">
+                    {row.goal.editable ? (
+                      <>
+                        <GoalCompletionButton
+                          completed={completed}
+                          disabled={requiresRecovery}
+                          onClick={() =>
+                            updateYearlyGoal(row.goal.id, {
+                              status: completed ? "active" : "completed",
+                              progress: completed ? Math.min(row.progress, 99) : 100,
+                            })
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() => openModal("edit-yearly-goal", row.goal)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-3 text-sm font-semibold"
+                          style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#4b635b" }}
+                        >
+                          <span className="material-symbols-outlined text-[17px]">edit</span>
+                          Edit yearly goal
+                        </button>
+                      </>
+                    ) : (
+                      <span
+                        className="inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-3 text-sm font-semibold"
+                        style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#6b7c75" }}
+                        title="This period is locked. You can review it, but only the current period is editable."
+                      >
+                        <span className="material-symbols-outlined text-[17px]">lock</span>
+                        Locked
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="mt-5 hidden overflow-x-auto md:block">
           <table className="min-w-full">
             <thead>
               <tr className="text-left">
-                {["Goal", "Category", "Progress", "Status", "Actions"].map((label) => (
-                  <th
-                    key={label}
-                    className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]"
-                    style={{ color: "#8a9e97" }}
-                  >
-                    {label}
-                  </th>
-                ))}
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                  Goal
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                  Category
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                  <span className="inline-flex items-center gap-1.5">
+                    Progress
+                    <GoalsInfoTooltip label="Yearly progress" detail={YEARLY_PROGRESS_DETAIL} />
+                  </span>
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                  <span className="inline-flex items-center gap-1.5">
+                    Status
+                    <GoalsInfoTooltip label="Yearly status" detail={YEARLY_STATUS_DETAIL} />
+                  </span>
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#8a9e97" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -281,22 +455,23 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
                 </tr>
               ) : (
                 paginatedRows.map((row) => {
-                  const completed = row.goal.status === "completed" || row.goal.progress >= 100;
-                  const stateMeta = getGoalStateMeta(row.state);
-                  const progressTone = getProgressTone(row.goal.progress);
+                  const completed = row.state === "completed";
+                  const stateMeta = getYearlyGoalStateMeta(row.state);
+                  const progressTone = getProgressTone(row.progress);
+                  const requiresRecovery = !completed && !row.review.canMarkComplete;
                   return (
                     <tr key={row.goal.id} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                       <td className="px-4 py-4 align-top">
-                        <div className="max-w-[300px]">
+                        <div className="max-w-[320px]">
                           <p className="text-sm font-semibold leading-relaxed" style={{ color: "#1a1f1e" }}>
                             {row.goal.title}
                           </p>
                           <p className="text-xs mt-1.5 leading-relaxed" style={{ color: "#6b7c75" }}>
                             {row.goal.description || "No description saved yet."}
                           </p>
-                          <p className="text-xs mt-2" style={{ color: "#8a9e97" }}>
+                          <p className="text-xs mt-2 leading-relaxed" style={{ color: "#8a9e97" }}>
                             {row.firstScheduledMonth
-                              ? `Linked to ${row.linkedMonthlyCount} monthly goal${row.linkedMonthlyCount === 1 ? "" : "s"} · Due ${formatGoalDate(row.goal.targetDate)}`
+                              ? `${row.linkedMonthlyCount} linked month${row.linkedMonthlyCount === 1 ? "" : "s"} · ${row.linkedWeeklyCount} linked week${row.linkedWeeklyCount === 1 ? "" : "s"} · Due ${formatGoalDate(row.goal.targetDate)}`
                               : `No monthly breakdown yet · Due ${formatGoalDate(row.goal.targetDate)}`}
                           </p>
                         </div>
@@ -314,38 +489,51 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
                       <td className="px-4 py-4 align-top min-w-[180px]">
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-sm font-bold" style={{ color: progressTone }}>
-                            {row.goal.progress}%
+                            {row.progress}%
                           </span>
                         </div>
                         <div className="mt-2 h-2 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.06)" }}>
                           <div
                             className="h-full rounded-full"
-                            style={{ width: `${row.goal.progress}%`, background: progressTone }}
+                            style={{ width: `${row.progress}%`, background: progressTone }}
                           />
                         </div>
+                        <p className="text-xs mt-2 font-medium" style={{ color: "#8a9e97" }}>
+                          {row.review.readyMonths > 0
+                            ? `${row.review.readyMonths} month${row.review.readyMonths === 1 ? "" : "s"} ready to review`
+                            : "Tracking aligned execution"}
+                        </p>
                       </td>
                       <td className="px-4 py-4 align-top">
-                        <span
-                          className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest"
-                          style={{
-                            color: stateMeta.text,
-                            background: stateMeta.background,
-                            border: `1px solid ${stateMeta.border}`,
-                          }}
-                        >
-                          {stateMeta.label}
-                        </span>
+                        <div className="space-y-2 max-w-[220px]">
+                          <span
+                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest"
+                            style={{
+                              color: stateMeta.text,
+                              background: stateMeta.background,
+                              border: `1px solid ${stateMeta.border}`,
+                            }}
+                          >
+                            {stateMeta.label}
+                          </span>
+                          {row.review.note ? (
+                            <p className="text-xs leading-relaxed" style={{ color: "#6b7c75" }}>
+                              {row.review.note}
+                            </p>
+                          ) : null}
+                        </div>
                       </td>
-                      <td className="px-4 py-4 align-top">
-                        <div className="flex items-center gap-2 flex-wrap">
+                      <td className="px-4 py-4 align-top min-w-[220px]">
+                        <div className="flex items-center gap-2 flex-wrap justify-start lg:justify-end">
                           {row.goal.editable ? (
                             <>
                               <GoalCompletionButton
                                 completed={completed}
+                                disabled={requiresRecovery}
                                 onClick={() =>
                                   updateYearlyGoal(row.goal.id, {
                                     status: completed ? "active" : "completed",
-                                    progress: completed ? Math.min(row.goal.progress, 99) : 100,
+                                    progress: completed ? Math.min(row.progress, 99) : 100,
                                   })
                                 }
                               />
@@ -433,7 +621,7 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
           className="mt-5 rounded-2xl px-4 py-3 text-sm"
           style={{ background: "#f7faf8", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
         >
-          Progress is the saved completion percentage for the yearly goal. A goal is <strong>On Track</strong> once it has started and is not overdue, <strong>At Risk</strong> if the due date has passed or it has been marked missed, <strong>Not Started</strong> when progress is still at zero, and <strong>Completed</strong> when you mark it done or it reaches 100%.
+          A yearly goal becomes <strong>In Progress</strong> once it has a linked monthly plan, <strong>Ready for Review</strong> when aligned month work is fully done, <strong>At Risk</strong> when a linked month closes unfinished without recovery underway, and <strong>Completed</strong> only when you confirm the outcome yourself.
         </div>
       </div>
     </div>

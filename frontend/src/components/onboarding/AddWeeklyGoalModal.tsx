@@ -6,6 +6,9 @@ import { MonthlyGoal } from "@/lib/types";
 interface Props {
   mode: "main" | "secondary";
   monthlyGoals: MonthlyGoal[];
+  currentCount?: number;
+  maxCount?: number;
+  limitMessage?: string;
   initialTitle?: string;
   initialMonthlyGoalId?: string;
   initialTargetDay?: string;
@@ -34,6 +37,9 @@ const DAYS = [
 export function AddWeeklyGoalModal({
   mode,
   monthlyGoals,
+  currentCount = 0,
+  maxCount,
+  limitMessage,
   initialTitle = "",
   initialMonthlyGoalId,
   initialTargetDay,
@@ -59,6 +65,10 @@ export function AddWeeklyGoalModal({
       setError("Please enter a goal name.");
       return;
     }
+    if (!isEdit && typeof maxCount === "number" && currentCount >= maxCount) {
+      setError(limitMessage ?? "You have reached the limit for this goal type.");
+      return;
+    }
     onSubmit({
       title: title.trim(),
       monthlyGoalId: selectedMonthlyGoalId || undefined,
@@ -70,16 +80,16 @@ export function AddWeeklyGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[88vh] overflow-hidden flex flex-col my-auto"
         style={{ border: "1px solid rgba(0,0,0,0.06)" }}
       >
         {/* Header */}
-        <div className="px-7 pt-7 pb-0">
+        <div className="px-7 pt-7 pb-0 overflow-y-auto min-h-0">
           <div className="flex items-start justify-between mb-4">
             <div>
               <p
@@ -101,7 +111,7 @@ export function AddWeeklyGoalModal({
               <p className="text-xs leading-relaxed mt-1" style={{ color: "#8a9e97" }}>
                 {isMain
                   ? "Define a high-impact objective for the next seven days to maintain momentum."
-                  : "Define a secondary objective to support your main weekly goal and maintain momentum."}
+                  : "Define another meaningful objective for this week without overloading your focus."}
               </p>
             </div>
             <button
@@ -259,7 +269,7 @@ export function AddWeeklyGoalModal({
 
         {/* Footer */}
         <div
-          className="flex items-center justify-end gap-4 px-7 py-5"
+          className="flex items-center justify-end gap-4 px-7 py-5 flex-shrink-0"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}
         >
           <button

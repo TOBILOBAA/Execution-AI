@@ -68,6 +68,7 @@ export type AuthActionResult =
   | { success: false; error: string };
 
 export type SendEmailOtpResult = { success: true } | { success: false; error: string };
+type PersistMode = "background" | "blocking";
 
 interface AppState {
   // ── Auth ────────────────────────────────────────────────────────────────────
@@ -95,6 +96,7 @@ interface AppState {
 
   // ── Backend session ──────────────────────────────────────────────────────────
   sessionId: string | null;
+  sessionTimezone: string;
   sessionWeekStartsOn: WeekStartsOn;
   setSessionId: (id: string | null) => void;
   setWeekStartsOn: (value: WeekStartsOn) => Promise<void>;
@@ -117,7 +119,7 @@ interface AppState {
   onboardingStep: number;
   onboardingComplete: boolean;
   kickoffPending: boolean;
-  setOnboardingStep: (step: number) => void;
+  setOnboardingStep: (step: number) => Promise<boolean>;
   completeOnboarding: () => Promise<boolean>;
   dismissKickoff: () => void;
 
@@ -139,43 +141,43 @@ interface AppState {
   syncReports: (force?: boolean) => Promise<ApiReport[] | null>;
 
   // ── CRUD operations ─────────────────────────────────────────────────────────
-  addCategory: (cat: Omit<Category, "id">) => void;
-  removeCategory: (id: string) => void;
+  addCategory: (cat: Omit<Category, "id">, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  removeCategory: (id: string, options?: { persistMode?: PersistMode }) => Promise<boolean>;
 
-  addYearlyGoal: (goal: Omit<YearlyGoal, "id">) => void;
-  updateYearlyGoal: (id: string, updates: Partial<YearlyGoal>) => void;
-  removeYearlyGoal: (id: string) => void;
+  addYearlyGoal: (goal: Omit<YearlyGoal, "id">, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  updateYearlyGoal: (id: string, updates: Partial<YearlyGoal>, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  removeYearlyGoal: (id: string, options?: { persistMode?: PersistMode }) => Promise<boolean>;
   /** Persist yearly goals that only exist locally (e.g. mock ids) before leaving step 1. */
-  syncYearlyGoalsToServer: () => Promise<boolean>;
+  syncYearlyGoalsToServer: (options?: { mode?: "sync" | "verify" }) => Promise<boolean>;
   /** Persist monthly goals with local-only ids before weekly AI / leaving step 2. */
-  syncMonthlyGoalsToServer: (year: number, month: number) => Promise<boolean>;
+  syncMonthlyGoalsToServer: (year: number, month: number, options?: { mode?: "sync" | "verify" }) => Promise<boolean>;
   /** Persist weekly goals with local-only ids before daily AI / leaving step 3. */
-  syncWeeklyGoalsToServer: (year: number, weekNumber: number) => Promise<boolean>;
+  syncWeeklyGoalsToServer: (year: number, weekNumber: number, options?: { mode?: "sync" | "verify" }) => Promise<boolean>;
   /** Persist local-only daily tasks / habits before completing onboarding. */
-  syncDailySetupToServer: (date: string) => Promise<boolean>;
+  syncDailySetupToServer: (date: string, options?: { mode?: "sync" | "verify" }) => Promise<boolean>;
 
-  addMonthlyGoal: (goal: Omit<MonthlyGoal, "id">) => void;
-  updateMonthlyGoal: (id: string, updates: Partial<MonthlyGoal>) => void;
-  removeMonthlyGoal: (id: string) => void;
+  addMonthlyGoal: (goal: Omit<MonthlyGoal, "id">, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  updateMonthlyGoal: (id: string, updates: Partial<MonthlyGoal>, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  removeMonthlyGoal: (id: string, options?: { persistMode?: PersistMode }) => Promise<boolean>;
 
-  addWeeklyGoal: (goal: Omit<WeeklyGoal, "id">) => void;
-  updateWeeklyGoal: (id: string, updates: Partial<WeeklyGoal>) => void;
-  removeWeeklyGoal: (id: string) => void;
+  addWeeklyGoal: (goal: Omit<WeeklyGoal, "id">, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  updateWeeklyGoal: (id: string, updates: Partial<WeeklyGoal>, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  removeWeeklyGoal: (id: string, options?: { persistMode?: PersistMode }) => Promise<boolean>;
 
-  addDailyPriority: (priority: Omit<DailyPriority, "id">) => void;
-  updateDailyPriority: (id: string, updates: Partial<DailyPriority>) => void;
+  addDailyPriority: (priority: Omit<DailyPriority, "id">, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  updateDailyPriority: (id: string, updates: Partial<DailyPriority>, options?: { persistMode?: PersistMode }) => Promise<boolean>;
   toggleDailyPriority: (id: string) => void;
-  removeDailyPriority: (id: string) => void;
+  removeDailyPriority: (id: string, options?: { persistMode?: PersistMode }) => Promise<boolean>;
 
-  addSecondaryTask: (task: Omit<DailyPriority, "id">) => void;
-  updateSecondaryTask: (id: string, updates: Partial<DailyPriority>) => void;
+  addSecondaryTask: (task: Omit<DailyPriority, "id">, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  updateSecondaryTask: (id: string, updates: Partial<DailyPriority>, options?: { persistMode?: PersistMode }) => Promise<boolean>;
   toggleSecondaryTask: (id: string) => void;
-  removeSecondaryTask: (id: string) => void;
+  removeSecondaryTask: (id: string, options?: { persistMode?: PersistMode }) => Promise<boolean>;
 
   toggleHabit: (id: string) => void;
-  updateHabit: (id: string, updates: Partial<FoundationalHabit>) => void;
-  addHabit: (habit: Omit<FoundationalHabit, "id">) => void;
-  removeHabit: (id: string) => void;
+  updateHabit: (id: string, updates: Partial<FoundationalHabit>, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  addHabit: (habit: Omit<FoundationalHabit, "id">, options?: { persistMode?: PersistMode }) => Promise<boolean>;
+  removeHabit: (id: string, options?: { persistMode?: PersistMode }) => Promise<boolean>;
 
   // ── AI Plan generation ───────────────────────────────────────────────────────
   generateMonthlyPlan: (
@@ -271,10 +273,15 @@ const pendingWeeklyGoalCreates = new Map<string, Promise<void>>();
 const pendingDailyPriorityCreates = new Map<string, Promise<void>>();
 const pendingSecondaryTaskCreates = new Map<string, Promise<void>>();
 const pendingHabitCreates = new Map<string, Promise<void>>();
+const pendingCategoryCreates = new Map<string, Promise<void>>();
 const pendingDashboardLoads = new Map<string, Promise<void>>();
 const pendingCategoryLoads = new Map<string, Promise<void>>();
 const pendingReportsLoads = new Map<string, Promise<ApiReport[] | null>>();
 const loadedCategoriesForSession = new Set<string>();
+const localToServerCategoryIds = new Map<string, string>();
+const localToServerYearlyGoalIds = new Map<string, string>();
+const localToServerMonthlyGoalIds = new Map<string, string>();
+const localToServerWeeklyGoalIds = new Map<string, string>();
 
 function upsertReport(reports: ApiReport[], incoming: ApiReport): ApiReport[] {
   const index = reports.findIndex((report) => report.id === incoming.id);
@@ -309,9 +316,45 @@ async function waitForPendingCreates(
   }
 }
 
+async function resolveCategoryIdForSave(
+  categoryId: string | undefined,
+): Promise<string | undefined> {
+  if (!categoryId) return undefined;
+  if (isUuid(categoryId)) return categoryId;
+  await waitForPendingCreates(pendingCategoryCreates, [categoryId]);
+  return localToServerCategoryIds.get(categoryId);
+}
+
+async function resolveYearlyGoalIdForSave(
+  yearlyGoalId: string | undefined,
+): Promise<string | undefined> {
+  if (!yearlyGoalId) return undefined;
+  if (isUuid(yearlyGoalId)) return yearlyGoalId;
+  await waitForPendingCreates(pendingYearlyGoalCreates, [yearlyGoalId]);
+  return localToServerYearlyGoalIds.get(yearlyGoalId);
+}
+
+async function resolveMonthlyGoalIdForSave(
+  monthlyGoalId: string | undefined,
+): Promise<string | undefined> {
+  if (!monthlyGoalId) return undefined;
+  if (isUuid(monthlyGoalId)) return monthlyGoalId;
+  await waitForPendingCreates(pendingMonthlyGoalCreates, [monthlyGoalId]);
+  return localToServerMonthlyGoalIds.get(monthlyGoalId);
+}
+
+async function resolveWeeklyGoalIdForSave(
+  weeklyGoalId: string | undefined,
+): Promise<string | undefined> {
+  if (!weeklyGoalId) return undefined;
+  if (isUuid(weeklyGoalId)) return weeklyGoalId;
+  await waitForPendingCreates(pendingWeeklyGoalCreates, [weeklyGoalId]);
+  return localToServerWeeklyGoalIds.get(weeklyGoalId);
+}
+
 function applyServerCategories(
   categories: Awaited<ReturnType<typeof categoriesApi.list>>,
-  set: (partial: Partial<AppState>) => void,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
 ) {
   const state = get();
@@ -323,9 +366,100 @@ function applyServerCategories(
   });
 }
 
+function categoryIdentityKey(cat: Pick<Category, "name" | "icon">): string {
+  return `${cat.name.trim().toLowerCase()}::${cat.icon}`;
+}
+
+function remapLocalCategoryIds(
+  mappings: Array<{ localId: string; serverId: string }>,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+): void {
+  if (mappings.length === 0) return;
+  for (const { localId, serverId } of mappings) {
+    localToServerCategoryIds.set(localId, serverId);
+  }
+  set((state) => ({
+    categories: state.categories.map((category) => {
+      const match = mappings.find((mapping) => mapping.localId === category.id);
+      return match ? { ...category, id: match.serverId } : category;
+    }),
+    yearlyGoals: state.yearlyGoals.map((goal) => {
+      const match = mappings.find((mapping) => mapping.localId === goal.categoryId);
+      return match ? { ...goal, categoryId: match.serverId } : goal;
+    }),
+    monthlyGoals: state.monthlyGoals.map((goal) => {
+      const match = mappings.find((mapping) => mapping.localId === goal.categoryId);
+      return match ? { ...goal, categoryId: match.serverId } : goal;
+    }),
+    habits: state.habits.map((habit) => {
+      const match = mappings.find((mapping) => mapping.localId === habit.categoryId);
+      return match ? { ...habit, categoryId: match.serverId } : habit;
+    }),
+  }));
+}
+
+async function reconcileOnboardingCategories(
+  sessionId: string,
+  serverCategories: Awaited<ReturnType<typeof categoriesApi.list>>,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+  get: () => AppState,
+): Promise<Awaited<ReturnType<typeof categoriesApi.list>>> {
+  const state = get();
+  if (state.onboardingComplete) {
+    return serverCategories;
+  }
+
+  const localPlaceholderCategories = state.categories.filter((category) => !isUuid(category.id));
+  if (localPlaceholderCategories.length === 0) {
+    return serverCategories;
+  }
+
+  const serverByIdentity = new Map(
+    serverCategories.map((category) => [categoryIdentityKey(category), category] as const),
+  );
+
+  const alreadyMapped = localPlaceholderCategories.flatMap((localCategory) => {
+    const match = serverByIdentity.get(categoryIdentityKey(localCategory));
+    return match ? [{ localId: localCategory.id, serverId: match.id }] : [];
+  });
+  remapLocalCategoryIds(alreadyMapped, set);
+
+  const missingLocalCategories = localPlaceholderCategories.filter(
+    (localCategory) => !serverByIdentity.has(categoryIdentityKey(localCategory)),
+  );
+  if (missingLocalCategories.length === 0) {
+    return serverCategories;
+  }
+
+  const createEntries = missingLocalCategories.map((localCategory) => {
+    const request = categoriesApi
+      .create(sessionId, {
+        name: localCategory.name,
+        icon: localCategory.icon,
+        color: localCategory.color,
+      })
+      .then((created) => {
+        remapLocalCategoryIds([{ localId: localCategory.id, serverId: created.id }], set);
+        return created;
+      });
+    trackPendingCreate(pendingCategoryCreates, localCategory.id, request);
+    return { localCategory, request };
+  });
+
+  const createdCategories = await Promise.all(
+    createEntries.map(async ({ localCategory, request }) => {
+      const created = await request;
+      serverByIdentity.set(categoryIdentityKey(localCategory), created);
+      return created;
+    }),
+  );
+
+  return [...serverCategories, ...createdCategories];
+}
+
 async function loadCategoriesOnce(
   sessionId: string,
-  set: (partial: Partial<AppState>) => void,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
   opts?: { force?: boolean },
 ): Promise<void> {
@@ -340,8 +474,9 @@ async function loadCategoriesOnce(
 
   const request = categoriesApi
     .list(sessionId)
-    .then((categories) => {
-      applyServerCategories(categories, set, get);
+    .then(async (categories) => {
+      const reconciledCategories = await reconcileOnboardingCategories(sessionId, categories, set, get);
+      applyServerCategories(reconciledCategories, set, get);
       loadedCategoriesForSession.add(sessionId);
     })
     .catch((e) => {
@@ -457,7 +592,11 @@ function mergeSeededRegistryUsers(set: (partial: Partial<AppState>) => void, get
  * If only dashboard load fails → keep backendReady true so POST/PATCH saves
  * can still succeed; the failure surfaces via syncError.
  */
-async function attachBackendAfterAuth(userId: string, get: () => AppState, set: (p: Partial<AppState>) => void) {
+async function attachBackendAfterAuth(
+  userId: string,
+  get: () => AppState,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+) {
   set({ workspaceHydrating: true });
   const prevOwner = get().workspaceOwnerId ?? null;
   /** Snapshot before any reset — after a full reset `get().onboardingComplete` would wrongly read false. */
@@ -493,14 +632,21 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   let onboardingSnapshot: {
     onboarding_step: number;
     onboarding_done: boolean;
+    timezone: string;
     week_starts_on: WeekStartsOn;
   };
   try {
-    const session = await ensureBackendSession(userId);
+    const identity = get().currentUser;
+    const session = await ensureBackendSession({
+      id: userId,
+      name: identity?.name,
+      email: identity?.email,
+    });
     sid = session.id;
     onboardingSnapshot = {
       onboarding_step: session.onboarding_step,
       onboarding_done: session.onboarding_done,
+      timezone: session.timezone,
       week_starts_on: session.week_starts_on,
     };
     set({ sessionId: sid, backendReady: true });
@@ -538,10 +684,14 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
       set({
         onboardingComplete: done,
         onboardingStep: step,
+        sessionTimezone: ob.timezone,
         sessionWeekStartsOn: ob.week_starts_on,
       });
       if (done && !dashboardPromise) {
         dashboardPromise = get().loadCurrentDashboard();
+      }
+      if (!done) {
+        await categoriesPromise;
       }
       if (done && !ob.onboarding_done) {
         void sessionsApi
@@ -567,6 +717,33 @@ async function attachBackendAfterAuth(userId: string, get: () => AppState, set: 
   }
 
   void categoriesPromise;
+}
+
+async function ensureWritableSession(
+  get: () => AppState,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+  context: string,
+): Promise<string | null> {
+  const current = get();
+  if (current.sessionId && current.backendReady) {
+    return current.sessionId;
+  }
+
+  const authUserId = current.currentUser?.id;
+  if (!authUserId) {
+    set({ syncError: `${context}: Sign in again to continue.` });
+    return null;
+  }
+
+  await attachBackendAfterAuth(authUserId, get, set);
+  const refreshed = get();
+  if (refreshed.sessionId && refreshed.backendReady) {
+    return refreshed.sessionId;
+  }
+  if (!refreshed.syncError) {
+    set({ syncError: `${context}: Backend session is not ready.` });
+  }
+  return null;
 }
 
 // ─── Mapper helpers: API response → frontend types ────────────────────────────
@@ -595,13 +772,16 @@ function mapApiGoalToPriority(p: {
 
 function mapApiHabit(h: {
   id: string; name: string; icon: string; frequency: string;
-  active: boolean; category_id?: string; completed_today: boolean; streak: number;
+  active: boolean; category_id?: string; yearly_goal_id?: string; monthly_goal_id?: string; weekly_goal_id?: string; completed_today: boolean; streak: number;
 }): FoundationalHabit {
   return {
     id: h.id,
     name: h.name,
     icon: h.icon,
     categoryId: h.category_id,
+    yearlyGoalId: h.yearly_goal_id,
+    monthlyGoalId: h.monthly_goal_id,
+    weeklyGoalId: h.weekly_goal_id,
     frequency: h.frequency as FoundationalHabit["frequency"],
     completedToday: h.completed_today,
     streak: h.streak,
@@ -1114,6 +1294,7 @@ export const useAppStore = create<AppState>()(
 
       // ── Backend session ──────────────────────────────────────────────────────
       sessionId: null,
+      sessionTimezone: "UTC",
       sessionWeekStartsOn: "monday",
       backendReady: false,
       workspaceHydrating: false,
@@ -1147,15 +1328,25 @@ export const useAppStore = create<AppState>()(
       onboardingStep: 1,
       onboardingComplete: false,
       kickoffPending: false,
-      setOnboardingStep: (step) => {
-        set({ onboardingStep: step });
+      setOnboardingStep: async (step) => {
         const { sessionId, backendReady } = get();
         if (sessionId && backendReady) {
-          void sessionsApi
-            .update(sessionId, { onboarding_step: step })
-            .then(() => set({ syncError: null }))
-            .catch((e) => set({ syncError: formatApiError("Save onboarding step", e) }));
+          set({ syncStatus: "saving" });
+          try {
+            await sessionsApi.update(sessionId, { onboarding_step: step });
+            set({ onboardingStep: step, syncError: null, syncStatus: "saved" });
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Save onboarding step", e), syncStatus: "failed" });
+            return false;
+          }
         }
+        if (requiresServerPersistence()) {
+          set({ syncError: "Save onboarding step: Backend session is not ready.", syncStatus: "failed" });
+          return false;
+        }
+        set({ onboardingStep: step, syncError: null, syncStatus: "saved" });
+        return true;
       },
       completeOnboarding: async () => {
         const { sessionId, backendReady } = get();
@@ -1241,35 +1432,132 @@ export const useAppStore = create<AppState>()(
       },
 
       // ── Categories ──────────────────────────────────────────────────────────
-      addCategory: (cat) => {
+      addCategory: async (cat, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
+        const { sessionId } = get();
+        if (shouldBlock) {
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save category"));
+          if (!writableSessionId) {
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            const created = await categoriesApi.create(writableSessionId, { name: cat.name, icon: cat.icon, color: cat.color });
+            set((s) => ({
+              categories: [...s.categories, { ...cat, id: created.id }],
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Save category", e), syncStatus: "failed" });
+            return false;
+          }
+        }
         const localId = genId("cat");
         set((s) => ({ categories: [...s.categories, { ...cat, id: localId }] }));
         // Sync to backend (fire-and-forget)
-        const { sessionId } = get();
-        if (sessionId) {
-          categoriesApi
-            .create(sessionId, { name: cat.name, icon: cat.icon, color: cat.color })
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save category")
+            .then((writableSessionId) => {
+              if (!writableSessionId) return null;
+              return categoriesApi.create(writableSessionId, { name: cat.name, icon: cat.icon, color: cat.color });
+            })
             .then((created) => {
+              if (!created) return;
+              localToServerCategoryIds.set(localId, created.id);
               set((s) => ({
                 categories: s.categories.map((c) => (c.id === localId ? { ...c, id: created.id } : c)),
+                yearlyGoals: s.yearlyGoals.map((goal) =>
+                  goal.categoryId === localId ? { ...goal, categoryId: created.id } : goal
+                ),
+                monthlyGoals: s.monthlyGoals.map((goal) =>
+                  goal.categoryId === localId ? { ...goal, categoryId: created.id } : goal
+                ),
+                habits: s.habits.map((habit) =>
+                  habit.categoryId === localId ? { ...habit, categoryId: created.id } : habit
+                ),
                 syncError: null,
               }));
             })
             .catch((e) => set({ syncError: formatApiError("Save category", e) }));
+          trackPendingCreate(pendingCategoryCreates, localId, request);
         }
+        return true;
       },
-      removeCategory: (id) => {
-        set((s) => ({ categories: s.categories.filter((c) => c.id !== id) }));
+      removeCategory: async (id, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Delete category: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await categoriesApi.delete(sessionId, id);
+            set((s) => ({ categories: s.categories.filter((c) => c.id !== id), syncError: null, syncStatus: "saved" }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Delete category", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        set((s) => ({ categories: s.categories.filter((c) => c.id !== id) }));
         if (sessionId && isUuid(id)) {
           categoriesApi.delete(sessionId, id).catch((e) => set({ syncError: formatApiError("Delete category", e) }));
         }
+        return true;
       },
 
       // ── Yearly goals ────────────────────────────────────────────────────────
-      addYearlyGoal: (goal) => {
-        const localId = genId("yg");
+      addYearlyGoal: async (goal, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId, activeDashboardDate } = get();
+        if (shouldBlock) {
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save yearly goal"));
+          if (!writableSessionId) {
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            const categoryId = await resolveCategoryIdForSave(goal.categoryId);
+            if (goal.categoryId && !categoryId) {
+              throw new Error("The selected category is still syncing. Wait a moment and try again.");
+            }
+            const created = await yearlyGoalsApi.create(writableSessionId, {
+              title: goal.title,
+              ...(categoryId ? { category_id: categoryId } : {}),
+              description: goal.description,
+              year: goal.year,
+              target_date: goal.targetDate,
+            });
+            set((s) => ({
+              yearlyGoals: [
+                ...s.yearlyGoals,
+                {
+                  ...goal,
+                  id: created.id,
+                  categoryId: created.category_id ?? goal.categoryId,
+                  editable: created.editable ?? isCurrentYearlyGoal(goal, activeDashboardDate),
+                },
+              ],
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Save yearly goal", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        const localId = genId("yg");
         set((s) => ({
           yearlyGoals: [
             ...s.yearlyGoals,
@@ -1280,16 +1568,26 @@ export const useAppStore = create<AppState>()(
             },
           ],
         }));
-        if (sessionId) {
-          const request = yearlyGoalsApi
-            .create(sessionId, {
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save yearly goal")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
+            const categoryId = await resolveCategoryIdForSave(goal.categoryId);
+            if (goal.categoryId && !categoryId) {
+              throw new Error("The selected category is still syncing. Wait a moment and try again.");
+            }
+              return yearlyGoalsApi.create(writableSessionId, {
               title: goal.title,
-              ...(isUuid(goal.categoryId) ? { category_id: goal.categoryId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
               description: goal.description,
               year: goal.year,
               target_date: goal.targetDate,
+            });
             })
             .then((created) => {
+              if (!created) return;
+              localToServerYearlyGoalIds.set(localId, created.id);
               set((s) => ({
                 yearlyGoals: s.yearlyGoals.map((g) =>
                   g.id === localId
@@ -1301,19 +1599,21 @@ export const useAppStore = create<AppState>()(
                       }
                     : g
                 ),
+                monthlyGoals: s.monthlyGoals.map((goal) =>
+                  goal.yearlyGoalId === localId ? { ...goal, yearlyGoalId: created.id } : goal
+                ),
                 syncError: null,
               }));
             })
             .catch((e) => set({ syncError: formatApiError("Save yearly goal", e) }));
           trackPendingCreate(pendingYearlyGoalCreates, localId, request);
         }
+        return true;
       },
-      updateYearlyGoal: (id, updates) => {
-        set((s) => ({
-          yearlyGoals: s.yearlyGoals.map((g) => g.id === id ? { ...g, ...updates } : g),
-        }));
+      updateYearlyGoal: async (id, updates, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
-        if (!sessionId || !isUuid(id)) return;
         const patch: Parameters<typeof yearlyGoalsApi.update>[2] = {};
         if (updates.title !== undefined) patch.title = updates.title;
         if (updates.description !== undefined) patch.description = updates.description;
@@ -1323,20 +1623,48 @@ export const useAppStore = create<AppState>()(
         if (updates.categoryId !== undefined && isUuid(updates.categoryId)) {
           patch.category_id = updates.categoryId;
         }
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Update yearly goal: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await yearlyGoalsApi.update(sessionId, id, patch);
+            set((s) => ({
+              yearlyGoals: s.yearlyGoals.map((g) => g.id === id ? { ...g, ...updates } : g),
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Update yearly goal", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        set((s) => ({
+          yearlyGoals: s.yearlyGoals.map((g) => g.id === id ? { ...g, ...updates } : g),
+        }));
+        if (!sessionId || !isUuid(id)) return true;
         if (Object.keys(patch).length) {
           yearlyGoalsApi
             .update(sessionId, id, patch)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Update yearly goal", e) }));
         }
+        return true;
       },
-      syncYearlyGoalsToServer: async () => {
-        const { sessionId, yearlyGoals } = get();
+      syncYearlyGoalsToServer: async (options) => {
+        const mode = options?.mode ?? "sync";
+        const { yearlyGoals } = get();
+        let sessionId = get().sessionId;
         if (!sessionId) {
           if (requiresServerPersistence()) {
-            set({ syncError: "Sync yearly goals: Backend session is not ready.", syncStatus: "failed" });
-            return false;
+            sessionId = await ensureWritableSession(get, set, "Sync yearly goals");
+            if (!sessionId) return false;
           }
+        }
+        if (!sessionId) {
           return true;
         }
         set({ syncStatus: "saving" });
@@ -1345,15 +1673,27 @@ export const useAppStore = create<AppState>()(
           .map((g) => g.id);
         await waitForPendingCreates(pendingYearlyGoalCreates, localIds);
         const pending = get().yearlyGoals.filter((g) => g.year === getCurrentYear() && !isUuid(g.id));
+        if (mode === "verify" && pending.length > 0) {
+          set({
+            syncError: `${pending.length} yearly goal(s) are still saving. Wait a moment and try again.`,
+            syncStatus: "failed",
+          });
+          return false;
+        }
         for (const g of pending) {
           try {
+            const categoryId = await resolveCategoryIdForSave(g.categoryId);
+            if (g.categoryId && !categoryId) {
+              throw new Error(`The category for "${g.title}" is still syncing.`);
+            }
             const created = await yearlyGoalsApi.create(sessionId, {
               title: g.title,
-              ...(isUuid(g.categoryId) ? { category_id: g.categoryId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
               description: g.description,
               year: g.year,
               target_date: g.targetDate,
             });
+            localToServerYearlyGoalIds.set(g.id, created.id);
             set((s) => ({
               yearlyGoals: s.yearlyGoals.map((yg) =>
                 yg.id === g.id
@@ -1364,6 +1704,9 @@ export const useAppStore = create<AppState>()(
                       editable: created.editable ?? yg.editable,
                     }
                   : yg,
+              ),
+              monthlyGoals: s.monthlyGoals.map((goal) =>
+                goal.yearlyGoalId === g.id ? { ...goal, yearlyGoalId: created.id } : goal
               ),
             }));
           } catch (e) {
@@ -1396,13 +1739,17 @@ export const useAppStore = create<AppState>()(
         return true;
       },
 
-      syncMonthlyGoalsToServer: async (year, month) => {
-        const { sessionId, monthlyGoals } = get();
+      syncMonthlyGoalsToServer: async (year, month, options) => {
+        const mode = options?.mode ?? "sync";
+        const { monthlyGoals } = get();
+        let sessionId = get().sessionId;
         if (!sessionId) {
           if (requiresServerPersistence()) {
-            set({ syncError: "Sync monthly goals: Backend session is not ready.", syncStatus: "failed" });
-            return false;
+            sessionId = await ensureWritableSession(get, set, "Sync monthly goals");
+            if (!sessionId) return false;
           }
+        }
+        if (!sessionId) {
           return true;
         }
         set({ syncStatus: "saving" });
@@ -1411,19 +1758,35 @@ export const useAppStore = create<AppState>()(
           .map((g) => g.id);
         await waitForPendingCreates(pendingMonthlyGoalCreates, localIds);
         const pending = get().monthlyGoals.filter((g) => g.year === year && g.month === month && !isUuid(g.id));
+        if (mode === "verify" && pending.length > 0) {
+          set({
+            syncError: `${pending.length} monthly goal(s) are still saving. Wait a moment and try again.`,
+            syncStatus: "failed",
+          });
+          return false;
+        }
         let success = true;
         for (const g of pending) {
           try {
+            const yearlyGoalId = await resolveYearlyGoalIdForSave(g.yearlyGoalId);
+            const categoryId = await resolveCategoryIdForSave(g.categoryId);
+            if (g.yearlyGoalId && !yearlyGoalId) {
+              throw new Error(`The linked yearly goal for "${g.title}" is still syncing.`);
+            }
+            if (g.categoryId && !categoryId) {
+              throw new Error(`The category for "${g.title}" is still syncing.`);
+            }
             const created = await monthlyPlanApi.addGoal(sessionId, year, month, {
               title: g.title,
               description: g.description,
               is_main: g.isMain,
               priority: g.priority,
-              ...(isUuid(g.yearlyGoalId) ? { yearly_goal_id: g.yearlyGoalId } : {}),
-              ...(isUuid(g.categoryId) ? { category_id: g.categoryId } : {}),
+              ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
               target_date: g.targetDate,
               workload: g.workload,
             });
+            localToServerMonthlyGoalIds.set(g.id, created.id);
             set((s) => ({
               monthlyGoals: s.monthlyGoals.map((mg) =>
                 mg.id === g.id
@@ -1431,9 +1794,13 @@ export const useAppStore = create<AppState>()(
                       ...mg,
                       id: created.id,
                       yearlyGoalId: created.yearly_goal_id ?? mg.yearlyGoalId,
+                      categoryId: created.category_id ?? mg.categoryId,
                       editable: created.editable ?? mg.editable,
                     }
                   : mg
+              ),
+              weeklyGoals: s.weeklyGoals.map((goal) =>
+                goal.monthlyGoalId === g.id ? { ...goal, monthlyGoalId: created.id } : goal
               ),
               syncError: null,
               syncStatus: "saved",
@@ -1448,13 +1815,17 @@ export const useAppStore = create<AppState>()(
         return success;
       },
 
-      syncWeeklyGoalsToServer: async (year, weekNumber) => {
-        const { sessionId, weeklyGoals } = get();
+      syncWeeklyGoalsToServer: async (year, weekNumber, options) => {
+        const mode = options?.mode ?? "sync";
+        const { weeklyGoals } = get();
+        let sessionId = get().sessionId;
         if (!sessionId) {
           if (requiresServerPersistence()) {
-            set({ syncError: "Sync weekly goals: Backend session is not ready.", syncStatus: "failed" });
-            return false;
+            sessionId = await ensureWritableSession(get, set, "Sync weekly goals");
+            if (!sessionId) return false;
           }
+        }
+        if (!sessionId) {
           return true;
         }
         set({ syncStatus: "saving" });
@@ -1463,18 +1834,30 @@ export const useAppStore = create<AppState>()(
           .map((g) => g.id);
         await waitForPendingCreates(pendingWeeklyGoalCreates, localIds);
         const pending = get().weeklyGoals.filter((g) => g.year === year && g.weekNumber === weekNumber && !isUuid(g.id));
+        if (mode === "verify" && pending.length > 0) {
+          set({
+            syncError: `${pending.length} weekly goal(s) are still saving. Wait a moment and try again.`,
+            syncStatus: "failed",
+          });
+          return false;
+        }
         let success = true;
         for (const g of pending) {
           try {
+            const monthlyGoalId = await resolveMonthlyGoalIdForSave(g.monthlyGoalId);
+            if (g.monthlyGoalId && !monthlyGoalId) {
+              throw new Error(`The linked monthly goal for "${g.title}" is still syncing.`);
+            }
             const created = await weeklyPlanApi.addGoal(sessionId, year, weekNumber, {
               title: g.title,
               description: g.description,
               is_main: g.isMain,
-              ...(isUuid(g.monthlyGoalId) ? { monthly_goal_id: g.monthlyGoalId } : {}),
+              ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
               target_day: g.targetDay,
               goal_type: g.goalType,
               workload: g.workload,
             });
+            localToServerWeeklyGoalIds.set(g.id, created.id);
             set((s) => ({
               weeklyGoals: s.weeklyGoals.map((wg) =>
                 wg.id === g.id
@@ -1485,6 +1868,12 @@ export const useAppStore = create<AppState>()(
                       editable: created.editable ?? wg.editable,
                     }
                   : wg
+              ),
+              dailyPriorities: s.dailyPriorities.map((goal) =>
+                goal.weeklyGoalId === g.id ? { ...goal, weeklyGoalId: created.id } : goal
+              ),
+              secondaryTasks: s.secondaryTasks.map((goal) =>
+                goal.weeklyGoalId === g.id ? { ...goal, weeklyGoalId: created.id } : goal
               ),
               syncError: null,
               syncStatus: "saved",
@@ -1498,21 +1887,87 @@ export const useAppStore = create<AppState>()(
         if (success) set({ syncError: null, syncStatus: "saved" });
         return success;
       },
-      removeYearlyGoal: (id) => {
-        set((s) => ({ yearlyGoals: s.yearlyGoals.filter((g) => g.id !== id) }));
+      removeYearlyGoal: async (id, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Delete yearly goal: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await yearlyGoalsApi.delete(sessionId, id);
+            set((s) => ({ yearlyGoals: s.yearlyGoals.filter((g) => g.id !== id), syncError: null, syncStatus: "saved" }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Delete yearly goal", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        set((s) => ({ yearlyGoals: s.yearlyGoals.filter((g) => g.id !== id) }));
         if (sessionId && isUuid(id)) {
           yearlyGoalsApi
             .delete(sessionId, id)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Delete yearly goal", e) }));
         }
+        return true;
       },
 
       // ── Monthly goals ────────────────────────────────────────────────────────
-      addMonthlyGoal: (goal) => {
-        const localId = genId("mg");
+      addMonthlyGoal: async (goal, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId, activeDashboardDate } = get();
+        if (shouldBlock) {
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save monthly goal"));
+          if (!writableSessionId) {
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            const yearlyGoalId = await resolveYearlyGoalIdForSave(goal.yearlyGoalId);
+            const categoryId = await resolveCategoryIdForSave(goal.categoryId);
+            if (goal.yearlyGoalId && !yearlyGoalId) {
+              throw new Error("The linked yearly goal is still syncing. Wait a moment and try again.");
+            }
+            if (goal.categoryId && !categoryId) {
+              throw new Error("The selected category is still syncing. Wait a moment and try again.");
+            }
+            const created = await monthlyPlanApi.addGoal(writableSessionId, goal.year, goal.month, {
+              title: goal.title,
+              description: goal.description,
+              is_main: goal.isMain,
+              priority: goal.priority,
+              ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
+              target_date: goal.targetDate,
+              workload: goal.workload,
+            });
+            set((s) => ({
+              monthlyGoals: [
+                ...s.monthlyGoals,
+                {
+                  ...goal,
+                  id: created.id,
+                  yearlyGoalId: created.yearly_goal_id ?? goal.yearlyGoalId,
+                  categoryId: created.category_id ?? goal.categoryId,
+                  editable: created.editable ?? isCurrentMonthlyGoal(goal, activeDashboardDate),
+                },
+              ],
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Save monthly goal", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        const localId = genId("mg");
         set((s) => ({
           monthlyGoals: [
             ...s.monthlyGoals,
@@ -1523,19 +1978,33 @@ export const useAppStore = create<AppState>()(
             },
           ],
         }));
-        if (sessionId) {
-          const request = monthlyPlanApi
-            .addGoal(sessionId, goal.year, goal.month, {
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save monthly goal")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
+            const yearlyGoalId = await resolveYearlyGoalIdForSave(goal.yearlyGoalId);
+            const categoryId = await resolveCategoryIdForSave(goal.categoryId);
+            if (goal.yearlyGoalId && !yearlyGoalId) {
+              throw new Error("The linked yearly goal is still syncing. Wait a moment and try again.");
+            }
+            if (goal.categoryId && !categoryId) {
+              throw new Error("The selected category is still syncing. Wait a moment and try again.");
+            }
+              return monthlyPlanApi.addGoal(writableSessionId, goal.year, goal.month, {
               title: goal.title,
               description: goal.description,
               is_main: goal.isMain,
               priority: goal.priority,
-              ...(isUuid(goal.yearlyGoalId) ? { yearly_goal_id: goal.yearlyGoalId } : {}),
-              ...(isUuid(goal.categoryId) ? { category_id: goal.categoryId } : {}),
+              ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
               target_date: goal.targetDate,
               workload: goal.workload,
+            });
             })
             .then((created) => {
+              if (!created) return;
+              localToServerMonthlyGoalIds.set(localId, created.id);
               set((s) => ({
                 monthlyGoals: s.monthlyGoals.map((g) =>
                   g.id === localId
@@ -1543,9 +2012,13 @@ export const useAppStore = create<AppState>()(
                         ...g,
                         id: created.id,
                         yearlyGoalId: created.yearly_goal_id ?? g.yearlyGoalId,
+                        categoryId: created.category_id ?? g.categoryId,
                         editable: created.editable ?? g.editable,
                       }
                     : g
+                ),
+                weeklyGoals: s.weeklyGoals.map((goal) =>
+                  goal.monthlyGoalId === localId ? { ...goal, monthlyGoalId: created.id } : goal
                 ),
                 syncError: null,
               }));
@@ -1553,23 +2026,12 @@ export const useAppStore = create<AppState>()(
             .catch((e) => set({ syncError: formatApiError("Save monthly goal", e) }));
           trackPendingCreate(pendingMonthlyGoalCreates, localId, request);
         }
+        return true;
       },
-      updateMonthlyGoal: (id, updates) => {
-        set((s) => ({
-          monthlyGoals: s.monthlyGoals.map((g) => {
-            if (g.id !== id) return g;
-            const merged: MonthlyGoal = { ...g, ...updates };
-            if (updates.description !== undefined) {
-              merged.description = updates.description ? updates.description : undefined;
-            }
-            if (updates.workload !== undefined) {
-              merged.workload = updates.workload ? updates.workload : undefined;
-            }
-            return merged;
-          }),
-        }));
+      updateMonthlyGoal: async (id, updates, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
-        if (!sessionId || !isUuid(id)) return;
         const patch: Parameters<typeof monthlyPlanApi.updateGoal>[2] = {};
         if (updates.title !== undefined) patch.title = updates.title;
         if (updates.description !== undefined) {
@@ -1589,28 +2051,128 @@ export const useAppStore = create<AppState>()(
         if (updates.yearlyGoalId !== undefined) {
           patch.yearly_goal_id = isUuid(updates.yearlyGoalId) ? updates.yearlyGoalId : undefined;
         }
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Update monthly goal: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await monthlyPlanApi.updateGoal(sessionId, id, patch);
+            set((s) => ({
+              monthlyGoals: s.monthlyGoals.map((g) => {
+                if (g.id !== id) return g;
+                const merged: MonthlyGoal = { ...g, ...updates };
+                if (updates.description !== undefined) merged.description = updates.description ? updates.description : undefined;
+                if (updates.workload !== undefined) merged.workload = updates.workload ? updates.workload : undefined;
+                return merged;
+              }),
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Update monthly goal", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        set((s) => ({
+          monthlyGoals: s.monthlyGoals.map((g) => {
+            if (g.id !== id) return g;
+            const merged: MonthlyGoal = { ...g, ...updates };
+            if (updates.description !== undefined) {
+              merged.description = updates.description ? updates.description : undefined;
+            }
+            if (updates.workload !== undefined) {
+              merged.workload = updates.workload ? updates.workload : undefined;
+            }
+            return merged;
+          }),
+        }));
+        if (!sessionId || !isUuid(id)) return true;
         if (Object.keys(patch).length) {
           monthlyPlanApi
             .updateGoal(sessionId, id, patch)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Update monthly goal", e) }));
         }
+        return true;
       },
-      removeMonthlyGoal: (id) => {
-        set((s) => ({ monthlyGoals: s.monthlyGoals.filter((g) => g.id !== id) }));
+      removeMonthlyGoal: async (id, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Delete monthly goal: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await monthlyPlanApi.deleteGoal(sessionId, id);
+            set((s) => ({ monthlyGoals: s.monthlyGoals.filter((g) => g.id !== id), syncError: null, syncStatus: "saved" }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Delete monthly goal", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        set((s) => ({ monthlyGoals: s.monthlyGoals.filter((g) => g.id !== id) }));
         if (sessionId && isUuid(id)) {
           monthlyPlanApi
             .deleteGoal(sessionId, id)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Delete monthly goal", e) }));
         }
+        return true;
       },
 
       // ── Weekly goals ─────────────────────────────────────────────────────────
-      addWeeklyGoal: (goal) => {
-        const localId = genId("wg");
+      addWeeklyGoal: async (goal, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId, activeDashboardDate, sessionWeekStartsOn } = get();
+        if (shouldBlock) {
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save weekly goal"));
+          if (!writableSessionId) {
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            const monthlyGoalId = await resolveMonthlyGoalIdForSave(goal.monthlyGoalId);
+            if (goal.monthlyGoalId && !monthlyGoalId) {
+              throw new Error("The linked monthly goal is still syncing. Wait a moment and try again.");
+            }
+            const created = await weeklyPlanApi.addGoal(writableSessionId, goal.year, goal.weekNumber, {
+              title: goal.title,
+              description: goal.description,
+              is_main: goal.isMain,
+              ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
+              target_day: goal.targetDay,
+              goal_type: goal.goalType,
+              workload: goal.workload,
+            });
+            set((s) => ({
+              weeklyGoals: [
+                ...s.weeklyGoals,
+                {
+                  ...goal,
+                  id: created.id,
+                  monthlyGoalId: created.monthly_goal_id ?? goal.monthlyGoalId,
+                  editable: created.editable ?? isCurrentWeeklyGoal(goal, activeDashboardDate, sessionWeekStartsOn),
+                },
+              ],
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Save weekly goal", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        const localId = genId("wg");
         set((s) => ({
           weeklyGoals: [
             ...s.weeklyGoals,
@@ -1621,18 +2183,28 @@ export const useAppStore = create<AppState>()(
             },
           ],
         }));
-        if (sessionId) {
-          const request = weeklyPlanApi
-            .addGoal(sessionId, goal.year, goal.weekNumber, {
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save weekly goal")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
+            const monthlyGoalId = await resolveMonthlyGoalIdForSave(goal.monthlyGoalId);
+            if (goal.monthlyGoalId && !monthlyGoalId) {
+              throw new Error("The linked monthly goal is still syncing. Wait a moment and try again.");
+            }
+              return weeklyPlanApi.addGoal(writableSessionId, goal.year, goal.weekNumber, {
               title: goal.title,
               description: goal.description,
               is_main: goal.isMain,
-              ...(isUuid(goal.monthlyGoalId) ? { monthly_goal_id: goal.monthlyGoalId } : {}),
+              ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
               target_day: goal.targetDay,
               goal_type: goal.goalType,
               workload: goal.workload,
+            });
             })
             .then((created) => {
+              if (!created) return;
+              localToServerWeeklyGoalIds.set(localId, created.id);
               set((s) => ({
                 weeklyGoals: s.weeklyGoals.map((g) =>
                   g.id === localId
@@ -1644,29 +2216,24 @@ export const useAppStore = create<AppState>()(
                       }
                     : g
                 ),
+                dailyPriorities: s.dailyPriorities.map((goal) =>
+                  goal.weeklyGoalId === localId ? { ...goal, weeklyGoalId: created.id } : goal
+                ),
+                secondaryTasks: s.secondaryTasks.map((goal) =>
+                  goal.weeklyGoalId === localId ? { ...goal, weeklyGoalId: created.id } : goal
+                ),
                 syncError: null,
               }));
             })
             .catch((e) => set({ syncError: formatApiError("Save weekly goal", e) }));
           trackPendingCreate(pendingWeeklyGoalCreates, localId, request);
         }
+        return true;
       },
-      updateWeeklyGoal: (id, updates) => {
-        set((s) => ({
-          weeklyGoals: s.weeklyGoals.map((g) => {
-            if (g.id !== id) return g;
-            const merged: WeeklyGoal = { ...g, ...updates };
-            if (updates.description !== undefined) {
-              merged.description = updates.description ? updates.description : undefined;
-            }
-            if (updates.workload !== undefined) {
-              merged.workload = updates.workload ? updates.workload : undefined;
-            }
-            return merged;
-          }),
-        }));
+      updateWeeklyGoal: async (id, updates, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
-        if (!sessionId || !isUuid(id)) return;
         const patch = {} as Parameters<typeof weeklyPlanApi.updateGoal>[2];
         if (updates.title !== undefined) patch.title = updates.title;
         if (updates.description !== undefined) {
@@ -1682,41 +2249,145 @@ export const useAppStore = create<AppState>()(
         if (updates.monthlyGoalId !== undefined) {
           patch.monthly_goal_id = isUuid(updates.monthlyGoalId) ? updates.monthlyGoalId : undefined;
         }
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Update weekly goal: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await weeklyPlanApi.updateGoal(sessionId, id, patch);
+            set((s) => ({
+              weeklyGoals: s.weeklyGoals.map((g) => {
+                if (g.id !== id) return g;
+                const merged: WeeklyGoal = { ...g, ...updates };
+                if (updates.description !== undefined) merged.description = updates.description ? updates.description : undefined;
+                if (updates.workload !== undefined) merged.workload = updates.workload ? updates.workload : undefined;
+                return merged;
+              }),
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Update weekly goal", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        set((s) => ({
+          weeklyGoals: s.weeklyGoals.map((g) => {
+            if (g.id !== id) return g;
+            const merged: WeeklyGoal = { ...g, ...updates };
+            if (updates.description !== undefined) {
+              merged.description = updates.description ? updates.description : undefined;
+            }
+            if (updates.workload !== undefined) {
+              merged.workload = updates.workload ? updates.workload : undefined;
+            }
+            return merged;
+          }),
+        }));
+        if (!sessionId || !isUuid(id)) return true;
         if (Object.keys(patch).length) {
           weeklyPlanApi
             .updateGoal(sessionId, id, patch)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Update weekly goal", e) }));
         }
+        return true;
       },
-      removeWeeklyGoal: (id) => {
-        set((s) => ({ weeklyGoals: s.weeklyGoals.filter((g) => g.id !== id) }));
+      removeWeeklyGoal: async (id, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Delete weekly goal: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await weeklyPlanApi.deleteGoal(sessionId, id);
+            set((s) => ({ weeklyGoals: s.weeklyGoals.filter((g) => g.id !== id), syncError: null, syncStatus: "saved" }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Delete weekly goal", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        set((s) => ({ weeklyGoals: s.weeklyGoals.filter((g) => g.id !== id) }));
         if (sessionId && isUuid(id)) {
           weeklyPlanApi
             .deleteGoal(sessionId, id)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Delete weekly goal", e) }));
         }
+        return true;
       },
 
       // ── Daily priorities ──────────────────────────────────────────────────────
-      addDailyPriority: (priority) => {
-        const localId = genId("dp");
-        set((s) => ({ dailyPriorities: [...s.dailyPriorities, { ...priority, id: localId }] }));
+      addDailyPriority: async (priority, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
-        if (sessionId) {
-          const request = tasksApi
-            .create(sessionId, priority.date, {
+        if (shouldBlock) {
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save daily priority"));
+          if (!writableSessionId) {
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(priority.weeklyGoalId);
+            if (priority.weeklyGoalId && !weeklyGoalId) {
+              throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
+            }
+            const created = await tasksApi.create(writableSessionId, priority.date, {
               title: priority.title,
               description: priority.description,
               priority: priority.priority,
               is_main: priority.isMain,
               estimated_minutes: priority.estimatedMinutes,
               tag: priority.tag,
-              ...(isUuid(priority.weeklyGoalId) ? { weekly_goal_id: priority.weeklyGoalId } : {}),
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
+            });
+            set((s) => ({
+              dailyPriorities: [
+                ...s.dailyPriorities,
+                { ...priority, id: created.id, weeklyGoalId: created.weekly_goal_id ?? priority.weeklyGoalId },
+              ],
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Save daily priority", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        const localId = genId("dp");
+        set((s) => ({ dailyPriorities: [...s.dailyPriorities, { ...priority, id: localId }] }));
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save daily priority")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(priority.weeklyGoalId);
+            if (priority.weeklyGoalId && !weeklyGoalId) {
+              throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
+            }
+              return tasksApi.create(writableSessionId, priority.date, {
+              title: priority.title,
+              description: priority.description,
+              priority: priority.priority,
+              is_main: priority.isMain,
+              estimated_minutes: priority.estimatedMinutes,
+              tag: priority.tag,
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
+            });
             })
             .then((created) => {
+              if (!created) return;
               set((s) => ({
                 dailyPriorities: s.dailyPriorities.map((p) =>
                   p.id === localId ? { ...p, id: created.id, weeklyGoalId: created.weekly_goal_id ?? p.weeklyGoalId } : p
@@ -1727,8 +2398,43 @@ export const useAppStore = create<AppState>()(
             .catch((e) => set({ syncError: formatApiError("Save daily priority", e) }));
           trackPendingCreate(pendingDailyPriorityCreates, localId, request);
         }
+        return true;
       },
-      updateDailyPriority: (id, updates) => {
+      updateDailyPriority: async (id, updates, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
+        const { sessionId } = get();
+        const patch: Record<string, string | number | null> = {};
+        if (updates.title !== undefined) patch.title = updates.title;
+        if (updates.description !== undefined) patch.description = updates.description ? updates.description : "";
+        if (updates.estimatedMinutes !== undefined) patch.estimated_minutes = updates.estimatedMinutes;
+        if (updates.priority !== undefined) patch.priority = updates.priority;
+        if (updates.tag !== undefined) patch.tag = updates.tag ?? "";
+        if (updates.weeklyGoalId !== undefined) patch.weekly_goal_id = isUuid(updates.weeklyGoalId) ? updates.weeklyGoalId : null;
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Update daily priority: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await tasksApi.update(sessionId, id, patch);
+            set((s) => ({
+              dailyPriorities: s.dailyPriorities.map((p) => {
+                if (p.id !== id) return p;
+                const merged: DailyPriority = { ...p, ...updates };
+                if (updates.description !== undefined) merged.description = updates.description ? updates.description : undefined;
+                return merged;
+              }),
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Update daily priority", e), syncStatus: "failed" });
+            return false;
+          }
+        }
         set((s) => ({
           dailyPriorities: s.dailyPriorities.map((p) => {
             if (p.id !== id) return p;
@@ -1739,25 +2445,14 @@ export const useAppStore = create<AppState>()(
             return merged;
           }),
         }));
-        const { sessionId } = get();
-        if (!sessionId || !isUuid(id)) return;
-        const patch: Record<string, string | number | null> = {};
-        if (updates.title !== undefined) patch.title = updates.title;
-        if (updates.description !== undefined) {
-          patch.description = updates.description ? updates.description : "";
-        }
-        if (updates.estimatedMinutes !== undefined) patch.estimated_minutes = updates.estimatedMinutes;
-        if (updates.priority !== undefined) patch.priority = updates.priority;
-        if (updates.tag !== undefined) patch.tag = updates.tag ?? "";
-        if (updates.weeklyGoalId !== undefined) {
-          patch.weekly_goal_id = isUuid(updates.weeklyGoalId) ? updates.weeklyGoalId : null;
-        }
+        if (!sessionId || !isUuid(id)) return true;
         if (Object.keys(patch).length) {
           tasksApi
             .update(sessionId, id, patch)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Update daily priority", e) }));
         }
+        return true;
       },
       toggleDailyPriority: (id) => {
         const priority = get().dailyPriorities.find((p) => p.id === id);
@@ -1786,11 +2481,28 @@ export const useAppStore = create<AppState>()(
             );
         }
       },
-      removeDailyPriority: (id) => {
+      removeDailyPriority: async (id, options) => {
         const removed = get().dailyPriorities.find((p) => p.id === id);
-        if (!removed) return;
-        set((s) => ({ dailyPriorities: s.dailyPriorities.filter((p) => p.id !== id) }));
+        if (!removed) return false;
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Delete daily priority: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await tasksApi.delete(sessionId, id);
+            set((s) => ({ dailyPriorities: s.dailyPriorities.filter((p) => p.id !== id), syncError: null, syncStatus: "saved" }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Delete daily priority", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        set((s) => ({ dailyPriorities: s.dailyPriorities.filter((p) => p.id !== id) }));
         if (sessionId && isUuid(id)) {
           tasksApi
             .delete(sessionId, id)
@@ -1804,25 +2516,72 @@ export const useAppStore = create<AppState>()(
               }))
             );
         }
+        return true;
       },
 
       // ── Secondary tasks ───────────────────────────────────────────────────────
-      addSecondaryTask: (task) => {
-        const localId = genId("st");
-        set((s) => ({ secondaryTasks: [...s.secondaryTasks, { ...task, id: localId }] }));
+      addSecondaryTask: async (task, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
-        if (sessionId) {
-          const request = tasksApi
-            .create(sessionId, task.date, {
+        if (shouldBlock) {
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save secondary task"));
+          if (!writableSessionId) {
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(task.weeklyGoalId);
+            if (task.weeklyGoalId && !weeklyGoalId) {
+              throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
+            }
+            const created = await tasksApi.create(writableSessionId, task.date, {
               title: task.title,
               description: task.description,
               priority: task.priority,
               is_main: false,
               estimated_minutes: task.estimatedMinutes,
               tag: task.tag,
-              ...(isUuid(task.weeklyGoalId) ? { weekly_goal_id: task.weeklyGoalId } : {}),
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
+            });
+            set((s) => ({
+              secondaryTasks: [
+                ...s.secondaryTasks,
+                { ...task, id: created.id, weeklyGoalId: created.weekly_goal_id ?? task.weeklyGoalId },
+              ],
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Save secondary task", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        const localId = genId("st");
+        set((s) => ({ secondaryTasks: [...s.secondaryTasks, { ...task, id: localId }] }));
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save secondary task")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(task.weeklyGoalId);
+            if (task.weeklyGoalId && !weeklyGoalId) {
+              throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
+            }
+              return tasksApi.create(writableSessionId, task.date, {
+              title: task.title,
+              description: task.description,
+              priority: task.priority,
+              is_main: false,
+              estimated_minutes: task.estimatedMinutes,
+              tag: task.tag,
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
+            });
             })
             .then((created) => {
+              if (!created) return;
               set((s) => ({
                 secondaryTasks: s.secondaryTasks.map((t) =>
                   t.id === localId ? { ...t, id: created.id, weeklyGoalId: created.weekly_goal_id ?? t.weeklyGoalId } : t
@@ -1833,8 +2592,43 @@ export const useAppStore = create<AppState>()(
             .catch((e) => set({ syncError: formatApiError("Save secondary task", e) }));
           trackPendingCreate(pendingSecondaryTaskCreates, localId, request);
         }
+        return true;
       },
-      updateSecondaryTask: (id, updates) => {
+      updateSecondaryTask: async (id, updates, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
+        const { sessionId } = get();
+        const patch: Record<string, string | number | null> = {};
+        if (updates.title !== undefined) patch.title = updates.title;
+        if (updates.description !== undefined) patch.description = updates.description ? updates.description : "";
+        if (updates.estimatedMinutes !== undefined) patch.estimated_minutes = updates.estimatedMinutes;
+        if (updates.priority !== undefined) patch.priority = updates.priority;
+        if (updates.tag !== undefined) patch.tag = updates.tag ?? "";
+        if (updates.weeklyGoalId !== undefined) patch.weekly_goal_id = isUuid(updates.weeklyGoalId) ? updates.weeklyGoalId : null;
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Update secondary task: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await tasksApi.update(sessionId, id, patch);
+            set((s) => ({
+              secondaryTasks: s.secondaryTasks.map((t) => {
+                if (t.id !== id) return t;
+                const merged: DailyPriority = { ...t, ...updates };
+                if (updates.description !== undefined) merged.description = updates.description ? updates.description : undefined;
+                return merged;
+              }),
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Update secondary task", e), syncStatus: "failed" });
+            return false;
+          }
+        }
         set((s) => ({
           secondaryTasks: s.secondaryTasks.map((t) => {
             if (t.id !== id) return t;
@@ -1845,25 +2639,14 @@ export const useAppStore = create<AppState>()(
             return merged;
           }),
         }));
-        const { sessionId } = get();
-        if (!sessionId || !isUuid(id)) return;
-        const patch: Record<string, string | number | null> = {};
-        if (updates.title !== undefined) patch.title = updates.title;
-        if (updates.description !== undefined) {
-          patch.description = updates.description ? updates.description : "";
-        }
-        if (updates.estimatedMinutes !== undefined) patch.estimated_minutes = updates.estimatedMinutes;
-        if (updates.priority !== undefined) patch.priority = updates.priority;
-        if (updates.tag !== undefined) patch.tag = updates.tag ?? "";
-        if (updates.weeklyGoalId !== undefined) {
-          patch.weekly_goal_id = isUuid(updates.weeklyGoalId) ? updates.weeklyGoalId : null;
-        }
+        if (!sessionId || !isUuid(id)) return true;
         if (Object.keys(patch).length) {
           tasksApi
             .update(sessionId, id, patch)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Update secondary task", e) }));
         }
+        return true;
       },
       toggleSecondaryTask: (id) => {
         const task = get().secondaryTasks.find((t) => t.id === id);
@@ -1891,11 +2674,28 @@ export const useAppStore = create<AppState>()(
             );
         }
       },
-      removeSecondaryTask: (id) => {
+      removeSecondaryTask: async (id, options) => {
         const removed = get().secondaryTasks.find((t) => t.id === id);
-        if (!removed) return;
-        set((s) => ({ secondaryTasks: s.secondaryTasks.filter((t) => t.id !== id) }));
+        if (!removed) return false;
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Delete secondary task: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await tasksApi.delete(sessionId, id);
+            set((s) => ({ secondaryTasks: s.secondaryTasks.filter((t) => t.id !== id), syncError: null, syncStatus: "saved" }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Delete secondary task", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        set((s) => ({ secondaryTasks: s.secondaryTasks.filter((t) => t.id !== id) }));
         if (sessionId && isUuid(id)) {
           tasksApi
             .delete(sessionId, id)
@@ -1909,6 +2709,7 @@ export const useAppStore = create<AppState>()(
               }))
             );
         }
+        return true;
       },
 
       // ── Habits ───────────────────────────────────────────────────────────────
@@ -1937,20 +2738,42 @@ export const useAppStore = create<AppState>()(
             );
         }
       },
-      updateHabit: (id, updates) => {
+      updateHabit: async (id, updates, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
+        const { sessionId } = get();
+        const hPatch: Parameters<typeof habitsApi.update>[2] = {};
+        if (updates.name !== undefined) hPatch.name = updates.name;
+        if (updates.icon !== undefined) hPatch.icon = updates.icon;
+        if (updates.frequency !== undefined) hPatch.frequency = updates.frequency;
+        if (updates.active !== undefined) hPatch.active = updates.active;
+        if (updates.categoryId !== undefined) hPatch.category_id = isUuid(updates.categoryId) ? updates.categoryId : null;
+        if (updates.yearlyGoalId !== undefined) hPatch.yearly_goal_id = isUuid(updates.yearlyGoalId) ? updates.yearlyGoalId : null;
+        if (updates.monthlyGoalId !== undefined) hPatch.monthly_goal_id = isUuid(updates.monthlyGoalId) ? updates.monthlyGoalId : null;
+        if (updates.weeklyGoalId !== undefined) hPatch.weekly_goal_id = isUuid(updates.weeklyGoalId) ? updates.weeklyGoalId : null;
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Update habit: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await habitsApi.update(sessionId, id, hPatch);
+            set((s) => ({
+              habits: s.habits.map((h) => h.id === id ? { ...h, ...updates } : h),
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Update habit", e), syncStatus: "failed" });
+            return false;
+          }
+        }
         set((s) => ({
           habits: s.habits.map((h) => h.id === id ? { ...h, ...updates } : h),
         }));
-        const { sessionId } = get();
         if (sessionId && isUuid(id)) {
-          const hPatch: Parameters<typeof habitsApi.update>[2] = {};
-          if (updates.name !== undefined) hPatch.name = updates.name;
-          if (updates.icon !== undefined) hPatch.icon = updates.icon;
-          if (updates.frequency !== undefined) hPatch.frequency = updates.frequency;
-          if (updates.active !== undefined) hPatch.active = updates.active;
-          if (updates.categoryId !== undefined && isUuid(updates.categoryId)) {
-            hPatch.category_id = updates.categoryId;
-          }
           if (Object.keys(hPatch).length) {
             habitsApi
               .update(sessionId, id, hPatch)
@@ -1958,24 +2781,112 @@ export const useAppStore = create<AppState>()(
               .catch((e) => set({ syncError: formatApiError("Update habit", e) }));
           }
         }
+        return true;
       },
-      addHabit: (habit) => {
-        const localId = genId("hab");
-        set((s) => ({ habits: [...s.habits, { ...habit, id: localId }] }));
+      addHabit: async (habit, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
-        if (sessionId) {
-          const request = habitsApi
-            .create(sessionId, {
+        if (shouldBlock) {
+          const writableSessionId =
+            sessionId ?? (await ensureWritableSession(get, set, "Save habit"));
+          if (!writableSessionId) {
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            const categoryId = await resolveCategoryIdForSave(habit.categoryId);
+            const yearlyGoalId = await resolveYearlyGoalIdForSave(habit.yearlyGoalId);
+            const monthlyGoalId = await resolveMonthlyGoalIdForSave(habit.monthlyGoalId);
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(habit.weeklyGoalId);
+            if (habit.categoryId && !categoryId) {
+              throw new Error("The selected category is still syncing. Wait a moment and try again.");
+            }
+            if (habit.yearlyGoalId && !yearlyGoalId) {
+              throw new Error("The linked yearly goal is still syncing. Wait a moment and try again.");
+            }
+            if (habit.monthlyGoalId && !monthlyGoalId) {
+              throw new Error("The linked monthly goal is still syncing. Wait a moment and try again.");
+            }
+            if (habit.weeklyGoalId && !weeklyGoalId) {
+              throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
+            }
+            const created = await habitsApi.create(writableSessionId, {
               name: habit.name,
               icon: habit.icon,
               frequency: habit.frequency,
-              ...(isUuid(habit.categoryId) ? { category_id: habit.categoryId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
+              ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+              ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
+            });
+            set((s) => ({
+              habits: [
+                ...s.habits,
+                {
+                  ...habit,
+                  id: created.id,
+                  categoryId: created.category_id ?? habit.categoryId,
+                  yearlyGoalId: created.yearly_goal_id ?? habit.yearlyGoalId,
+                  monthlyGoalId: created.monthly_goal_id ?? habit.monthlyGoalId,
+                  weeklyGoalId: created.weekly_goal_id ?? habit.weeklyGoalId,
+                },
+              ],
+              syncError: null,
+              syncStatus: "saved",
+            }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Save habit", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        const localId = genId("hab");
+        set((s) => ({ habits: [...s.habits, { ...habit, id: localId }] }));
+        const currentSessionId = get().sessionId;
+        if (currentSessionId || requiresServerPersistence()) {
+          const request = ensureWritableSession(get, set, "Save habit")
+            .then(async (writableSessionId) => {
+              if (!writableSessionId) return null;
+              const categoryId = await resolveCategoryIdForSave(habit.categoryId);
+              const yearlyGoalId = await resolveYearlyGoalIdForSave(habit.yearlyGoalId);
+              const monthlyGoalId = await resolveMonthlyGoalIdForSave(habit.monthlyGoalId);
+              const weeklyGoalId = await resolveWeeklyGoalIdForSave(habit.weeklyGoalId);
+              if (habit.categoryId && !categoryId) {
+                throw new Error("The selected category is still syncing. Wait a moment and try again.");
+              }
+              if (habit.yearlyGoalId && !yearlyGoalId) {
+                throw new Error("The linked yearly goal is still syncing. Wait a moment and try again.");
+              }
+              if (habit.monthlyGoalId && !monthlyGoalId) {
+                throw new Error("The linked monthly goal is still syncing. Wait a moment and try again.");
+              }
+              if (habit.weeklyGoalId && !weeklyGoalId) {
+                throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
+              }
+              return habitsApi.create(writableSessionId, {
+                name: habit.name,
+                icon: habit.icon,
+                frequency: habit.frequency,
+                ...(categoryId ? { category_id: categoryId } : {}),
+                ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+                ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
+                ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
+              });
             })
             .then((created) => {
+              if (!created) return;
               set((s) => ({
                 habits: s.habits.map((h) =>
                   h.id === localId
-                    ? { ...h, id: created.id, categoryId: created.category_id ?? h.categoryId }
+                    ? {
+                        ...h,
+                        id: created.id,
+                        categoryId: created.category_id ?? h.categoryId,
+                        yearlyGoalId: created.yearly_goal_id ?? h.yearlyGoalId,
+                        monthlyGoalId: created.monthly_goal_id ?? h.monthlyGoalId,
+                        weeklyGoalId: created.weekly_goal_id ?? h.weeklyGoalId,
+                      }
                     : h
                 ),
                 syncError: null,
@@ -1984,25 +2895,48 @@ export const useAppStore = create<AppState>()(
             .catch((e) => set({ syncError: formatApiError("Save habit", e) }));
           trackPendingCreate(pendingHabitCreates, localId, request);
         }
+        return true;
       },
-      removeHabit: (id) => {
-        set((s) => ({ habits: s.habits.filter((h) => h.id !== id) }));
+      removeHabit: async (id, options) => {
+        const persistMode = options?.persistMode ?? "background";
+        const shouldBlock = persistMode === "blocking" && requiresServerPersistence();
         const { sessionId } = get();
+        if (shouldBlock && isUuid(id)) {
+          if (!sessionId) {
+            set({ syncError: "Delete habit: Backend session is not ready.", syncStatus: "failed" });
+            return false;
+          }
+          set({ syncStatus: "saving" });
+          try {
+            await habitsApi.delete(sessionId, id);
+            set((s) => ({ habits: s.habits.filter((h) => h.id !== id), syncError: null, syncStatus: "saved" }));
+            return true;
+          } catch (e) {
+            set({ syncError: formatApiError("Delete habit", e), syncStatus: "failed" });
+            return false;
+          }
+        }
+        set((s) => ({ habits: s.habits.filter((h) => h.id !== id) }));
         if (sessionId && isUuid(id)) {
           habitsApi
             .delete(sessionId, id)
             .then(() => set({ syncError: null }))
             .catch((e) => set({ syncError: formatApiError("Delete habit", e) }));
         }
+        return true;
       },
 
-      syncDailySetupToServer: async (planDate) => {
-        const { sessionId, dailyPriorities, secondaryTasks, habits } = get();
+      syncDailySetupToServer: async (planDate, options) => {
+        const mode = options?.mode ?? "sync";
+        let sessionId = get().sessionId;
+        const { dailyPriorities, secondaryTasks, habits } = get();
         if (!sessionId) {
           if (requiresServerPersistence()) {
-            set({ syncError: "Sync daily setup: Backend session is not ready." });
-            return false;
+            sessionId = await ensureWritableSession(get, set, "Sync daily setup");
+            if (!sessionId) return false;
           }
+        }
+        if (!sessionId) {
           return true;
         }
 
@@ -2020,9 +2954,28 @@ export const useAppStore = create<AppState>()(
         );
 
         const refreshed = get();
+        if (mode === "verify") {
+          const unsavedPriorities = refreshed.dailyPriorities.filter((item) => item.date === planDate && !isUuid(item.id));
+          const unsavedTasks = refreshed.secondaryTasks.filter((item) => item.date === planDate && !isUuid(item.id));
+          const unsavedHabits = refreshed.habits.filter((item) => !isUuid(item.id));
+          if (unsavedPriorities.length || unsavedTasks.length || unsavedHabits.length) {
+            set({
+              syncError: "Some daily goals or routines are still saving. Wait a moment and try again.",
+              syncStatus: "failed",
+            });
+            return false;
+          }
+          set({ syncError: null });
+          await get().loadDashboard(planDate);
+          return true;
+        }
 
         for (const p of refreshed.dailyPriorities.filter((item) => item.date === planDate && !isUuid(item.id))) {
           try {
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(p.weeklyGoalId);
+            if (p.weeklyGoalId && !weeklyGoalId) {
+              throw new Error(`The linked weekly goal for "${p.title}" is still syncing.`);
+            }
             const created = await tasksApi.create(sessionId, planDate, {
               title: p.title,
               description: p.description,
@@ -2030,7 +2983,7 @@ export const useAppStore = create<AppState>()(
               is_main: p.isMain,
               estimated_minutes: p.estimatedMinutes,
               tag: p.tag,
-              ...(isUuid(p.weeklyGoalId) ? { weekly_goal_id: p.weeklyGoalId } : {}),
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
             });
             set((s) => ({
               dailyPriorities: s.dailyPriorities.map((item) =>
@@ -2045,6 +2998,10 @@ export const useAppStore = create<AppState>()(
 
         for (const t of refreshed.secondaryTasks.filter((item) => item.date === planDate && !isUuid(item.id))) {
           try {
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(t.weeklyGoalId);
+            if (t.weeklyGoalId && !weeklyGoalId) {
+              throw new Error(`The linked weekly goal for "${t.title}" is still syncing.`);
+            }
             const created = await tasksApi.create(sessionId, planDate, {
               title: t.title,
               description: t.description,
@@ -2052,7 +3009,7 @@ export const useAppStore = create<AppState>()(
               is_main: false,
               estimated_minutes: t.estimatedMinutes,
               tag: t.tag,
-              ...(isUuid(t.weeklyGoalId) ? { weekly_goal_id: t.weeklyGoalId } : {}),
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
             });
             set((s) => ({
               secondaryTasks: s.secondaryTasks.map((item) =>
@@ -2067,15 +3024,43 @@ export const useAppStore = create<AppState>()(
 
         for (const h of refreshed.habits.filter((item) => !isUuid(item.id))) {
           try {
+            const categoryId = await resolveCategoryIdForSave(h.categoryId);
+            const yearlyGoalId = await resolveYearlyGoalIdForSave(h.yearlyGoalId);
+            const monthlyGoalId = await resolveMonthlyGoalIdForSave(h.monthlyGoalId);
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(h.weeklyGoalId);
+            if (h.categoryId && !categoryId) {
+              throw new Error(`The category for "${h.name}" is still syncing.`);
+            }
+            if (h.yearlyGoalId && !yearlyGoalId) {
+              throw new Error(`The yearly goal linked to "${h.name}" is still syncing.`);
+            }
+            if (h.monthlyGoalId && !monthlyGoalId) {
+              throw new Error(`The monthly goal linked to "${h.name}" is still syncing.`);
+            }
+            if (h.weeklyGoalId && !weeklyGoalId) {
+              throw new Error(`The weekly goal linked to "${h.name}" is still syncing.`);
+            }
             const created = await habitsApi.create(sessionId, {
               name: h.name,
               icon: h.icon,
               frequency: h.frequency,
-              ...(isUuid(h.categoryId) ? { category_id: h.categoryId } : {}),
+              ...(categoryId ? { category_id: categoryId } : {}),
+              ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+              ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
             });
             set((s) => ({
               habits: s.habits.map((item) =>
-                item.id === h.id ? { ...item, id: created.id, categoryId: created.category_id ?? item.categoryId } : item
+                item.id === h.id
+                  ? {
+                      ...item,
+                      id: created.id,
+                      categoryId: created.category_id ?? item.categoryId,
+                      yearlyGoalId: created.yearly_goal_id ?? item.yearlyGoalId,
+                      monthlyGoalId: created.monthly_goal_id ?? item.monthlyGoalId,
+                      weeklyGoalId: created.weekly_goal_id ?? item.weeklyGoalId,
+                    }
+                  : item
               ),
             }));
           } catch (e) {
