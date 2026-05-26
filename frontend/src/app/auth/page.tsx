@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
@@ -621,8 +622,16 @@ export default function AuthPage() {
           </div>
         </div>
 
-        <p className="text-center text-[11px] mt-6 max-w-xs" style={{ color: "#a8b5af" }}>
-          By continuing you accept our Terms and Privacy.
+        <p className="text-center text-[11px] mt-6 max-w-xs leading-5" style={{ color: "#a8b5af" }}>
+          By continuing you accept our{" "}
+          <Link href="/terms" className="font-semibold transition-opacity hover:opacity-75" style={{ color: "#006c4a" }}>
+            Terms of Use
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="font-semibold transition-opacity hover:opacity-75" style={{ color: "#006c4a" }}>
+            Privacy Policy
+          </Link>
+          .
         </p>
       </div>
     </div>
