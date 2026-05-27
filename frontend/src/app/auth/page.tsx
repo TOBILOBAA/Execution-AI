@@ -8,6 +8,7 @@ import { useShallow } from "zustand/react/shallow";
 import { describeSyncError } from "@/lib/apiErrors";
 import { isAuthLocalOnly, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
 import { PASSWORD_REQUIREMENTS_COPY, validateStrongPassword } from "@/lib/passwordRules";
+import { BetaBadge } from "@/components/ui/BetaBadge";
 
 type Mode = "signin" | "signup" | "forgot" | "verify-email";
 
@@ -265,7 +266,10 @@ export default function AuthPage() {
             </span>
           </div>
           <div>
-            <p className="font-headline font-bold text-base text-white">Execution AI</p>
+            <div className="flex items-center gap-2">
+              <p className="font-headline font-bold text-base text-white">Execution AI</p>
+              <BetaBadge compact light />
+            </div>
             <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>
               Execution Engine
             </p>
@@ -340,9 +344,12 @@ export default function AuthPage() {
           <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "#006c4a" }}>
             <span className="material-symbols-outlined text-[18px] text-white">bolt</span>
           </div>
-          <p className="font-headline font-bold text-lg" style={{ color: "#1a1f1e" }}>
-            Execution AI
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="font-headline font-bold text-lg" style={{ color: "#1a1f1e" }}>
+              Execution AI
+            </p>
+            <BetaBadge compact />
+          </div>
         </div>
 
         <div className="bg-white rounded-3xl shadow-sm w-full" style={{ maxWidth: 460, border: "1.5px solid rgba(0,0,0,0.07)" }}>
