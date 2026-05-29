@@ -260,20 +260,8 @@ export default function AuthPage() {
     <div className="min-h-screen flex" style={{ background: "#f4f6f4" }}>
       <div className="hidden lg:flex flex-col justify-between w-[480px] flex-shrink-0 p-12" style={{ background: "#0d1f18" }}>
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(133,248,196,0.15)" }}>
-            <span className="material-symbols-outlined text-[20px]" style={{ color: "#85f8c4" }}>
-              bolt
-            </span>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="font-headline font-bold text-base text-white">Execution AI</p>
-              <BetaBadge compact light />
-            </div>
-            <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>
-              Execution Engine
-            </p>
-          </div>
+          <p className="font-headline text-[30px] font-extrabold tracking-[-0.05em] text-white">Execution AI</p>
+          <BetaBadge compact light className="translate-y-px" />
         </div>
 
         <div className="space-y-6">
@@ -340,16 +328,11 @@ export default function AuthPage() {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
-        <div className="flex items-center gap-2.5 mb-10 lg:hidden">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "#006c4a" }}>
-            <span className="material-symbols-outlined text-[18px] text-white">bolt</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <p className="font-headline font-bold text-lg" style={{ color: "#1a1f1e" }}>
-              Execution AI
-            </p>
-            <BetaBadge compact />
-          </div>
+        <div className="mb-10 flex items-center gap-2.5 lg:hidden">
+          <p className="font-headline text-[26px] font-extrabold tracking-[-0.05em]" style={{ color: "#1a1f1e" }}>
+            Execution AI
+          </p>
+          <BetaBadge compact className="translate-y-px" />
         </div>
 
         <div className="bg-white rounded-3xl shadow-sm w-full" style={{ maxWidth: 460, border: "1.5px solid rgba(0,0,0,0.07)" }}>
