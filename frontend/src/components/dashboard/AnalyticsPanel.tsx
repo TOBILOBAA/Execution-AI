@@ -1,144 +1,315 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useMemo } from "react";
 import type { DashboardMetrics } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
-import { getDayLabels, getWeekdayIndex } from "@/lib/utils";
+import { getWeekNumber } from "@/lib/goalsView";
+import { useShallow } from "zustand/react/shallow";
 
 interface AnalyticsPanelProps {
   metrics: DashboardMetrics;
 }
 
+function clampProgress(value: number | undefined) {
+  return Math.max(0, Math.min(100, Math.round(value ?? 0)));
+}
+
+function getReferenceDate(isoDate: string) {
+  const parsed = new Date(`${isoDate}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
 export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
-  const maxVal = Math.max(...metrics.weeklyConsistency, 1);
-  const [now, setNow] = useState<Date>(() => new Date());
-  const weekStartsOn = useAppStore((state) => state.sessionWeekStartsOn);
-  const dayLabels = getDayLabels(weekStartsOn);
+  const {
+    yearlyGoals,
+    monthlyGoals,
+    weeklyGoals,
+    categories,
+    activeDashboardDate,
+    sessionWeekStartsOn,
+  } = useAppStore(
+    useShallow((state) => ({
+      yearlyGoals: state.yearlyGoals,
+      monthlyGoals: state.monthlyGoals,
+      weeklyGoals: state.weeklyGoals,
+      categories: state.categories,
+      activeDashboardDate: state.activeDashboardDate,
+      sessionWeekStartsOn: state.sessionWeekStartsOn,
+    })),
+  );
 
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
+  const referenceDate = getReferenceDate(activeDashboardDate);
+  const currentYear = referenceDate.getFullYear();
+  const currentMonth = referenceDate.getMonth() + 1;
+  const currentWeek = getWeekNumber(referenceDate, sessionWeekStartsOn);
 
-  const todayIndex = getWeekdayIndex(now, weekStartsOn);
-  const hasWeeklyData = metrics.weeklyConsistency.some((value) => value > 0);
-  const hasWeeklyObjective = Boolean(metrics.weeklyObjective?.trim());
-  const bestStreakLabel = metrics.bestExecutionStreak === 1 ? "1 day" : `${metrics.bestExecutionStreak} days`;
+  const currentYearGoals = useMemo(
+    () =>
+      yearlyGoals
+        .filter((goal) => goal.year === currentYear)
+        .sort((a, b) => clampProgress(b.progress) - clampProgress(a.progress)),
+    [currentYear, yearlyGoals],
+  );
+
+  const currentMonthlyGoals = useMemo(
+    () => monthlyGoals.filter((goal) => goal.year === currentYear && goal.month === currentMonth),
+    [currentMonth, currentYear, monthlyGoals],
+  );
+
+  const currentWeeklyGoals = useMemo(
+    () => weeklyGoals.filter((goal) => goal.year === currentYear && goal.weekNumber === currentWeek),
+    [currentWeek, currentYear, weeklyGoals],
+  );
+
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const monthlyGoalsByYearlyGoal = useMemo(() => {
+    const grouped = new Map<string, typeof monthlyGoals>();
+    monthlyGoals.forEach((goal) => {
+      if (!goal.yearlyGoalId) return;
+      const existing = grouped.get(goal.yearlyGoalId) ?? [];
+      existing.push(goal);
+      grouped.set(goal.yearlyGoalId, existing);
+    });
+    return grouped;
+  }, [monthlyGoals]);
+
+  const weeklyGoalsByMonthlyGoal = useMemo(() => {
+    const grouped = new Map<string, typeof weeklyGoals>();
+    weeklyGoals.forEach((goal) => {
+      if (!goal.monthlyGoalId) return;
+      const existing = grouped.get(goal.monthlyGoalId) ?? [];
+      existing.push(goal);
+      grouped.set(goal.monthlyGoalId, existing);
+    });
+    return grouped;
+  }, [weeklyGoals]);
+
+  const yearlyProgressByGoalId = useMemo(() => {
+    const derived = new Map<string, number>();
+    currentYearGoals.forEach((goal) => {
+      const linkedMonthlyGoals = monthlyGoalsByYearlyGoal.get(goal.id) ?? [];
+      const progress = linkedMonthlyGoals.length
+        ? Math.round(
+            linkedMonthlyGoals.reduce((sum, monthlyGoal) => sum + clampProgress(monthlyGoal.progress), 0) /
+              linkedMonthlyGoals.length,
+          )
+        : clampProgress(goal.progress);
+      derived.set(goal.id, progress);
+    });
+    return derived;
+  }, [currentYearGoals, monthlyGoalsByYearlyGoal]);
+
+  const averageProgress = currentYearGoals.length
+    ? Math.round(
+        currentYearGoals.reduce((sum, goal) => sum + (yearlyProgressByGoalId.get(goal.id) ?? clampProgress(goal.progress)), 0) /
+          currentYearGoals.length,
+      )
+    : 0;
+
+  const highlightedYearlyGoals = currentYearGoals.slice(0, 2);
+  const currentWeeklyObjective =
+    currentWeeklyGoals.find((goal) => goal.isMain) ??
+    currentWeeklyGoals.sort((a, b) => clampProgress(b.progress) - clampProgress(a.progress))[0] ??
+    null;
+  const currentMonthlyObjective =
+    currentMonthlyGoals.find((goal) => goal.isMain) ??
+    currentMonthlyGoals.sort((a, b) => clampProgress(b.progress) - clampProgress(a.progress))[0] ??
+    null;
+
+  const weeklyObjectiveProgress = currentWeeklyObjective
+    ? clampProgress(currentWeeklyObjective.progress)
+    : clampProgress(metrics.weeklyCompletionRate);
+  const monthlyObjectiveProgress = currentMonthlyObjective
+    ? (() => {
+        const linkedWeeklyGoals = weeklyGoalsByMonthlyGoal.get(currentMonthlyObjective.id) ?? [];
+        return linkedWeeklyGoals.length
+          ? Math.round(
+              linkedWeeklyGoals.reduce((sum, weeklyGoal) => sum + clampProgress(weeklyGoal.progress), 0) /
+                linkedWeeklyGoals.length,
+            )
+          : clampProgress(currentMonthlyObjective.progress);
+      })()
+    : clampProgress(metrics.monthlyCompletionRate);
 
   return (
     <div
-      className="text-white rounded-2xl p-5 sm:p-6 space-y-6 sm:space-y-7"
-      style={{ background: "#1a1f1e", boxShadow: "0 4px 24px rgba(0,0,0,0.18)" }}
+      className="rounded-[30px] p-6 text-white md:p-7"
+      style={{
+        background: "linear-gradient(180deg, #0f1d18 0%, #13231d 100%)",
+        boxShadow: "0 22px 60px rgba(10, 18, 15, 0.22)",
+      }}
     >
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>
-          Execution Streak
-        </p>
-        <div className="flex items-baseline gap-2">
-          <span className="font-headline font-extrabold" style={{ fontSize: "48px", lineHeight: 1, color: "#85f8c4" }}>
-            {metrics.executionStreak}
-          </span>
-          <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>Current streak</span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <p className="text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: "rgba(255,255,255,0.58)" }}>
+              Yearly Progress
+            </p>
+            <span
+              className="rounded-full px-3 py-1 text-[11px] font-bold tracking-[0.12em]"
+              style={{ border: "1px solid rgba(127,243,190,0.34)", color: "#85f8c4", background: "rgba(127,243,190,0.08)" }}
+            >
+              {currentYear}
+            </span>
+          </div>
+          <div className="mt-5 flex items-end gap-3">
+            <span className="font-headline text-[72px] font-extrabold leading-none tracking-[-0.06em]" style={{ color: "#85f8c4" }}>
+              {averageProgress}%
+            </span>
+          </div>
+          <p className="mt-2 max-w-[320px] text-[15px] leading-7" style={{ color: "rgba(255,255,255,0.62)" }}>
+            of your yearly goals completed
+          </p>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span
-            className="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]"
-            style={{ background: "rgba(133,248,196,0.08)", color: "#85f8c4", border: "1px solid rgba(133,248,196,0.15)" }}
-          >
-            Best streak {bestStreakLabel}
-          </span>
-        </div>
-        <p className="text-[10px] mt-1.5 font-medium leading-snug" style={{ color: "rgba(255,255,255,0.35)" }}>
-          Grows only when every main goal for the day gets finished.
-        </p>
       </div>
 
-      {/* Yesterday Completion */}
-      <div className="space-y-2">
-        <div className="flex justify-between items-end">
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.4)" }}>
-            Yesterday Completion
+      <div className="mt-8 h-px" style={{ background: "rgba(255,255,255,0.10)" }} />
+
+      <div className="mt-8">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: "rgba(255,255,255,0.58)" }}>
+            Yearly Goals Overview
           </p>
-          <span className="text-xl font-headline font-bold text-white">{metrics.yesterdayCompletion}%</span>
+          <Link
+            href={`/dashboard/goals/${currentYear}`}
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[15px] font-semibold transition-opacity hover:opacity-85"
+            style={{ color: "#85f8c4" }}
+          >
+            View all
+            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+          </Link>
         </div>
-        <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+
+        <div className="mt-5 space-y-0">
+          {highlightedYearlyGoals.length === 0 ? (
+            <div className="rounded-[24px] border border-white/8 bg-white/[0.03] px-5 py-6">
+              <p className="text-[17px] font-medium text-white/82">No yearly goals saved for this year yet.</p>
+              <p className="mt-2 text-sm leading-7 text-white/54">
+                Start by adding the outcomes you want this year, then connect them to your monthly and weekly execution.
+              </p>
+            </div>
+          ) : (
+            highlightedYearlyGoals.map((goal, index) => {
+              const category = goal.categoryId ? categoryById.get(goal.categoryId) : null;
+              const progress = yearlyProgressByGoalId.get(goal.id) ?? clampProgress(goal.progress);
+              return (
+                <div
+                  key={goal.id}
+                  className={`${index > 0 ? "border-t" : ""} py-4`}
+                  style={{ borderColor: "rgba(255,255,255,0.10)" }}
+                >
+                  <div className="grid grid-cols-[44px_minmax(0,1fr)_56px] items-center gap-3">
+                    <div
+                      className="flex h-[44px] w-[44px] items-center justify-center rounded-[14px]"
+                      style={{
+                        background: category?.color
+                          ? `${category.color}22`
+                          : "linear-gradient(180deg, rgba(127,243,190,0.12) 0%, rgba(127,243,190,0.04) 100%)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                      }}
+                    >
+                      <span className="material-symbols-outlined text-[20px]" style={{ color: category?.color || "#85f8c4" }}>
+                        {category?.icon || "track_changes"}
+                      </span>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="truncate text-[15px] font-medium text-white">{goal.title}</p>
+                      <div className="mt-2 h-1.5 rounded-full bg-white/10">
+                        <div
+                          className="h-1.5 rounded-full"
+                          style={{ width: `${progress}%`, background: "linear-gradient(90deg, #7ff3be 0%, #6bddac 100%)" }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[15px] font-semibold tracking-[-0.02em]" style={{ color: "#85f8c4" }}>
+                        {progress}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      <div className="mt-7 h-px" style={{ background: "rgba(255,255,255,0.10)" }} />
+
+      <ObjectiveRow
+        label="Weekly Objective"
+        title={currentWeeklyObjective?.title ?? metrics.weeklyObjective || "No weekly sprint saved for this week yet."}
+        progress={weeklyObjectiveProgress}
+        href={`/dashboard/goals/${currentYear}/weekly`}
+      />
+
+      <div className="mt-5 h-px" style={{ background: "rgba(255,255,255,0.10)" }} />
+
+      <ObjectiveRow
+        label="Monthly Objective"
+        title={currentMonthlyObjective?.title ?? metrics.monthlyContext || "No monthly objective is connected yet."}
+        progress={monthlyObjectiveProgress}
+        href={`/dashboard/goals/${currentYear}`}
+      />
+
+      <div className="mt-7 h-px" style={{ background: "rgba(255,255,255,0.10)" }} />
+
+      <div className="mt-6 space-y-4">
+        <p className="text-[14px] leading-7" style={{ color: "rgba(255,255,255,0.58)" }}>
+          Stay consistent. Small daily actions = big yearly results.
+        </p>
+        <div className="inline-flex items-center gap-2 text-[15px] font-semibold" style={{ color: "#85f8c4" }}>
+          <span className="material-symbols-outlined text-[18px]">north_east</span>
+          Keep going
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ObjectiveRow({
+  label,
+  title,
+  progress,
+  href,
+}: {
+  label: string;
+  title: string;
+  progress: number;
+  href: string;
+}) {
+  return (
+    <div className="mt-6">
+      <p className="text-[13px] font-bold uppercase tracking-[0.22em]" style={{ color: "rgba(255,255,255,0.54)" }}>
+        {label}
+      </p>
+
+      <Link
+        href={href}
+        className="mt-5 grid grid-cols-[40px_minmax(0,1.2fr)_48px_74px_18px] items-center gap-3 transition-opacity hover:opacity-90"
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-full border border-[#7ff3be]/30 bg-[#7ff3be]/8">
+          <span className="material-symbols-outlined text-[20px]" style={{ color: "#85f8c4" }}>
+            task_alt
+          </span>
+        </span>
+        <p className="line-clamp-2 pr-1 text-[15px] leading-6 text-white">{title}</p>
+        <span className="text-right text-[17px] font-semibold tracking-[-0.02em]" style={{ color: "#85f8c4" }}>
+          {progress}%
+        </span>
+        <div className="h-2 rounded-full bg-white/10">
           <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${metrics.yesterdayCompletion}%`, background: "#85f8c4" }}
+            className="h-2 rounded-full"
+            style={{ width: `${progress}%`, background: "linear-gradient(90deg, #7ff3be 0%, #6bddac 100%)" }}
           />
         </div>
-      </div>
-
-      {/* Weekly Chart */}
-      <div className="space-y-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.4)" }}>
-          Weekly Consistency
-        </p>
-        <div className="flex justify-between items-end h-[72px] md:h-16 gap-1.5">
-          {metrics.weeklyConsistency.map((val, i) => {
-            const pct = Math.round((val / maxVal) * 100);
-            const isToday = i === todayIndex;
-            const isFuture = i > todayIndex;
-            const isActiveDay = val > 0;
-            return (
-              <div
-                key={i}
-                className="flex-1 rounded-sm transition-all duration-500"
-                style={{
-                  height: `${isFuture ? 10 : Math.max(pct, 12)}%`,
-                  background: isFuture
-                    ? "rgba(255,255,255,0.08)"
-                    : isToday
-                      ? "#85f8c4"
-                      : isActiveDay
-                        ? "rgba(133,248,196,0.62)"
-                        : "rgba(255,255,255,0.14)",
-                  boxShadow: isToday ? "0 0 10px rgba(133,248,196,0.35)" : undefined,
-                }}
-                title={
-                  isFuture
-                    ? `${dayLabels[i]}: upcoming`
-                    : isActiveDay
-                      ? `${dayLabels[i]}: active`
-                      : `${dayLabels[i]}: missed`
-                }
-              />
-            );
-          })}
-        </div>
-        <div className="flex justify-between text-[10px] font-bold" style={{ color: "rgba(255,255,255,0.34)" }}>
-          {dayLabels.map((d, i) => (
-            <span key={i} className="flex-1 text-center">
-              {d}
-            </span>
-          ))}
-        </div>
-        {!hasWeeklyData && (
-          <p className="text-[10px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.35)" }}>
-            No meaningful action has been logged for the current week yet.
-          </p>
-        )}
-      </div>
-
-      <div style={{ height: "1px", background: "rgba(255,255,255,0.07)" }} />
-
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "rgba(255,255,255,0.4)" }}>
-          Weekly Objective
-        </p>
-        <p className="text-sm font-semibold leading-snug text-white">
-          {hasWeeklyObjective ? metrics.weeklyObjective : "No weekly sprint saved for this week yet."}
-        </p>
-      </div>
-
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "rgba(255,255,255,0.4)" }}>
-          Monthly Context
-        </p>
-        <p className="text-sm font-medium leading-snug" style={{ color: "rgba(255,255,255,0.6)" }}>
-          {metrics.monthlyContext || "No monthly context is connected yet."}
-        </p>
-      </div>
+        <span className="material-symbols-outlined text-[20px]" style={{ color: "rgba(255,255,255,0.42)" }}>
+          chevron_right
+        </span>
+      </Link>
     </div>
   );
 }
