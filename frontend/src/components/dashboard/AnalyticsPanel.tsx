@@ -241,7 +241,7 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
 
       <ObjectiveRow
         label="Weekly Objective"
-        title={currentWeeklyObjective?.title ?? metrics.weeklyObjective || "No weekly sprint saved for this week yet."}
+        title={(currentWeeklyObjective?.title ?? metrics.weeklyObjective) || "No weekly sprint saved for this week yet."}
         progress={weeklyObjectiveProgress}
         href={`/dashboard/goals/${currentYear}/weekly`}
       />
@@ -250,7 +250,7 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
 
       <ObjectiveRow
         label="Monthly Objective"
-        title={currentMonthlyObjective?.title ?? metrics.monthlyContext || "No monthly objective is connected yet."}
+        title={(currentMonthlyObjective?.title ?? metrics.monthlyContext) || "No monthly objective is connected yet."}
         progress={monthlyObjectiveProgress}
         href={`/dashboard/goals/${currentYear}`}
       />
