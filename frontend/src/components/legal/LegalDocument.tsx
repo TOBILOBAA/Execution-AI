@@ -15,19 +15,14 @@ export function LegalDocument({ eyebrow, title, intro, sections, aside }: LegalD
     <div className="min-h-screen" style={{ background: "#f4f6f4" }}>
       <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8 lg:px-10">
         <div className="mb-8 flex flex-col gap-4 rounded-[28px] px-6 py-6 sm:px-8" style={{ background: "#0d1f18" }}>
-          <div className="flex items-center justify-between gap-4">
-            <Link href="/auth" className="inline-flex items-center gap-2 text-sm font-semibold text-white/80 transition-opacity hover:opacity-80">
-              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-              Back to sign in
+          <div className="flex items-center justify-start">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm font-semibold text-white/82 transition-all hover:border-white/18 hover:bg-white/10 hover:text-white"
+            >
+              <span className="material-symbols-outlined text-[18px]">west</span>
+              Back to home
             </Link>
-            <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: "rgba(133,248,196,0.12)" }}>
-              <span className="material-symbols-outlined text-[16px]" style={{ color: "#85f8c4" }}>
-                bolt
-              </span>
-              <span className="text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: "#85f8c4" }}>
-                Execution AI
-              </span>
-            </div>
           </div>
 
           <div className="max-w-3xl space-y-3">
