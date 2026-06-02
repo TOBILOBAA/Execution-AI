@@ -176,6 +176,34 @@ POST   /reports/monthly/generate        # Generate monthly report
 POST   /reports/yearly/generate         # Generate yearly report
 ```
 
+### Analytics
+```
+GET    /analytics/users                 # Per-user behavioral summary
+GET    /analytics/users/{user_key}      # One user summary
+GET    /analytics/users.csv             # User summary CSV export
+GET    /analytics/daily-activity        # Raw daily activity rows
+GET    /analytics/daily-activity.csv    # Raw daily activity CSV export
+GET    /analytics/devices               # Device history by auth user
+GET    /analytics/devices.csv           # Device history CSV export
+GET    /analytics/categories            # User-level category profile rows
+GET    /analytics/categories.csv        # User-level category profile CSV export
+GET    /analytics/category-popularity   # Cross-user category popularity rows
+GET    /analytics/category-popularity.csv
+```
+
+### One-Command Local Export
+From the `backend` folder:
+
+```bash
+python scripts/export_activity_pipeline.py
+```
+
+Optional custom output directory:
+
+```bash
+python scripts/export_activity_pipeline.py --output-dir exports/analytics
+```
+
 ---
 
 ## Key Design Decisions

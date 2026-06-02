@@ -1,9 +1,10 @@
 from datetime import date
 from uuid import UUID
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from supabase import Client
 
 from app.api.deps import get_db
+from app.services import activity_service
 from app.services import dashboard_service
 from app.schemas.dashboard import NextDayReviewApproveRequest
 from app.utils.period_guards import get_session_today
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 @router.get("/{session_id}")
 def get_dashboard(
     session_id: UUID,
+    request: Request,
     plan_date: date | None = None,
     db: Client = Depends(get_db),
 ):
@@ -22,16 +24,19 @@ def get_dashboard(
     Returns today's priorities, weekly context, monthly context, habits, and metrics.
     All metrics are computed in Python — no AI involved.
     """
+    activity_service.track_reached_dashboard(db, session_id, user_agent=request.headers.get("user-agent"))
     return dashboard_service.get_dashboard(db, session_id, plan_date)
 
 
 @router.get("/{session_id}/next-day-review")
 def get_next_day_review(
     session_id: UUID,
+    request: Request,
     plan_date: date | None = None,
     db: Client = Depends(get_db),
 ):
     """Return the persisted review payload for the requested kickoff date."""
+    activity_service.track_opened_next_day_review(db, session_id, user_agent=request.headers.get("user-agent"))
     return dashboard_service.get_next_day_review(db, session_id, plan_date)
 
 
@@ -55,4 +60,6 @@ def approve_next_day_review(
         [item.model_dump() for item in body.priorities],
         [item.model_dump() for item in body.tasks],
     )
+    activity_service.track_approved_next_day_review(db, session_id, effective_date)
+    activity_service.refresh_daily_completion_counts(db, session_id, effective_date)
     return result

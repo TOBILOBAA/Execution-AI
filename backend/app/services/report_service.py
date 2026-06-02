@@ -658,11 +658,11 @@ def ensure_historical_reports(
                     "period_year": plan_date.year,
                     "metrics": metrics,
                     "ai_narrative": {
-                        "summary": f"Execution snapshot for {plan_date.isoformat()} reconstructed from saved goals and routines.",
-                        "top_win": f"Completed {metrics['priorities_completed']} of {metrics['priorities_total']} main goals.",
-                        "key_miss": f"{metrics['secondary_tasks_total'] - metrics['secondary_tasks_completed']} secondary goals were left unfinished.",
-                        "reflection": "This historical daily report was reconstructed from saved execution data.",
-                        "tomorrow_focus": "Carry the most important unfinished work into the next planned day.",
+                        "summary": f"{plan_date.isoformat()} shows {metrics['completion_rate']}% completion based on the saved plan and routine logs for that day.",
+                        "top_win": f"{metrics['priorities_completed']} of {metrics['priorities_total']} main goals were closed.",
+                        "key_miss": f"{metrics['secondary_tasks_total'] - metrics['secondary_tasks_completed']} secondary goals remained open at the end of the day.",
+                        "reflection": "This historical daily review is grounded in the goals and routines that were actually saved for that date.",
+                        "tomorrow_focus": "Use the unfinished work here to decide what truly deserves a place in the next planned day.",
                     },
                     "ai_generated_at": None,
                     "status": "ready",
@@ -933,8 +933,8 @@ def _build_weekly_summary(
         "summary": f"Week {week_number} focused on {lead}.",
         "top_win": f"Completed {metrics['goals_completed']} of {metrics['goals_total']} weekly goals.",
         "key_pattern": f"Average daily completion settled at {metrics['avg_daily_completion']}%.",
-        "reflection": "This historical snapshot was reconstructed from saved goals, plans, and habit logs.",
-        "next_week_priority": f"Carry the strongest unfinished work from week {week_number} into the next sprint.",
+        "reflection": "This weekly review is grounded in the saved daily plans, weekly goals, and routine logs from that week.",
+        "next_week_priority": f"Carry only the most important unfinished work from week {week_number} into the next sprint.",
     }
     return {"metrics": metrics, "ai_narrative": ai_narrative}
 
@@ -972,9 +972,9 @@ def _build_monthly_summary(
         "summary": f"{month_name(month)} {year} combined {len(monthly_goals)} monthly goal(s) across {len(weekly_summaries)} tracked week(s).",
         "top_pillar": metrics["best_pillar"],
         "biggest_win": f"{metrics['tasks_completed']} of {metrics['tasks_total']} tracked tasks were completed.",
-        "key_lesson": "Historical imports are strongest when weekly planning and daily execution both exist for the same period.",
-        "reflection": "This monthly narrative was reconstructed from saved planning rows rather than a live AI generation pass.",
-        "next_month_focus": "Turn the strongest recurring monthly theme into a clearer main goal for the next month.",
+        "key_lesson": "The clearest months are the ones where monthly goals, weekly plans, and daily execution all stayed connected.",
+        "reflection": "This monthly review is built from the saved planning rows and execution history already in the workspace.",
+        "next_month_focus": "Turn the strongest recurring monthly signal into one clearer main goal for the next month.",
     }
     return {"metrics": metrics, "ai_narrative": ai_narrative}
 
@@ -1008,8 +1008,8 @@ def _build_yearly_summary(
         "top_pillar": metrics["best_pillar"],
         "biggest_win": f"{metrics['tasks_completed']} of {metrics['tasks_total']} tracked tasks were completed across the year.",
         "key_pattern": f"Average monthly completion settled at {metrics['avg_monthly_completion']}%.",
-        "reflection": "This yearly snapshot was reconstructed from the saved history currently in your workspace.",
-        "next_year_focus": "Keep importing or tracking each current week so the yearly archive stays truthful end to end.",
+        "reflection": "This yearly review is built from the saved monthly, weekly, and daily history currently available in the workspace.",
+        "next_year_focus": "Keep each month tied to real weekly and daily execution so the yearly record stays truthful end to end.",
     }
     return {"metrics": metrics, "ai_narrative": ai_narrative}
 
@@ -1080,7 +1080,7 @@ def _build_quarterly_summary(
     ai_narrative = {
         "summary": f"{_quarter_label(year, quarter)} spans {month_name(months[0])} to {month_name(months[-1])}.",
         "key_pattern": f"Average monthly completion settled at {metrics['avg_monthly_completion']}%.",
-        "reflection": "This quarterly narrative was reconstructed from the saved monthly archive rather than a live AI generation pass.",
+        "reflection": "This quarterly review is grounded in the saved monthly archive and the execution history connected to it.",
         "next_quarter_focus": f"Use {_quarter_label(year, quarter + 1) if quarter < 4 else _quarter_label(year + 1, 1)} to tighten one repeated execution leak instead of carrying every theme forward at once.",
     }
     return {"metrics": metrics, "ai_narrative": ai_narrative}

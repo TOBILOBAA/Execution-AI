@@ -221,6 +221,7 @@ def build_weekly_planning_payload(
     Monthly goals are the parent — weekly goals must serve them.
     """
     budget = compute_weekly_workload(ctx)
+    yearly_by_id = {str(g["id"]): g for g in (yearly_goals or []) if g.get("id")}
 
     monthly_summary = [
         {
@@ -230,6 +231,11 @@ def build_weekly_planning_payload(
             "progress_pct": g.get("progress", 0),
             "description": g.get("description", ""),
             "workload": g.get("workload", ""),
+            "parent_yearly_title": (
+                yearly_by_id.get(str(g.get("yearly_goal_id")), {}).get("title")
+                if g.get("yearly_goal_id")
+                else None
+            ),
         }
         for g in monthly_goals
     ]
@@ -282,6 +288,8 @@ def build_daily_planning_payload(
     Reflects today's position in the week and remaining weekly workload.
     """
     budget = compute_daily_workload(ctx, weekly_remaining_tasks)
+    monthly_by_id = {str(g["id"]): g for g in (monthly_goals or []) if g.get("id")}
+    yearly_by_id = {str(g["id"]): g for g in (yearly_goals or []) if g.get("id")}
 
     weekly_summary = [
         {
@@ -289,6 +297,24 @@ def build_daily_planning_payload(
             "is_main": g.get("is_main", False),
             "progress_pct": g.get("progress", 0),
             "description": g.get("description", ""),
+            "parent_monthly_title": (
+                monthly_by_id.get(str(g.get("monthly_goal_id")), {}).get("title")
+                if g.get("monthly_goal_id")
+                else None
+            ),
+            "parent_yearly_title": (
+                yearly_by_id.get(
+                    str(
+                        monthly_by_id.get(str(g.get("monthly_goal_id")), {}).get("yearly_goal_id")
+                    )
+                ).get("title")
+                if g.get("monthly_goal_id")
+                and monthly_by_id.get(str(g.get("monthly_goal_id")), {}).get("yearly_goal_id")
+                and yearly_by_id.get(
+                    str(monthly_by_id.get(str(g.get("monthly_goal_id")), {}).get("yearly_goal_id"))
+                )
+                else None
+            ),
         }
         for g in weekly_goals
     ]

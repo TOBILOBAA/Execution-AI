@@ -6,6 +6,7 @@ from supabase import Client
 from app.api.deps import get_db
 from app.core.exceptions import NotFoundError
 from app.schemas.habits import HabitCreate, HabitUpdate, HabitResponse
+from app.services import activity_service
 import app.db.habits as habits_db
 
 router = APIRouter(prefix="/habits", tags=["Habits"])
@@ -27,7 +28,9 @@ def create_habit(
     body: HabitCreate,
     db: Client = Depends(get_db),
 ):
-    return habits_db.create_habit(db, session_id, body.model_dump())
+    habit = habits_db.create_habit(db, session_id, body.model_dump())
+    activity_service.record_activity(db, session_id)
+    return habit
 
 
 @router.patch("/{session_id}/{habit_id}", response_model=HabitResponse)
@@ -40,7 +43,9 @@ def update_habit(
     habit = habits_db.get_habit(db, habit_id, session_id)
     if not habit:
         raise NotFoundError("Habit", str(habit_id))
-    return habits_db.update_habit(db, habit_id, session_id, body.model_dump(exclude_unset=True))
+    updated = habits_db.update_habit(db, habit_id, session_id, body.model_dump(exclude_unset=True))
+    activity_service.record_activity(db, session_id)
+    return updated
 
 
 @router.delete("/{session_id}/{habit_id}", status_code=204)
