@@ -15,8 +15,8 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 @router.get("/{session_id}")
 def get_dashboard(
     session_id: UUID,
+    request: Request,
     plan_date: date | None = None,
-    request: Request | None = None,
     db: Client = Depends(get_db),
 ):
     """
@@ -24,19 +24,19 @@ def get_dashboard(
     Returns today's priorities, weekly context, monthly context, habits, and metrics.
     All metrics are computed in Python — no AI involved.
     """
-    activity_service.track_reached_dashboard(db, session_id, user_agent=request.headers.get("user-agent") if request else None)
+    activity_service.track_reached_dashboard(db, session_id, user_agent=request.headers.get("user-agent"))
     return dashboard_service.get_dashboard(db, session_id, plan_date)
 
 
 @router.get("/{session_id}/next-day-review")
 def get_next_day_review(
     session_id: UUID,
+    request: Request,
     plan_date: date | None = None,
-    request: Request | None = None,
     db: Client = Depends(get_db),
 ):
     """Return the persisted review payload for the requested kickoff date."""
-    activity_service.track_opened_next_day_review(db, session_id, user_agent=request.headers.get("user-agent") if request else None)
+    activity_service.track_opened_next_day_review(db, session_id, user_agent=request.headers.get("user-agent"))
     return dashboard_service.get_next_day_review(db, session_id, plan_date)
 
 

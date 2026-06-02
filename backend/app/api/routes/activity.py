@@ -27,10 +27,11 @@ def list_user_activity_summaries(
     limit: int | None = 100,
     db: Client = Depends(get_db),
 ):
-    users = activity_service.build_user_activity_summaries(db, limit=limit)
+    all_users = activity_service.build_user_lifecycle_rows(db, limit=None)
+    users = all_users[:limit] if limit is not None else all_users
     return {
         "users": users,
-        "total_users": len(users),
+        "total_users": len(all_users),
     }
 
 
@@ -39,7 +40,7 @@ def get_user_activity_summary(
     user_key: str,
     db: Client = Depends(get_db),
 ):
-    summary = activity_service.get_user_activity_summary(db, user_key)
+    summary = activity_service.get_user_lifecycle_summary(db, user_key)
     if not summary:
         raise NotFoundError("Analytics user", user_key)
     return summary
@@ -47,11 +48,11 @@ def get_user_activity_summary(
 
 @router.get("/users.csv")
 def export_user_activity_summaries_csv(db: Client = Depends(get_db)):
-    csv_text = activity_service.export_user_summaries_csv(db)
+    csv_text = activity_service.export_user_lifecycle_csv(db)
     return Response(
         content=csv_text,
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=user_activity_summary.csv"},
+        headers={"Content-Disposition": "attachment; filename=user_lifecycle_summary.csv"},
     )
 
 

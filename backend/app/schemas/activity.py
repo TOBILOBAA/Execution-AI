@@ -48,44 +48,35 @@ class UserActivitySummaryResponse(BaseModel):
     auth_user_id: str | None = None
     auth_email: str | None = None
     auth_name: str | None = None
-    primary_session_id: UUID | None = None
     signup_at: datetime | None = None
-    first_active_at: datetime | None = None
     last_active_at: datetime | None = None
     primary_device_type: str | None = None
     device_types_used: list[str] = Field(default_factory=list)
     onboarding_started: bool
     onboarding_completed: bool
-    onboarding_stop_stage: str | None = None
-    reached_dashboard: bool = False
+    onboarding_dropoff_stage: str | None = None
+    reached_homepage: bool = False
+    created_yearly_goal: bool = False
+    created_monthly_goal: bool = False
+    created_weekly_goal: bool = False
+    created_daily_plan: bool = False
+    planned_day: bool = False
+    ticked_any_task: bool = False
+    completed_main_task: bool = False
+    completed_secondary_task: bool = False
+    completed_habit: bool = False
+    saw_review: bool = False
+    planned_next_day: bool = False
+    returned_after_onboarding: bool = False
+    returned_after_review: bool = False
     days_active_total: int
     days_active_7d: int
     days_active_30d: int
     productive_days_7d: int = 0
     productive_days_30d: int = 0
     current_streak_days: int
-    longest_streak_days: int
-    returned_day_1: bool
-    returned_day_3: bool
-    returned_day_7: bool
-    created_yearly_goal_count: int
-    created_monthly_goal_count: int
-    created_weekly_goal_count: int
-    created_daily_plan_count: int
-    completed_days_count: int
-    main_goal_completion_days: int
-    secondary_task_completion_days: int
-    habit_completion_days: int
-    total_tasks_completed: int
-    total_habits_completed: int
-    avg_daily_completion_score: int = 0
-    used_next_day_review: bool
-    approved_next_day_review_count: int
-    opened_reports_count: int
     retention_status: str
-    retention_risk: str
     days_since_last_seen: int | None = None
-    active_dates: list[date] = Field(default_factory=list)
 
 
 class UserDeviceActivityResponse(BaseModel):

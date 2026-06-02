@@ -13,8 +13,8 @@ router = APIRouter(prefix="/session", tags=["Sessions"])
 
 @router.post("/start", response_model=SessionResponse, status_code=201)
 def start_session(
+    request: Request,
     body: SessionCreate = Body(default=SessionCreate()),
-    request: Request | None = None,
     db: Client = Depends(get_db),
 ):
     """Create or recover a workspace session for the current auth user."""
@@ -25,7 +25,7 @@ def start_session(
         auth_user_id=body.auth_user_id,
         week_starts_on=body.week_starts_on,
     )
-    activity_service.track_app_open(db, session["id"], user_agent=request.headers.get("user-agent") if request else None)
+    activity_service.track_app_open(db, session["id"], user_agent=request.headers.get("user-agent"))
     return session
 
 

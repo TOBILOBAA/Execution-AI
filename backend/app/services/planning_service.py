@@ -147,6 +147,123 @@ def _linked_id_from_item(item: dict, key: str, allowed_rows: list[dict]) -> str 
     return value if any(str(row.get("id")) == value for row in allowed_rows) else None
 
 
+def _normalize_ref_title(
+    ref: str | None,
+    rows: list[dict],
+    matcher,
+    *,
+    single_parent_only: bool = False,
+) -> str | None:
+    if ref:
+        matched = matcher(ref, rows)
+        if matched:
+            return matched.get("title")
+    if single_parent_only and len(rows) == 1:
+        title = rows[0].get("title")
+        return str(title) if title else None
+    main_rows = [row for row in rows if row.get("is_main")]
+    if single_parent_only and len(main_rows) == 1:
+        title = main_rows[0].get("title")
+        return str(title) if title else None
+    return None
+
+
+def _normalize_monthly_ai_output(ai_output, yearly_goals: list[dict]):
+    def normalize_item(item: dict) -> dict:
+        yearly_title = _normalize_ref_title(
+            item.get("yearly_goal_ref"),
+            yearly_goals,
+            _match_yearly_goal_by_ref,
+            single_parent_only=True,
+        )
+        return {
+            **item,
+            "yearly_goal_ref": yearly_title,
+            "monthly_goal_ref": None,
+            "weekly_goal_ref": None,
+        }
+
+    return ai_output.model_copy(
+        update={
+            "main_goals": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.main_goals],
+            "secondary_goals": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.secondary_goals],
+        }
+    )
+
+
+def _normalize_weekly_ai_output(ai_output, monthly_goals: list[dict], yearly_goals: list[dict]):
+    yearly_by_id = {str(goal.get("id")): goal for goal in yearly_goals if goal.get("id")}
+
+    def normalize_item(item: dict) -> dict:
+        monthly_row = _match_monthly_goal_by_ref(item.get("monthly_goal_ref"), monthly_goals)
+        if not monthly_row:
+            monthly_row = _match_monthly_goal_by_ref(item.get("yearly_goal_ref"), monthly_goals)
+        if not monthly_row:
+            monthly_title = _normalize_ref_title(None, monthly_goals, _match_monthly_goal_by_ref, single_parent_only=True)
+            monthly_row = _match_monthly_goal_by_ref(monthly_title, monthly_goals) if monthly_title else None
+        monthly_title = monthly_row.get("title") if monthly_row else None
+        yearly_title = item.get("yearly_goal_ref")
+        if monthly_row and monthly_row.get("yearly_goal_id"):
+            parent_yearly = yearly_by_id.get(str(monthly_row.get("yearly_goal_id")))
+            if parent_yearly:
+                yearly_title = parent_yearly.get("title")
+        else:
+            yearly_title = _normalize_ref_title(yearly_title, yearly_goals, _match_yearly_goal_by_ref)
+        return {
+            **item,
+            "monthly_goal_ref": monthly_title,
+            "yearly_goal_ref": yearly_title,
+            "weekly_goal_ref": None,
+        }
+
+    return ai_output.model_copy(
+        update={
+            "main_goals": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.main_goals],
+            "secondary_goals": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.secondary_goals],
+        }
+    )
+
+
+def _normalize_daily_ai_output(ai_output, weekly_goals: list[dict], monthly_goals: list[dict], yearly_goals: list[dict]):
+    monthly_by_id = {str(goal.get("id")): goal for goal in monthly_goals if goal.get("id")}
+    yearly_by_id = {str(goal.get("id")): goal for goal in yearly_goals if goal.get("id")}
+
+    def normalize_item(item: dict) -> dict:
+        weekly_row = _match_weekly_goal_by_ref(item.get("weekly_goal_ref"), weekly_goals)
+        if not weekly_row:
+            weekly_row = _match_weekly_goal_by_ref(item.get("monthly_goal_ref"), weekly_goals)
+        if not weekly_row:
+            weekly_row = _match_weekly_goal_by_ref(item.get("yearly_goal_ref"), weekly_goals)
+        if not weekly_row:
+            weekly_title = _normalize_ref_title(None, weekly_goals, _match_weekly_goal_by_ref, single_parent_only=True)
+            weekly_row = _match_weekly_goal_by_ref(weekly_title, weekly_goals) if weekly_title else None
+
+        weekly_title = weekly_row.get("title") if weekly_row else None
+        monthly_title = item.get("monthly_goal_ref")
+        yearly_title = item.get("yearly_goal_ref")
+        if weekly_row and weekly_row.get("monthly_goal_id"):
+            monthly_row = monthly_by_id.get(str(weekly_row.get("monthly_goal_id")))
+            if monthly_row:
+                monthly_title = monthly_row.get("title")
+                if monthly_row.get("yearly_goal_id"):
+                    yearly_row = yearly_by_id.get(str(monthly_row.get("yearly_goal_id")))
+                    if yearly_row:
+                        yearly_title = yearly_row.get("title")
+        return {
+            **item,
+            "weekly_goal_ref": weekly_title,
+            "monthly_goal_ref": monthly_title,
+            "yearly_goal_ref": yearly_title,
+        }
+
+    return ai_output.model_copy(
+        update={
+            "top_priorities": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.top_priorities],
+            "secondary_tasks": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.secondary_tasks],
+        }
+    )
+
+
 def _count_main_rows(rows: list[dict]) -> int:
     return sum(1 for row in rows if row.get("is_main"))
 
@@ -213,6 +330,7 @@ def generate_monthly_plan(
         max_main=payload["workload_budget"]["max_main_goals"],
         max_secondary=payload["workload_budget"]["max_secondary_goals"],
     )
+    ai_output = _normalize_monthly_ai_output(ai_output, yearly_goals)
     latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
 
     # Log generation
@@ -381,6 +499,7 @@ def generate_weekly_plan(
         max_main=payload["workload_budget"]["max_main_goals"],
         max_secondary=payload["workload_budget"]["max_secondary_goals"],
     )
+    ai_output = _normalize_weekly_ai_output(ai_output, monthly_goals, yearly_goals)
     latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
     _log_generation(db, session_id, "weekly_plan", latency_ms=latency_ms)
 
@@ -445,9 +564,11 @@ def approve_weekly_plan(
         mg = next((row for row in monthly_list if str(row.get("id")) == mid), None) if mid else None
         if not mg:
             mg = _match_monthly_goal_by_ref(
-                g.get("monthly_goal_ref") or g.get("yearly_goal_ref"),
+                g.get("monthly_goal_ref"),
                 monthly_list,
             )
+        if not mg and g.get("yearly_goal_ref"):
+            mg = _match_monthly_goal_by_ref(g.get("yearly_goal_ref"), monthly_list)
         mid = mg.get("id") if mg else mid
         workload = g.get("estimated_effort") or g.get("workload")
         is_ai_suggested = _row_matches_draft(g.get("title", ""), all_draft_items)
@@ -551,6 +672,7 @@ def generate_daily_plan(
         max_main=payload["workload_budget"]["max_daily_priorities"],
         max_secondary=payload["workload_budget"]["max_secondary_tasks"],
     )
+    ai_output = _normalize_daily_ai_output(ai_output, weekly_goals, monthly_goals, yearly_goals)
     latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
     _log_generation(db, session_id, "daily_plan", latency_ms=latency_ms)
 
@@ -614,9 +736,13 @@ def approve_daily_plan(
         wid = _linked_id_from_item(item, "weekly_goal_id", weekly_goals)
         if not wid:
             wg = _match_weekly_goal_by_ref(
-                item.get("weekly_goal_ref") or item.get("yearly_goal_ref"),
+                item.get("weekly_goal_ref"),
                 weekly_goals,
             )
+            if not wg and item.get("monthly_goal_ref"):
+                wg = _match_weekly_goal_by_ref(item.get("monthly_goal_ref"), weekly_goals)
+            if not wg and item.get("yearly_goal_ref"):
+                wg = _match_weekly_goal_by_ref(item.get("yearly_goal_ref"), weekly_goals)
             wid = wg.get("id") if wg else None
         is_ai_suggested = _row_matches_draft(item.get("title", ""), all_draft_items)
         priority_records.append({

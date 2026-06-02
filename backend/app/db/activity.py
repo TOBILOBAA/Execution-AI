@@ -44,7 +44,9 @@ def get_daily_activity(db: Client, session_id: UUID, activity_date: date) -> dic
         if _guard_analytics(exc):
             return None
         raise
-    return result.data
+    if result is None:
+        return None
+    return getattr(result, "data", None)
 
 
 def upsert_daily_activity(db: Client, payload: dict) -> dict | None:

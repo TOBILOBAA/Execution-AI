@@ -58,6 +58,20 @@ def _auth_attr(user: object, key: str, default=None):
     return getattr(user, key, default)
 
 
+def _extract_auth_user_batch(result: object) -> list[object]:
+    if isinstance(result, list):
+        return result
+    users = getattr(result, "users", None)
+    if isinstance(users, list):
+        return users
+    data = getattr(result, "data", None)
+    if isinstance(data, dict):
+        users = data.get("users")
+        if isinstance(users, list):
+            return users
+    return []
+
+
 def parse_device_context(user_agent: str | None) -> dict[str, str | None]:
     ua = (user_agent or "").strip()
     ua_l = ua.lower()
@@ -122,7 +136,7 @@ def list_auth_users(db: Client) -> list[dict]:
     page = 1
     while True:
         result = db.auth.admin.list_users(page=page, per_page=200)
-        batch = getattr(result, "users", None) or getattr(result, "data", {}).get("users", [])
+        batch = _extract_auth_user_batch(result)
         if not batch:
             break
         for user in batch:
@@ -616,6 +630,76 @@ def _productive_dates(rows: list[dict]) -> list[date]:
     )
 
 
+def _merge_export_daily_rows(rows: list[dict]) -> list[dict]:
+    grouped: dict[tuple[str, str], dict] = {}
+    for row in rows:
+        auth_user_id = str(row.get("auth_user_id") or "").strip()
+        activity_date = str(row.get("activity_date") or "").strip()
+        if not auth_user_id or not activity_date:
+            continue
+        key = (auth_user_id, activity_date)
+        existing = grouped.get(key)
+        if existing is None:
+            grouped[key] = {
+                **row,
+                "session_id": row.get("session_id") or "",
+            }
+            continue
+
+        existing["session_id"] = "|".join(
+            sorted(
+                {
+                    *([value for value in str(existing.get("session_id") or "").split("|") if value]),
+                    str(row.get("session_id") or ""),
+                }
+                - {""}
+            )
+        )
+        for key_name in (
+            "opened_app",
+            "reached_dashboard",
+            "completed_onboarding",
+            "created_yearly_goal",
+            "created_monthly_goal",
+            "created_weekly_goal",
+            "created_daily_plan",
+            "opened_next_day_review",
+            "approved_next_day_review",
+            "opened_reports",
+            "handled_recap",
+            "main_goal_completed",
+            "completed_any_meaningful_work",
+        ):
+            existing[key_name] = bool(existing.get(key_name)) or bool(row.get(key_name))
+        for key_name in (
+            "main_tasks_total",
+            "main_tasks_completed",
+            "secondary_tasks_total",
+            "secondary_tasks_completed",
+            "habits_total",
+            "completed_tasks_count",
+            "completed_habits_count",
+        ):
+            existing[key_name] = max(int(existing.get(key_name) or 0), int(row.get(key_name) or 0))
+        existing["daily_completion_score"] = max(
+            int(existing.get("daily_completion_score") or 0),
+            int(row.get("daily_completion_score") or 0),
+        )
+        first_seen_existing = _coerce_dt(existing.get("first_seen_at"))
+        first_seen_row = _coerce_dt(row.get("first_seen_at"))
+        if first_seen_row and (first_seen_existing is None or first_seen_row < first_seen_existing):
+            existing["first_seen_at"] = row.get("first_seen_at")
+        last_seen_existing = _coerce_dt(existing.get("last_seen_at"))
+        last_seen_row = _coerce_dt(row.get("last_seen_at"))
+        if last_seen_row and (last_seen_existing is None or last_seen_row > last_seen_existing):
+            existing["last_seen_at"] = row.get("last_seen_at")
+        for key_name in ("device_type", "device_family", "os_name", "browser_name"):
+            existing[key_name] = existing.get(key_name) or row.get(key_name)
+    merged_rows = list(grouped.values())
+    merged_rows.sort(key=lambda item: (str(item.get("activity_date") or ""), str(item.get("auth_user_id") or "")), reverse=True)
+    return merged_rows
+
+
 def _current_and_longest_streak(active_dates: list[date], today: date) -> tuple[int, int]:
     if not active_dates:
         return 0, 0
@@ -646,6 +730,21 @@ def _days_since_last_seen(last_active: datetime | None, today: date) -> int | No
     if not last_active:
         return None
     return (today - last_active.date()).days
+
+
+def _first_row_date(rows: list[dict], predicate) -> date | None:
+    matching_dates = [
+        activity_date
+        for row in rows
+        if predicate(row) and (activity_date := _coerce_date(row.get("activity_date"))) is not None
+    ]
+    return min(matching_dates) if matching_dates else None
+
+
+def _has_activity_after(active_dates: list[date], target_date: date | None) -> bool:
+    if target_date is None:
+        return False
+    return any(activity_date > target_date for activity_date in active_dates)
 
 
 def _derive_onboarding_stop_stage(primary_session: dict, rows: list[dict], active_dates: list[date]) -> str | None:
@@ -898,6 +997,11 @@ def build_user_activity_summaries(db: Client, *, limit: int | None = None) -> li
         device_rows = activity_db.list_user_device_activity(db, auth_user_id=user_key, limit=None)
         device_types_used = sorted({row.get("device_type") for row in device_rows if row.get("device_type")})
         primary_device_type = device_rows[0].get("device_type") if device_rows else None
+        onboarding_completed_date = _first_row_date(rows, lambda row: bool(row.get("completed_onboarding")))
+        first_review_date = _first_row_date(
+            rows,
+            lambda row: bool(row.get("opened_next_day_review") or row.get("approved_next_day_review")),
+        )
         summary = {
             "user_key": user_key,
             "auth_user_id": user_key,
@@ -942,6 +1046,8 @@ def build_user_activity_summaries(db: Client, *, limit: int | None = None) -> li
             "opened_reports_count": sum(1 for row in rows if row.get("opened_reports")),
             "days_since_last_seen": days_since_last_seen,
             "active_dates": active_dates,
+            "onboarding_completed_date": onboarding_completed_date,
+            "first_review_date": first_review_date,
         }
         summary["retention_status"] = _derive_retention_status(
             onboarding_completed=onboarding_completed,
@@ -975,6 +1081,63 @@ def get_user_activity_summary(db: Client, user_key: str) -> dict | None:
     return None
 
 
+def build_user_lifecycle_rows(db: Client, *, limit: int | None = None) -> list[dict]:
+    lifecycle_rows: list[dict] = []
+    for item in build_user_activity_summaries(db, limit=limit):
+        created_daily_plan = item["created_daily_plan_count"] > 0
+        ticked_any_task = item["total_tasks_completed"] > 0
+        completed_main_task = item["main_goal_completion_days"] > 0
+        completed_secondary_task = item["secondary_task_completion_days"] > 0
+        completed_habit = item["total_habits_completed"] > 0
+        saw_review = bool(item["used_next_day_review"])
+        planned_next_day = item["approved_next_day_review_count"] > 0
+        lifecycle_rows.append(
+            {
+                "user_key": item["user_key"],
+                "auth_user_id": item["auth_user_id"] or "",
+                "auth_email": item["auth_email"] or "",
+                "auth_name": item["auth_name"] or "",
+                "signup_at": item["signup_at"],
+                "last_active_at": item["last_active_at"],
+                "primary_device_type": item["primary_device_type"] or "",
+                "device_types_used": item["device_types_used"],
+                "onboarding_started": item["onboarding_started"],
+                "onboarding_completed": item["onboarding_completed"],
+                "onboarding_dropoff_stage": item["onboarding_stop_stage"] or "",
+                "reached_homepage": bool(item["reached_dashboard"]),
+                "created_yearly_goal": item["created_yearly_goal_count"] > 0,
+                "created_monthly_goal": item["created_monthly_goal_count"] > 0,
+                "created_weekly_goal": item["created_weekly_goal_count"] > 0,
+                "created_daily_plan": created_daily_plan,
+                "planned_day": created_daily_plan,
+                "ticked_any_task": ticked_any_task,
+                "completed_main_task": completed_main_task,
+                "completed_secondary_task": completed_secondary_task,
+                "completed_habit": completed_habit,
+                "saw_review": saw_review,
+                "planned_next_day": planned_next_day,
+                "returned_after_onboarding": _has_activity_after(item["active_dates"], item.get("onboarding_completed_date")),
+                "returned_after_review": _has_activity_after(item["active_dates"], item.get("first_review_date")),
+                "days_active_total": item["days_active_total"],
+                "days_active_7d": item["days_active_7d"],
+                "days_active_30d": item["days_active_30d"],
+                "productive_days_7d": item["productive_days_7d"],
+                "productive_days_30d": item["productive_days_30d"],
+                "current_streak_days": item["current_streak_days"],
+                "retention_status": item["retention_status"],
+                "days_since_last_seen": item["days_since_last_seen"],
+            }
+        )
+    return lifecycle_rows
+
+
+def get_user_lifecycle_summary(db: Client, user_key: str) -> dict | None:
+    for summary in build_user_lifecycle_rows(db, limit=None):
+        if summary["user_key"] == user_key or summary.get("auth_user_id") == user_key:
+            return summary
+    return None
+
+
 def _csv_text(rows: list[dict], fieldnames: list[str]) -> str:
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=fieldnames)
@@ -984,8 +1147,8 @@ def _csv_text(rows: list[dict], fieldnames: list[str]) -> str:
     return buffer.getvalue()
 
 
-def export_user_summaries_csv(db: Client) -> str:
-    summaries = build_user_activity_summaries(db, limit=None)
+def export_user_lifecycle_csv(db: Client) -> str:
+    summaries = build_user_lifecycle_rows(db, limit=None)
     rows = []
     for item in summaries:
         rows.append(
@@ -994,44 +1157,35 @@ def export_user_summaries_csv(db: Client) -> str:
                 "auth_user_id": item["auth_user_id"] or "",
                 "auth_email": item["auth_email"] or "",
                 "auth_name": item["auth_name"] or "",
-                "primary_session_id": item["primary_session_id"] or "",
                 "signup_at": item["signup_at"].isoformat() if item["signup_at"] else "",
-                "first_active_at": item["first_active_at"].isoformat() if item["first_active_at"] else "",
                 "last_active_at": item["last_active_at"].isoformat() if item["last_active_at"] else "",
                 "primary_device_type": item["primary_device_type"] or "",
                 "device_types_used": "|".join(item["device_types_used"]),
                 "onboarding_started": item["onboarding_started"],
                 "onboarding_completed": item["onboarding_completed"],
-                "onboarding_stop_stage": item["onboarding_stop_stage"] or "",
-                "reached_dashboard": item["reached_dashboard"],
+                "onboarding_dropoff_stage": item["onboarding_dropoff_stage"] or "",
+                "reached_homepage": item["reached_homepage"],
+                "created_yearly_goal": item["created_yearly_goal"],
+                "created_monthly_goal": item["created_monthly_goal"],
+                "created_weekly_goal": item["created_weekly_goal"],
+                "created_daily_plan": item["created_daily_plan"],
+                "planned_day": item["planned_day"],
+                "ticked_any_task": item["ticked_any_task"],
+                "completed_main_task": item["completed_main_task"],
+                "completed_secondary_task": item["completed_secondary_task"],
+                "completed_habit": item["completed_habit"],
+                "saw_review": item["saw_review"],
+                "planned_next_day": item["planned_next_day"],
+                "returned_after_onboarding": item["returned_after_onboarding"],
+                "returned_after_review": item["returned_after_review"],
                 "days_active_total": item["days_active_total"],
                 "days_active_7d": item["days_active_7d"],
                 "days_active_30d": item["days_active_30d"],
                 "productive_days_7d": item["productive_days_7d"],
                 "productive_days_30d": item["productive_days_30d"],
                 "current_streak_days": item["current_streak_days"],
-                "longest_streak_days": item["longest_streak_days"],
-                "returned_day_1": item["returned_day_1"],
-                "returned_day_3": item["returned_day_3"],
-                "returned_day_7": item["returned_day_7"],
-                "created_yearly_goal_count": item["created_yearly_goal_count"],
-                "created_monthly_goal_count": item["created_monthly_goal_count"],
-                "created_weekly_goal_count": item["created_weekly_goal_count"],
-                "created_daily_plan_count": item["created_daily_plan_count"],
-                "completed_days_count": item["completed_days_count"],
-                "main_goal_completion_days": item["main_goal_completion_days"],
-                "secondary_task_completion_days": item["secondary_task_completion_days"],
-                "habit_completion_days": item["habit_completion_days"],
-                "total_tasks_completed": item["total_tasks_completed"],
-                "total_habits_completed": item["total_habits_completed"],
-                "avg_daily_completion_score": item["avg_daily_completion_score"],
-                "used_next_day_review": item["used_next_day_review"],
-                "approved_next_day_review_count": item["approved_next_day_review_count"],
-                "opened_reports_count": item["opened_reports_count"],
                 "retention_status": item["retention_status"],
-                "retention_risk": item["retention_risk"],
                 "days_since_last_seen": item["days_since_last_seen"] if item["days_since_last_seen"] is not None else "",
-                "active_dates": "|".join(day.isoformat() for day in item["active_dates"]),
             }
         )
     return _csv_text(
@@ -1041,46 +1195,41 @@ def export_user_summaries_csv(db: Client) -> str:
             "auth_user_id",
             "auth_email",
             "auth_name",
-            "primary_session_id",
             "signup_at",
-            "first_active_at",
             "last_active_at",
             "primary_device_type",
             "device_types_used",
             "onboarding_started",
             "onboarding_completed",
-            "onboarding_stop_stage",
-            "reached_dashboard",
+            "onboarding_dropoff_stage",
+            "reached_homepage",
+            "created_yearly_goal",
+            "created_monthly_goal",
+            "created_weekly_goal",
+            "created_daily_plan",
+            "planned_day",
+            "ticked_any_task",
+            "completed_main_task",
+            "completed_secondary_task",
+            "completed_habit",
+            "saw_review",
+            "planned_next_day",
+            "returned_after_onboarding",
+            "returned_after_review",
             "days_active_total",
             "days_active_7d",
             "days_active_30d",
             "productive_days_7d",
             "productive_days_30d",
             "current_streak_days",
-            "longest_streak_days",
-            "returned_day_1",
-            "returned_day_3",
-            "returned_day_7",
-            "created_yearly_goal_count",
-            "created_monthly_goal_count",
-            "created_weekly_goal_count",
-            "created_daily_plan_count",
-            "completed_days_count",
-            "main_goal_completion_days",
-            "secondary_task_completion_days",
-            "habit_completion_days",
-            "total_tasks_completed",
-            "total_habits_completed",
-            "avg_daily_completion_score",
-            "used_next_day_review",
-            "approved_next_day_review_count",
-            "opened_reports_count",
             "retention_status",
-            "retention_risk",
             "days_since_last_seen",
-            "active_dates",
         ],
     )
+
+
+def export_user_summaries_csv(db: Client) -> str:
+    return export_user_lifecycle_csv(db)
 
 
 def export_daily_activity_csv(
@@ -1091,6 +1240,7 @@ def export_daily_activity_csv(
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> str:
+    auth_user_ids = {str(user["id"]) for user in list_auth_users(db) if user.get("id")}
     rows = [
         row
         for row in list_daily_activity(
@@ -1101,8 +1251,9 @@ def export_daily_activity_csv(
             end_date=end_date,
             limit=None,
         )
-        if row.get("auth_user_id")
+        if row.get("auth_user_id") in auth_user_ids
     ]
+    rows = _merge_export_daily_rows(rows)
     return _csv_text(
         rows,
         [

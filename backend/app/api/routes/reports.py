@@ -20,9 +20,9 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
 @router.get("/{session_id}")
-def list_reports(session_id: UUID, request: Request | None = None, db: Client = Depends(get_db)):
+def list_reports(session_id: UUID, request: Request, db: Client = Depends(get_db)):
     """List all generated reports for a session."""
-    activity_service.track_opened_reports(db, session_id, user_agent=request.headers.get("user-agent") if request else None)
+    activity_service.track_opened_reports(db, session_id, user_agent=request.headers.get("user-agent"))
     return report_service.list_reports(db, session_id)
 
 

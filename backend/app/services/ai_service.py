@@ -277,6 +277,9 @@ def generate_monthly_plan(planning_payload: dict) -> AIMonthlyPlanOutput:
 Generate ONLY main_goals and secondary_goals for this month. Do NOT suggest routines — users define those separately in the app.
 Never return more than {budget['max_main_goals']} main_goals or more than {budget['max_secondary_goals']} secondary_goals.
 Goals must be achievable within the remaining {ctx['days_remaining']} days.
+Every goal must clearly support one of the yearly goals above.
+Use the user's own wording and priorities when possible instead of inventing adjacent goals.
+If a goal does not directly serve one of the yearly goals above, do not include it.
 Each goal must set yearly_goal_ref to the exact title of a yearly goal above when possible.
 For EVERY goal, set target_date to a realistic deadline as YYYY-MM-DD within {ctx['year']}-{ctx['month']:02d} (use dates on or after today if this is the current month).
 
@@ -290,6 +293,8 @@ For EVERY goal, set target_date to a realistic deadline as YYYY-MM-DD within {ct
       "priority": "high",
       "is_main": true,
       "yearly_goal_ref": "<title of the yearly goal this serves>",
+      "monthly_goal_ref": null,
+      "weekly_goal_ref": null,
       "estimated_effort": "<e.g. 10-15 hours total>",
       "target_date": "<YYYY-MM-DD within this month>"
     }}
@@ -301,6 +306,8 @@ For EVERY goal, set target_date to a realistic deadline as YYYY-MM-DD within {ct
       "priority": "medium",
       "is_main": false,
       "yearly_goal_ref": "<yearly goal ref or null>",
+      "monthly_goal_ref": null,
+      "weekly_goal_ref": null,
       "estimated_effort": "<estimate>",
       "target_date": "<YYYY-MM-DD within this month>"
     }}
@@ -325,6 +332,7 @@ def generate_weekly_plan(planning_payload: dict) -> AIWeeklyPlanOutput:
 
     monthly_text = "\n".join(
         f"- [{'MAIN' if g['is_main'] else 'secondary'}] {g['title']} (progress: {g.get('progress_pct', 0)}%)"
+        f"{(' | yearly: ' + g['parent_yearly_title']) if g.get('parent_yearly_title') else ''}"
         f"{(' | workload: ' + g['workload']) if g.get('workload') else ''}"
         f"{(' — ' + g['description']) if g.get('description') else ''}"
         for g in monthly_goals
@@ -363,7 +371,10 @@ def generate_weekly_plan(planning_payload: dict) -> AIWeeklyPlanOutput:
 Generate ONLY main_goals and secondary_goals for this week. Do NOT suggest routines — users define those in the app.
 Never return more than {budget['max_main_goals']} main_goals or more than {budget['max_secondary_goals']} secondary_goals.
 Each goal must be completable within {ctx['days_remaining']} days.
-Weekly goals must concretely advance the monthly goals above. Set yearly_goal_ref to the monthly goal title when applicable.
+Weekly goals must concretely advance the monthly goals above.
+Use monthly_goal_ref for the exact monthly goal title each weekly goal serves.
+Use yearly_goal_ref only when the monthly goal clearly maps up to a yearly goal already listed above.
+Do not invent a weekly goal that cannot be traced to the monthly goals shown.
 
 ### Required JSON Output Schema
 {{
@@ -374,7 +385,9 @@ Weekly goals must concretely advance the monthly goals above. Set yearly_goal_re
       "description": "<1-2 sentences>",
       "priority": "high",
       "is_main": true,
-      "yearly_goal_ref": "<monthly goal title this serves>",
+      "yearly_goal_ref": "<yearly goal title this serves or null>",
+      "monthly_goal_ref": "<exact monthly goal title this serves>",
+      "weekly_goal_ref": null,
       "estimated_effort": "<hours estimate>"
     }}
   ],
@@ -384,7 +397,9 @@ Weekly goals must concretely advance the monthly goals above. Set yearly_goal_re
       "description": "<1-2 sentences>",
       "priority": "medium",
       "is_main": false,
-      "yearly_goal_ref": null,
+      "yearly_goal_ref": "<yearly goal title this supports or null>",
+      "monthly_goal_ref": "<monthly goal title this supports or null>",
+      "weekly_goal_ref": null,
       "estimated_effort": "<estimate>"
     }}
   ]
@@ -412,6 +427,8 @@ def generate_daily_plan(planning_payload: dict) -> AIDailyPlanOutput:
 
     weekly_text = "\n".join(
         f"- [{'MAIN' if g['is_main'] else 'secondary'}] {g['title']} (progress: {g.get('progress_pct', 0)}%)"
+        f"{(' | monthly: ' + g['parent_monthly_title']) if g.get('parent_monthly_title') else ''}"
+        f"{(' | yearly: ' + g['parent_yearly_title']) if g.get('parent_yearly_title') else ''}"
         f"{(' — ' + g['description']) if g.get('description') else ''}"
         for g in weekly_goals
     )
@@ -466,7 +483,11 @@ Weekly goals remaining: {remaining}
 ### Instructions
 Generate a daily plan for {ctx['today']}. Main goals must be concretely achievable in one day.
 Never return more than {budget['max_daily_priorities']} top_priorities or more than {budget['max_secondary_tasks']} secondary_tasks.
-Each main goal should advance a specific weekly goal. Secondary goals are quick wins or maintenance.
+Each main goal should advance a specific weekly goal.
+Use weekly_goal_ref for the exact weekly goal title each item supports.
+Use monthly_goal_ref and yearly_goal_ref only when the parent chain is clear from the provided context.
+Secondary goals should be quick wins or maintenance, but still intentional and connected when possible.
+Do not invent random tasks that are not grounded in the weekly goals, monthly goals, routines, or yesterday's unfinished work.
 Do NOT include foundational_habits in the output — they are tracked separately in the app.
 
 ### Required JSON Output Schema
@@ -478,7 +499,9 @@ Do NOT include foundational_habits in the output — they are tracked separately
       "description": "<specific action>",
       "priority": "high",
       "is_main": true,
-      "yearly_goal_ref": "<weekly goal title>",
+      "yearly_goal_ref": "<yearly goal title this supports or null>",
+      "monthly_goal_ref": "<monthly goal title this supports or null>",
+      "weekly_goal_ref": "<exact weekly goal title this supports>",
       "estimated_effort": "<minutes, e.g. 90 min>"
     }}
   ],
@@ -488,7 +511,9 @@ Do NOT include foundational_habits in the output — they are tracked separately
       "description": null,
       "priority": "medium",
       "is_main": false,
-      "yearly_goal_ref": null,
+      "yearly_goal_ref": "<yearly goal title this supports or null>",
+      "monthly_goal_ref": "<monthly goal title this supports or null>",
+      "weekly_goal_ref": "<weekly goal title this supports or null>",
       "estimated_effort": "<minutes>"
     }}
   ]
