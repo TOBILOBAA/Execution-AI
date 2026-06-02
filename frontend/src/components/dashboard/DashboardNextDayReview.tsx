@@ -1046,7 +1046,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                     >
                       {[
                         { id: "priorities" as const, label: "Main" },
-                        { id: "tasks" as const, label: "Supporting" },
+                        { id: "tasks" as const, label: "Secondary" },
                         { id: "habits" as const, label: "Routines" },
                       ].map((option) => (
                         <button

@@ -143,14 +143,14 @@ export function AddHabitModal({
           {/* Header */}
           <div className="flex items-start justify-between mb-1">
             <h2 className="font-headline text-xl font-bold" style={{ color: "#1a1f1e" }}>
-              {isEdit ? "Edit Habit" : "Define Foundational Habit"}
+              {isEdit ? "Edit Routine" : "Define Routine"}
             </h2>
             <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition" style={{ color: "#5a6b65" }}>
               <span className="material-symbols-outlined text-[18px]">close</span>
             </button>
           </div>
           <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
-            {isEdit ? "Update the habit name, icon, category, or frequency." : "Link this to your yearly vision and define your focus for the month."}
+            {isEdit ? "Update the routine name, icon, category, or frequency." : "Define a routine that can stay visible and support your goals over time."}
           </p>
 
           {/* Icon picker */}
@@ -187,7 +187,7 @@ export function AddHabitModal({
           {/* Habit name */}
           <div className="mb-5">
             <label className="block mb-2" style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8a9e97" }}>
-              Habit Name
+              Routine Name
             </label>
             <input
               autoFocus
