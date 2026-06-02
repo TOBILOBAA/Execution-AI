@@ -2,7 +2,7 @@
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { dashboardApi, type ApiNextDayReview, type ApiNextDayReviewItem } from "@/lib/api";
+import { dashboardApi, habitsApi, tasksApi, type ApiNextDayReview, type ApiNextDayReviewItem } from "@/lib/api";
 import { AddDailyPriorityModal } from "@/components/onboarding/AddDailyPriorityModal";
 import { AddSecondaryTaskModal } from "@/components/onboarding/AddSecondaryTaskModal";
 import { AddHabitModal } from "@/components/onboarding/AddHabitModal";
@@ -11,6 +11,7 @@ import { useAppStore } from "@/lib/store";
 import { describeSyncError } from "@/lib/apiErrors";
 
 type EditableReviewItem = ApiNextDayReviewItem & { localId: string; yearly_goal_ref?: string };
+type RecoverableEntry = { id: string; title: string; kind: "main" | "task" | "habit" };
 
 interface DailyAIDraft {
   reasoning?: string;
@@ -282,6 +283,69 @@ function ReviewSummaryCard({
           ))}
         </div>
       )}
+    </SectionCard>
+  );
+}
+
+function RecoveryCard({
+  items,
+  recoveringKey,
+  onRecover,
+}: {
+  items: RecoverableEntry[];
+  recoveringKey: string | null;
+  onRecover: (item: RecoverableEntry) => void;
+}) {
+  if (!items.length) return null;
+
+  return (
+    <SectionCard
+      eyebrow="Yesterday recovery"
+      title="Did you finish any of these but forget to log them?"
+      description="Confirm them now and they will still count for yesterday."
+      tone="accent"
+    >
+      <div className="space-y-3">
+        {items.map((item) => {
+          const tone =
+            item.kind === "main"
+              ? "Main goal"
+              : item.kind === "task"
+                ? "Secondary goal"
+                : "Routine";
+          const itemKey = `${item.kind}:${item.id}`;
+          const isSaving = recoveringKey === itemKey;
+          return (
+            <div
+              key={itemKey}
+              className="flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between"
+              style={{ background: "rgba(255,255,255,0.82)", border: "1px solid rgba(0,0,0,0.06)" }}
+            >
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                  {tone}
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-snug break-words" style={{ color: "#1a1f1e" }}>
+                  {item.title}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRecover(item)}
+                disabled={isSaving}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.16em]"
+                style={{
+                  background: isSaving ? "rgba(0,0,0,0.08)" : "rgba(0,108,74,0.12)",
+                  color: isSaving ? "#6f817a" : "#006c4a",
+                }}
+              >
+                <span className="material-symbols-outlined text-[16px]">task_alt</span>
+                {isSaving ? "Saving..." : "Count it"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </SectionCard>
   );
 }
@@ -601,6 +665,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
   const [plannerModal, setPlannerModal] = useState<PlannerModalState>(null);
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [recoveringKey, setRecoveringKey] = useState<string | null>(null);
   const [aiNote, setAiNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -608,9 +673,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     if (!sessionId || kickoffPending) return;
     let cancelled = false;
 
-    dashboardApi
-      .getNextDayReview(sessionId, planDate)
-      .then((data) => {
+    const loadReview = async () => {
+      try {
+        const data = await dashboardApi.getNextDayReview(sessionId, planDate);
         if (cancelled) return;
         setReview(data);
         setPriorities([]);
@@ -621,11 +686,13 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
         setAiNote(null);
         setError(null);
         setOpen(startOpen || data.should_open);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Could not load next-day review");
-      });
+      }
+    };
+
+    void loadReview();
 
     return () => {
       cancelled = true;
@@ -654,6 +721,25 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     [review, tasks],
   );
 
+  const recoverableItems = useMemo<RecoverableEntry[]>(
+    () =>
+      review
+        ? [
+            ...review.recovery.main_items.map((item) => ({ ...item, title: item.title, kind: "main" as const })),
+            ...review.recovery.task_items.map((item) => ({ ...item, title: item.title, kind: "task" as const })),
+            ...review.recovery.habit_items.map((item) => ({ id: item.id, title: item.name, kind: "habit" as const })),
+          ]
+        : [],
+    [review],
+  );
+
+  async function refreshReviewState(targetDate: string) {
+    if (!sessionId) return;
+    const nextReview = await dashboardApi.getNextDayReview(sessionId, planDate);
+    setReview(nextReview);
+    await loadDashboard(targetDate);
+  }
+
   if (!open || !review) return null;
 
   const reviewTitle = planningTomorrow ? "Review today, then lock tomorrow in" : "Review yesterday before you begin";
@@ -664,6 +750,26 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
   const planIntro = planningTomorrow
     ? `Build ${formatReviewDateLabel(review.today)} yourself. AI can help only when you ask it to.`
     : `Set up ${formatReviewDateLabel(review.today)} clearly before execution begins.`;
+
+  async function handleRecoverItem(item: RecoverableEntry) {
+    const currentReview = review;
+    if (!sessionId || !currentReview) return;
+    const key = `${item.kind}:${item.id}`;
+    setRecoveringKey(key);
+    setError(null);
+    try {
+      if (item.kind === "habit") {
+        await habitsApi.toggle(sessionId, item.id, true, currentReview.source_date);
+      } else {
+        await tasksApi.toggleStatus(sessionId, item.id, true);
+      }
+      await refreshReviewState(currentReview.today);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update yesterday's record");
+    } finally {
+      setRecoveringKey(null);
+    }
+  }
 
   async function handleApprove() {
     const currentReview = review;
@@ -909,6 +1015,14 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       </div>
                       </div>
                     </SectionCard>
+
+                  {review.recovery.should_prompt ? (
+                    <RecoveryCard
+                      items={recoverableItems}
+                      recoveringKey={recoveringKey}
+                      onRecover={handleRecoverItem}
+                    />
+                  ) : null}
 
                   <div className="space-y-4 md:hidden">
                     <div

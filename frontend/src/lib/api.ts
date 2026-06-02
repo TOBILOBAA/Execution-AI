@@ -288,6 +288,13 @@ export interface ApiNextDayReview {
   source_date: string;
   should_open: boolean;
   already_planned_today: boolean;
+  recovery: {
+    eligible: boolean;
+    should_prompt: boolean;
+    main_items: { id: string; title: string }[];
+    task_items: { id: string; title: string }[];
+    habit_items: { id: string; name: string }[];
+  };
   yesterday_summary: {
     completion_rate: number;
     completed_main_count: number;
