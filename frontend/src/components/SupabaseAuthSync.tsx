@@ -14,7 +14,10 @@ const DEMO_ID = "user-demo";
 export function SupabaseAuthSync() {
   useEffect(() => {
     const sb = getSupabaseBrowser();
-    if (!sb) return;
+    if (!sb) {
+      useAppStore.setState({ authReady: true });
+      return;
+    }
 
     void useAppStore.getState().hydrateAuthFromSupabase();
 
