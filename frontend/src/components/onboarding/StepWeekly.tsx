@@ -169,7 +169,7 @@ function SecondaryGoalCard({
             color: goal.aiSuggested ? "#006c4a" : "#8a9e97",
           }}
         >
-          {goal.aiSuggested ? "AI Suggested" : "Supporting Goal"}
+          {goal.aiSuggested ? "AI Suggested" : "Secondary Goal"}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -803,7 +803,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       {/* ── ROUTINES ── */}
       <section>
         <SectionHeader
-          title="Foundational Habits"
+          title="Routines"
           action="Define Routine"
           actionIcon="add_circle"
           onAction={() => { setEditHabitId(null); setAddHabitOpen(true); }}
@@ -827,7 +827,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
               }}
             >
               <span className="material-symbols-outlined text-[18px]">add</span>
-              Define your first foundational habit
+              Define your first routine
             </button>
           )}
         </div>
