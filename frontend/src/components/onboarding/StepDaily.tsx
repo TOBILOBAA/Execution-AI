@@ -5,7 +5,6 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { DailyPriority, FoundationalHabit, HabitFrequency } from "@/lib/types";
 import { getToday } from "@/lib/mockData";
-import { DAILY_MAIN_GOAL_CAP, DAILY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 import { AddDailyPriorityModal } from "./AddDailyPriorityModal";
 import { AddSecondaryTaskModal } from "./AddSecondaryTaskModal";
 import { AddHabitModal } from "./AddHabitModal";
@@ -290,9 +289,13 @@ function HabitRow({
 // ─── AI Draft types ────────────────────────────────────────────────────────────
 interface DailyAIDraft {
   reasoning: string;
-  top_priorities: { title: string; description?: string; estimated_effort?: string; tag?: string }[];
-  secondary_tasks: { title: string; description?: string; estimated_effort?: string; tag?: string }[];
+  top_priorities: { title: string; description?: string; estimated_effort?: string; tag?: string; weekly_goal_ref?: string | null }[];
+  secondary_tasks: { title: string; description?: string; estimated_effort?: string; tag?: string; weekly_goal_ref?: string | null }[];
   foundational_habits: string[];
+}
+
+function normalizeGoalTitle(value: string | undefined) {
+  return (value ?? "").trim().toLowerCase();
 }
 
 // ─── Main Step ─────────────────────────────────────────────────────────────────
@@ -309,13 +312,13 @@ export function StepDaily({ onFinish, onBack }: Props) {
     habits,
     categories,
     weeklyGoals,
-    sessionTimezone,
     addHabit,
     updateHabit,
     removeHabit,
     generateDailyPlan,
     approveDailyPlan,
     syncDailySetupToServer,
+    sessionTimezone,
   } = useAppStore(
     useShallow((state) => ({
       dailyPriorities: state.dailyPriorities,
@@ -329,13 +332,13 @@ export function StepDaily({ onFinish, onBack }: Props) {
       habits: state.habits,
       categories: state.categories,
       weeklyGoals: state.weeklyGoals,
-      sessionTimezone: state.sessionTimezone,
       addHabit: state.addHabit,
       updateHabit: state.updateHabit,
       removeHabit: state.removeHabit,
       generateDailyPlan: state.generateDailyPlan,
       approveDailyPlan: state.approveDailyPlan,
       syncDailySetupToServer: state.syncDailySetupToServer,
+      sessionTimezone: state.sessionTimezone,
     })),
   );
 
@@ -404,7 +407,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
           : null;
       const msg =
         result.code === "no_weekly_or_habits"
-          ? "Add weekly goals or at least one active routine, commit so they sync, then try again."
+          ? "Add weekly goals or at least one active habit, commit so they sync, then try again."
           : result.code === "weekly_sync_failed"
             ? "Weekly goals are still syncing. Fix any sync banner above, then try again."
             : result.code === "invalid_date"
@@ -412,7 +415,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
               : result.code === "no_session"
                 ? "Sign in or refresh your session, then try again."
                 : apiDetail ??
-                  "AI generation failed. Add weekly goals (or use AI on the previous step and accept), click “Commit Plan” so they save, and add at least one routine if you have no weekly goals — then try again.";
+                  "AI generation failed. Add weekly goals (or use AI on the previous step and accept), click “Commit Plan” so they save, and add at least one habit if you have no weeklies — then try again.";
       setAiError(msg);
     } else {
       const draft = result.draft as DailyAIDraft;
@@ -424,12 +427,36 @@ export function StepDaily({ onFinish, onBack }: Props) {
 
   const handleAIAccept = async () => {
     if (!aiDraft || aiSelectedCount === 0) return;
-    const priorities: Record<string, unknown>[] = [];
+    const priorities: Record<string, unknown>[] = [
+      ...todayPriorities.map((item) => ({
+        title: item.title,
+        description: item.description,
+        weekly_goal_id: item.weeklyGoalId,
+        estimated_effort: item.estimatedMinutes ? `${item.estimatedMinutes} min` : undefined,
+        is_main: true,
+        priority: "high",
+      })),
+      ...todayTasks.map((item) => ({
+        title: item.title,
+        description: item.description,
+        weekly_goal_id: item.weeklyGoalId,
+        estimated_effort: item.estimatedMinutes ? `${item.estimatedMinutes} min` : undefined,
+        is_main: false,
+        priority: "medium",
+      })),
+    ];
+    const existingTitles = new Set(
+      [...todayPriorities, ...todayTasks].map((item) => normalizeGoalTitle(item.title)).filter(Boolean),
+    );
     aiDraft.top_priorities?.forEach((p, i) => {
-      if (aiRowKeys.has(`p:${i}`)) priorities.push({ ...p, is_main: true, priority: "high" });
+      if (aiRowKeys.has(`p:${i}`) && !existingTitles.has(normalizeGoalTitle(p.title))) {
+        priorities.push({ ...p, is_main: true, priority: "high" });
+      }
     });
     (aiDraft.secondary_tasks ?? []).forEach((t, i) => {
-      if (aiRowKeys.has(`t:${i}`)) priorities.push({ ...t, is_main: false });
+      if (aiRowKeys.has(`t:${i}`) && !existingTitles.has(normalizeGoalTitle(t.title))) {
+        priorities.push({ ...t, is_main: false });
+      }
     });
     setAiAccepting(true);
     const ok = await approveDailyPlan(todayStr, priorities);
@@ -454,17 +481,17 @@ export function StepDaily({ onFinish, onBack }: Props) {
     const todayPrioritiesCount = dailyPriorities.filter((p) => p.date === todayStr).length;
     const todayTasksCount = secondaryTasks.filter((t) => t.date === todayStr).length;
     if (todayPrioritiesCount !== 1) {
-      setLeaveError("You need exactly one main goal for today before continuing.");
+      setLeaveError("You need exactly one main priority for today before continuing.");
       return;
     }
-    if (todayTasksCount > DAILY_SECONDARY_GOAL_CAP) {
-      setLeaveError("You can have at most three secondary goals for today.");
+    if (todayTasksCount > 3) {
+      setLeaveError("You can have at most three secondary tasks for today.");
       return;
     }
-    const ok = await syncDailySetupToServer(todayStr, { mode: "verify" });
+    const ok = await syncDailySetupToServer(todayStr);
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
-      setLeaveError("Your daily goals and routines have not finished saving to the server yet. Fix the sync error above, then try again.");
+      setLeaveError("Daily tasks and habits have not finished saving to the server yet. Fix the sync error above, then try again.");
       return;
     }
     await onFinish();
@@ -479,7 +506,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             Set up {headlineDate.weekday}, {headlineDate.monthShort} {headlineDate.day}.
           </h1>
           <p className="text-sm leading-relaxed max-w-md mx-auto" style={{ color: "#8a9e97" }}>
-            1 main goal, up to 3 secondary goals. Each connects to a weekly goal. Your routines roll forward from Step 2.
+            1 main goal, up to 3 secondary goals. Link each daily goal to the weekly direction it belongs to. Your routines roll forward from Step 2.
           </p>
         </div>
 
@@ -493,7 +520,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
               <div>
                 <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Generate with AI</p>
                 <p className="text-xs" style={{ color: "#6b7b74" }}>
-                  We&apos;ll use this week&apos;s goals and your habits to suggest a focused day.
+                  We&apos;ll use this week&apos;s goals and your routines to suggest a focused day.
                 </p>
               </div>
             </div>
@@ -547,7 +574,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 Tap the circle on each row to include or exclude it before saving.
               </p>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Main Goals</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Top Priorities</p>
                 <div className="space-y-1.5">
                   {aiDraft.top_priorities?.map((p, i) => {
                     const key = `p:${i}`;
@@ -584,7 +611,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
               </div>
               {(aiDraft.secondary_tasks?.length ?? 0) > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Secondary Goals</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Secondary Tasks</p>
                   <div className="space-y-1.5">
                     {(aiDraft.secondary_tasks ?? []).map((t, i) => {
                       const key = `t:${i}`;
@@ -645,13 +672,13 @@ export function StepDaily({ onFinish, onBack }: Props) {
           </div>
         )}
 
-        {/* ── 01. Main Goal ── */}
+        {/* ── 01. Essential Priorities ── */}
         <section>
           <SectionHeader
             number="01"
-            title="Main Goal"
-            subtitle="The goal that matters most in the day."
-            action="Add Main Goal"
+            title="Essential Priorities"
+            subtitle="The three non-negotiables for a successful day."
+            action="Add Priority"
             onAction={() => setPriorityModal(true)}
           />
           <div
@@ -661,7 +688,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             {todayPriorities.length === 0 ? (
               <div className="py-8 text-center">
                 <p className="text-sm" style={{ color: "#a8b5af" }}>
-                  No main goal yet.
+                  No priorities yet — add your top 3 for today.
                 </p>
               </div>
             ) : (
@@ -672,20 +699,20 @@ export function StepDaily({ onFinish, onBack }: Props) {
                   index={idx}
                   isLast={idx === todayPriorities.length - 1}
                   onEdit={() => setPriorityModal(p)}
-                  onDelete={async () => { await removeDailyPriority(p.id, { persistMode: "blocking" }); }}
+                  onDelete={() => removeDailyPriority(p.id)}
                 />
               ))
             )}
           </div>
         </section>
 
-        {/* ── 02. Secondary Goals ── */}
+        {/* ── 02. Supporting Priorities ── */}
         <section>
           <SectionHeader
             number="02"
-            title="Secondary Goals"
-            subtitle="Additional goals to work on after the main goal."
-            action="Add Secondary Goal"
+            title="Supporting Priorities"
+            subtitle="Supporting tasks to be addressed after primary focus."
+            action="Add Task"
             onAction={() => setTaskModal(true)}
           />
           <div
@@ -695,7 +722,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             {todayTasks.length === 0 ? (
               <div className="py-8 text-center">
                 <p className="text-sm" style={{ color: "#a8b5af" }}>
-                  No secondary goals yet.
+                  No supporting tasks — add tasks to stay on top of everything.
                 </p>
               </div>
             ) : (
@@ -706,20 +733,20 @@ export function StepDaily({ onFinish, onBack }: Props) {
                   index={idx}
                   isLast={idx === todayTasks.length - 1}
                   onEdit={() => setTaskModal(t)}
-                  onDelete={async () => { await removeSecondaryTask(t.id, { persistMode: "blocking" }); }}
+                  onDelete={() => removeSecondaryTask(t.id)}
                 />
               ))
             )}
           </div>
         </section>
 
-        {/* ── 03. Routines ── */}
+        {/* ── 03. High-Performance Habits ── */}
         <section>
           <SectionHeader
             number="03"
-            title="Routines"
-            subtitle="Repeatable actions you want to keep in the day."
-            action="Add Routine"
+            title="High-Performance Habits"
+            subtitle="Micro-actions that fuel your long-term output."
+            action="Add Habit"
             onAction={() => setHabitModal(true)}
           />
           <div className="space-y-2.5">
@@ -728,7 +755,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 key={habit.id}
                 habit={habit}
                 onEdit={() => setHabitModal(habit)}
-                onDelete={async () => { await removeHabit(habit.id, { persistMode: "blocking" }); }}
+                onDelete={() => removeHabit(habit.id)}
               />
             ))}
             {activeHabits.length === 0 && (
@@ -743,7 +770,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 onMouseLeave={(e) => { e.currentTarget.style.border = "1.5px dashed rgba(0,108,74,0.25)"; e.currentTarget.style.color = "#8a9e97"; }}
               >
                 <span className="material-symbols-outlined text-[18px]">add</span>
-                Define your first routine
+                Define your first habit
               </button>
             )}
           </div>
@@ -752,7 +779,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
         {/* Bottom CTA */}
         <div className="text-center space-y-4 pt-2 pb-2">
           <p className="text-sm leading-relaxed" style={{ color: "#8a9e97" }}>
-            Ready to begin your day with precision? All goals and<br />routines are synced to your dashboard.
+            Ready to begin your day with precision? All tasks and<br />habits are synced to your dashboard.
           </p>
         </div>
 
@@ -789,8 +816,6 @@ export function StepDaily({ onFinish, onBack }: Props) {
         <AddDailyPriorityModal
           categories={categories}
           weeklyGoals={weeklyGoals}
-          mainGoalCapReached={!isEditingPriority && todayPriorities.length >= DAILY_MAIN_GOAL_CAP}
-          mainGoalCapMessage="You can only save 1 main goal for this day."
           initialTitle={isEditingPriority ? (priorityModal as DailyPriority).title : ""}
           initialCategoryId={
             isEditingPriority
@@ -800,18 +825,17 @@ export function StepDaily({ onFinish, onBack }: Props) {
           initialWeeklyGoalId={isEditingPriority ? (priorityModal as DailyPriority).weeklyGoalId : undefined}
           initialAllocation={isEditingPriority ? (priorityModal as DailyPriority).estimatedMinutes : 30}
           initialDescription={isEditingPriority ? (priorityModal as DailyPriority).description : undefined}
-          onSubmit={async (data) => {
+          onSubmit={(data) => {
             if (isEditingPriority) {
-              const ok = await updateDailyPriority((priorityModal as DailyPriority).id, {
+              updateDailyPriority((priorityModal as DailyPriority).id, {
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
                 weeklyGoalId: data.weeklyGoalId,
                 description: data.description,
-              }, { persistMode: "blocking" });
-              if (!ok) return;
+              });
             } else {
-              const ok = await addDailyPriority({
+              addDailyPriority({
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
@@ -823,8 +847,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 priority: "high",
                 isMain: true,
                 aiSuggested: false,
-              }, { persistMode: "blocking" });
-              if (!ok) return;
+              });
             }
             setPriorityModal(null);
           }}
@@ -836,8 +859,6 @@ export function StepDaily({ onFinish, onBack }: Props) {
         <AddSecondaryTaskModal
           categories={categories}
           weeklyGoals={weeklyGoals}
-          secondaryGoalCapReached={!isEditingTask && todayTasks.length >= DAILY_SECONDARY_GOAL_CAP}
-          secondaryGoalCapMessage="You can only save up to 3 secondary goals for this day."
           initialTitle={isEditingTask ? (taskModal as DailyPriority).title : ""}
           initialCategoryId={isEditingTask
             ? categories.find((c) => c.name === (taskModal as DailyPriority).tag)?.id
@@ -845,18 +866,17 @@ export function StepDaily({ onFinish, onBack }: Props) {
           initialWeeklyGoalId={isEditingTask ? (taskModal as DailyPriority).weeklyGoalId : undefined}
           initialAllocation={isEditingTask ? (taskModal as DailyPriority).estimatedMinutes : 30}
           initialDescription={isEditingTask ? (taskModal as DailyPriority).description : undefined}
-          onSubmit={async (data) => {
+          onSubmit={(data) => {
             if (isEditingTask) {
-              const ok = await updateSecondaryTask((taskModal as DailyPriority).id, {
+              updateSecondaryTask((taskModal as DailyPriority).id, {
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
                 weeklyGoalId: data.weeklyGoalId,
                 description: data.description,
-              }, { persistMode: "blocking" });
-              if (!ok) return;
+              });
             } else {
-              const ok = await addSecondaryTask({
+              addSecondaryTask({
                 title: data.title,
                 estimatedMinutes: data.estimatedMinutes,
                 tag: data.tag,
@@ -868,8 +888,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 priority: "medium",
                 isMain: false,
                 aiSuggested: false,
-              }, { persistMode: "blocking" });
-              if (!ok) return;
+              });
             }
             setTaskModal(null);
           }}
@@ -911,36 +930,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
   );
 }
 
-// ─── Daily AI Guidance Panel ───────────────────────────────────────────────────
-const GUIDANCE_TIPS = [
-  {
-    title: "Minimize Context Switching",
-    body: "Your goals today require high cognitive load. Batch your secondary goals into a single 30-minute block at 4:00 PM to protect your morning momentum.",
-    tip: "Drink 500ml of water during Main Goal 01 to maintain peak neural function.",
-    mindset: "Execution is the only form of progress that matters today. Done is better than perfect.",
-  },
-  {
-    title: "Protect Deep Work Time",
-    body: "Schedule your highest-energy goal first. Block the first 90 minutes of your day for focused execution before any meetings or communication.",
-    tip: "Close all notification channels during your main-goal block for maximum output.",
-    mindset: "Clarity precedes action. Know your target before you start moving.",
-  },
-  {
-    title: "Energy Before Work",
-    body: "Match your goals to your natural energy curve. Do creative and analytical work in the morning, operational work in the afternoon.",
-    tip: "A 10-minute walk between your goals resets your focus and reduces decision fatigue.",
-    mindset: "Small consistent actions compound into extraordinary results over time.",
-  },
-];
-
 export function DailyAIGuidancePanel() {
-  const [tipIndex, setTipIndex] = useState(0);
-  const tip = GUIDANCE_TIPS[tipIndex];
-
-  const handleRefresh = () => {
-    setTipIndex((prev) => (prev + 1) % GUIDANCE_TIPS.length);
-  };
-
   return (
     <div className="px-7 pt-10 pb-8 space-y-6 h-full overflow-y-auto">
       {/* Header */}
@@ -956,47 +946,48 @@ export function DailyAIGuidancePanel() {
 
       {/* Sections */}
       <div className="space-y-5">
-        {/* Rule of 3 */}
         <div>
-          <div className="flex items-center gap-1.5 mb-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Daily Focus Rule</p>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>looks_one</span>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Choose One Main Goal For Today</p>
           </div>
-          <p className="text-sm font-bold mb-1.5" style={{ color: "#1a1f1e" }}>{tip.title}</p>
-          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>{tip.body}</p>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+            Your daily main goal should be the clearest and most important thing to finish or advance today.
+          </p>
         </div>
 
-        {/* Execution Tip */}
-        <div
-          className="rounded-xl p-3.5"
-          style={{ background: "#f5f7f6" }}
-        >
-          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#8a9e97" }}>Execution Tip</p>
-          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>{tip.tip}</p>
+        <div>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>tune</span>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Use Secondary Goals Carefully</p>
+          </div>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+            Secondary goals should create progress without crowding out the main goal.
+          </p>
         </div>
 
-        {/* Mindset */}
-        <div
-          className="rounded-xl p-3.5"
-          style={{ background: "#f5f7f6" }}
-        >
-          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#8a9e97" }}>Mindset</p>
-          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>{tip.mindset}</p>
+        <div>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>repeat</span>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Let Routines Steady The Day</p>
+          </div>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+            Routines are the repeated actions that help you stay disciplined, clear, and consistent.
+          </p>
         </div>
 
-        {/* Refresh button */}
-        <button
-          onClick={handleRefresh}
-          className="w-full py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all"
-          style={{
-            border: "1px solid rgba(0,0,0,0.08)",
-            color: "#8a9e97",
-            background: "transparent",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "#f5f7f6"; e.currentTarget.style.color = "#1a1f1e"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#8a9e97"; }}
-        >
-          Refresh Strategy
-        </button>
+        <div className="rounded-xl p-4 space-y-2.5" style={{ background: "#f4f6f4" }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Example</p>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+            <strong style={{ color: "#1a1f1e" }}>Weekly main goal:</strong> Finish this week&apos;s cloud networking and storage modules, and complete one practice test review.
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+            <strong style={{ color: "#1a1f1e" }}>Daily main goal:</strong> Complete the cloud networking lesson and take notes on key architecture patterns today.
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+            <strong style={{ color: "#1a1f1e" }}>Routine example:</strong> 45 minutes of certification study before the day gets busy.
+          </p>
+        </div>
       </div>
     </div>
   );

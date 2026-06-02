@@ -1,7 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { SupabaseAuthSync } from "@/components/SupabaseAuthSync";
 import type { CSSProperties } from "react";
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+});
 
 export const metadata: Metadata = {
   title: "Execution AI",
@@ -29,16 +35,15 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <style>{`
-          @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap");
           @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200");
         `}</style>
       </head>
       <body
-        className="antialiased"
+        className={`${plusJakarta.variable} antialiased`}
         style={{
-          "--font-headline": "Manrope, sans-serif",
-          "--font-body": "Inter, sans-serif",
-          "--font-label": "Inter, sans-serif",
+          "--font-headline": "var(--font-jakarta), sans-serif",
+          "--font-body": "var(--font-jakarta), sans-serif",
+          "--font-label": "var(--font-jakarta), sans-serif",
         } as CSSProperties}
       >
         <SupabaseAuthSync />

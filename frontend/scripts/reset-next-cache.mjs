@@ -1,9 +1,9 @@
 import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
 
-const distDir = path.join(process.cwd(), ".next");
+const distDir = path.join(process.cwd(), process.env.NEXT_DIST_DIR || ".next");
 
-// Deletes `.next`. Run via `npm run clean` after a crashed dev server or weird ENOENT
+// Deletes the active Next dist dir. Run via `npm run clean` after a crashed dev server or weird ENOENT
 // errors — do NOT run this automatically before `next dev` (that races with requests).
 if (existsSync(distDir)) {
   rmSync(distDir, {

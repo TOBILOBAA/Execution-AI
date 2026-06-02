@@ -2,7 +2,7 @@
 
 import { useRef, useCallback, type KeyboardEvent, type ClipboardEvent } from "react";
 
-const LENGTH = 6;
+const LENGTH = 8;
 
 type Props = {
   value: string;
@@ -11,7 +11,7 @@ type Props = {
   autoFocus?: boolean;
 };
 
-/** Six single-digit fields with paste and keyboard navigation. */
+/** Eight single-digit fields with paste and keyboard navigation. */
 export function OtpCodeInput({ value, onChange, disabled, autoFocus }: Props) {
   const refs = useRef<(HTMLInputElement | null)[]>([]);
 

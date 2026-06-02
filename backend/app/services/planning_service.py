@@ -101,7 +101,7 @@ def _match_yearly_goal_by_ref(ref: str | None, yearly_goals: list[dict]) -> dict
 
 
 def _match_monthly_goal_by_ref(ref: str | None, monthly_goals: list[dict]) -> dict | None:
-    """Match AI yearly_goal_ref (monthly goal title hint) to a monthly goal row."""
+    """Match AI monthly_goal_ref (or legacy yearly_goal_ref fallback) to a monthly goal row."""
     if not ref or not monthly_goals:
         return None
     ref_l = ref.strip().lower()
@@ -262,6 +262,11 @@ def _normalize_daily_ai_output(ai_output, weekly_goals: list[dict], monthly_goal
             "secondary_tasks": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.secondary_tasks],
         }
     )
+def _single_main_goal(rows: list[dict]) -> dict | None:
+    mains = [row for row in rows if row.get("is_main")]
+    if len(mains) == 1:
+        return mains[0]
+    return None
 
 
 def _count_main_rows(rows: list[dict]) -> int:
@@ -391,6 +396,7 @@ def approve_monthly_plan(
     _assert_main_goal_cap(_count_main_rows(goals_to_create), "month", "goals")
 
     yearly_list = yg_db.list_yearly_goals(db, session_id, year)
+    single_yearly_goal = yearly_list[0] if len(yearly_list) == 1 else None
 
     # Determine which draft items exist for per-row ai_suggested flagging
     plan_draft = plan.get("ai_draft") or {}
@@ -403,6 +409,8 @@ def approve_monthly_plan(
         yg = next((row for row in yearly_list if str(row.get("id")) == yid), None) if yid else None
         if not yg:
             yg = _match_yearly_goal_by_ref(g.get("yearly_goal_ref"), yearly_list)
+        if not yg and g.get("is_main") and single_yearly_goal:
+            yg = single_yearly_goal
         yid = yg.get("id") if yg else yid
         cid = g.get("category_id") or (yg.get("category_id") if yg else None)
         target_date = _normalize_monthly_target_date(g.get("target_date"), year, month)
@@ -553,6 +561,7 @@ def approve_weekly_plan(
     _assert_main_goal_cap(_count_main_rows(goals_to_create), "week", "goals")
 
     monthly_list = plans_db.list_monthly_goals(db, session_id, year, month)
+    single_main_monthly = _single_main_goal(monthly_list)
 
     # Per-row ai_suggested: compare against draft
     plan_draft = plan.get("ai_draft") or {}
@@ -569,6 +578,12 @@ def approve_weekly_plan(
             )
         if not mg and g.get("yearly_goal_ref"):
             mg = _match_monthly_goal_by_ref(g.get("yearly_goal_ref"), monthly_list)
+        if not mg and g.get("is_main") and single_main_monthly:
+            mg = single_main_monthly
+        if not mg and g.get("yearly_goal_ref"):
+            mg = _match_monthly_goal_by_ref(g.get("yearly_goal_ref"), monthly_list)
+        if not mg and g.get("is_main") and single_main_monthly:
+            mg = single_main_monthly
         mid = mg.get("id") if mg else mid
         workload = g.get("estimated_effort") or g.get("workload")
         is_ai_suggested = _row_matches_draft(g.get("title", ""), all_draft_items)
@@ -613,6 +628,7 @@ def generate_daily_plan(
     week_number = week_number_for(plan_date, week_starts_on)
 
     weekly_goals = plans_db.list_weekly_goals(db, session_id, plan_date.year, week_number)
+    single_main_weekly = _single_main_goal(weekly_goals)
     habits = habits_db.list_habits(db, session_id, active_only=True)
 
     # Fail before calling the model — avoids token spend on an empty planning context
@@ -744,6 +760,8 @@ def approve_daily_plan(
             if not wg and item.get("yearly_goal_ref"):
                 wg = _match_weekly_goal_by_ref(item.get("yearly_goal_ref"), weekly_goals)
             wid = wg.get("id") if wg else None
+        if not wid and item.get("is_main") and single_main_weekly:
+            wid = str(single_main_weekly.get("id"))
         is_ai_suggested = _row_matches_draft(item.get("title", ""), all_draft_items)
         priority_records.append({
             "session_id": str(session_id),

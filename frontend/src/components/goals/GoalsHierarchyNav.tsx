@@ -22,7 +22,7 @@ export function GoalsHierarchyNav({
 
   return (
     <div
-      className="rounded-[18px] p-1.5 flex flex-wrap gap-1.5"
+      className="flex gap-1.5 overflow-x-auto rounded-[18px] p-1.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{
         background: "#f7faf8",
         border: "1px solid rgba(0,0,0,0.06)",
@@ -34,7 +34,7 @@ export function GoalsHierarchyNav({
           <Link
             key={item.id}
             href={item.href}
-            className="px-3.5 py-2 rounded-[14px] text-sm font-bold transition-colors"
+            className="min-w-[88px] shrink-0 px-3.5 py-2 text-center rounded-[14px] text-sm font-bold transition-colors"
             style={{
               background: selected ? "#006c4a" : "transparent",
               color: selected ? "#ffffff" : "#5d6d67",

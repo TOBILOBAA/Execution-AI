@@ -246,6 +246,7 @@ def generate_monthly_plan(planning_payload: dict) -> AIMonthlyPlanOutput:
     ctx = planning_payload["temporal_context"]
     budget = planning_payload["workload_budget"]
     yearly_goals = planning_payload["yearly_goals"]
+    existing_monthly_goals = planning_payload.get("existing_monthly_goals", [])
 
     goals_text = "\n".join(
         f"- [{g['category']}] {g['title']} (progress: {g.get('progress_pct', 0)}%)"
@@ -253,6 +254,11 @@ def generate_monthly_plan(planning_payload: dict) -> AIMonthlyPlanOutput:
         f"{(' | target: ' + g['target_date']) if g.get('target_date') else ''}"
         for g in yearly_goals
     )
+    existing_text = "\n".join(
+        f"- [{'MAIN' if g.get('is_main') else 'secondary'}] {g.get('title', '')}"
+        for g in existing_monthly_goals
+        if g.get("title")
+    ) or "No existing monthly goals."
 
     prompt = f"""{_SYSTEM_ROLE}
 
@@ -273,14 +279,22 @@ def generate_monthly_plan(planning_payload: dict) -> AIMonthlyPlanOutput:
 ### Yearly Goals (parent context)
 {goals_text}
 
+### Existing Monthly Goals (avoid duplicates)
+{existing_text}
+
 ### Instructions
 Generate ONLY main_goals and secondary_goals for this month. Do NOT suggest routines — users define those separately in the app.
 Never return more than {budget['max_main_goals']} main_goals or more than {budget['max_secondary_goals']} secondary_goals.
+If the max main goal count is 1, return exactly 1 main goal unless the parent context is genuinely empty.
 Goals must be achievable within the remaining {ctx['days_remaining']} days.
 Every goal must clearly support one of the yearly goals above.
 Use the user's own wording and priorities when possible instead of inventing adjacent goals.
 If a goal does not directly serve one of the yearly goals above, do not include it.
-Each goal must set yearly_goal_ref to the exact title of a yearly goal above when possible.
+The main goal should reflect the most important meaningful progress for this month.
+Secondary goals can be other important outcomes for the month.
+If tradeoffs are needed, protect the clarity of the main goal first and reduce secondary goals before weakening the main goal.
+Do not repeat or lightly reword a goal that already exists in the monthly list above.
+Set yearly_goal_ref to the exact title of a yearly goal above when the goal clearly connects to it.
 For EVERY goal, set target_date to a realistic deadline as YYYY-MM-DD within {ctx['year']}-{ctx['month']:02d} (use dates on or after today if this is the current month).
 
 ### Required JSON Output Schema
@@ -329,6 +343,7 @@ def generate_weekly_plan(planning_payload: dict) -> AIWeeklyPlanOutput:
     budget = planning_payload["workload_budget"]
     monthly_goals = planning_payload["monthly_goals"]
     yearly_goals = planning_payload.get("yearly_goals", [])
+    existing_weekly_goals = planning_payload.get("existing_weekly_goals", [])
 
     monthly_text = "\n".join(
         f"- [{'MAIN' if g['is_main'] else 'secondary'}] {g['title']} (progress: {g.get('progress_pct', 0)}%)"
@@ -343,6 +358,11 @@ def generate_weekly_plan(planning_payload: dict) -> AIWeeklyPlanOutput:
         f"{(' — ' + g['description']) if g.get('description') else ''}"
         for g in yearly_goals
     ) or "No yearly goals provided."
+    existing_text = "\n".join(
+        f"- [{'MAIN' if g.get('is_main') else 'secondary'}] {g.get('title', '')}"
+        for g in existing_weekly_goals
+        if g.get("title")
+    ) or "No existing weekly goals."
 
     prompt = f"""{_SYSTEM_ROLE}
 
@@ -367,14 +387,23 @@ def generate_weekly_plan(planning_payload: dict) -> AIWeeklyPlanOutput:
 ### Yearly Goals (strategic context)
 {yearly_text}
 
+### Existing Weekly Goals (avoid duplicates)
+{existing_text}
+
 ### Instructions
 Generate ONLY main_goals and secondary_goals for this week. Do NOT suggest routines — users define those in the app.
 Never return more than {budget['max_main_goals']} main_goals or more than {budget['max_secondary_goals']} secondary_goals.
+If the max main goal count is 1, return exactly 1 main goal unless the parent context is genuinely empty.
 Each goal must be completable within {ctx['days_remaining']} days.
 Weekly goals must concretely advance the monthly goals above.
 Use monthly_goal_ref for the exact monthly goal title each weekly goal serves.
 Use yearly_goal_ref only when the monthly goal clearly maps up to a yearly goal already listed above.
 Do not invent a weekly goal that cannot be traced to the monthly goals shown.
+The weekly main goal should concretely advance the most important monthly goal.
+Secondary goals can advance other important monthly outcomes or other meaningful areas of life.
+If tradeoffs are needed, keep the weekly main goal sharp and reduce secondary goals before weakening the main goal.
+Do not repeat or lightly reword a goal that already exists in the weekly list above.
+When a weekly goal clearly connects to a monthly goal above, set monthly_goal_ref to the exact monthly goal title.
 
 ### Required JSON Output Schema
 {{
@@ -424,6 +453,7 @@ def generate_daily_plan(planning_payload: dict) -> AIDailyPlanOutput:
     habits = planning_payload.get("active_habits", [])
     remaining = planning_payload.get("weekly_tasks_remaining", 0)
     yesterday = planning_payload.get("yesterday_completion", {})
+    existing_daily_items = planning_payload.get("existing_daily_items", [])
 
     weekly_text = "\n".join(
         f"- [{'MAIN' if g['is_main'] else 'secondary'}] {g['title']} (progress: {g.get('progress_pct', 0)}%)"
@@ -442,6 +472,11 @@ def generate_daily_plan(planning_payload: dict) -> AIDailyPlanOutput:
         for g in yearly_goals
     ) or "No yearly goals."
     habits_text = ", ".join(habits) if habits else "none set"
+    existing_text = "\n".join(
+        f"- [{'MAIN' if item.get('is_main') else 'secondary'}] {item.get('title', '')}"
+        for item in existing_daily_items
+        if item.get("title")
+    ) or "No existing daily items."
 
     yesterday_text = ""
     if yesterday:
@@ -480,15 +515,21 @@ Weekly goals remaining: {remaining}
 ### Active Routines to reinforce today
 {habits_text}
 
+### Existing Daily Items (avoid duplicates)
+{existing_text}
+
 ### Instructions
 Generate a daily plan for {ctx['today']}. Main goals must be concretely achievable in one day.
 Never return more than {budget['max_daily_priorities']} top_priorities or more than {budget['max_secondary_tasks']} secondary_tasks.
+If the max main goal count is 1, return exactly 1 main goal unless the parent context is genuinely empty.
 Each main goal should advance a specific weekly goal.
+Secondary goals can advance another important weekly goal or cover useful maintenance without crowding the day.
+If tradeoffs are needed, protect the daily main goal first and cut secondary goals before weakening it.
+Do NOT include routines in the output — they are tracked separately in the app.
+Do not repeat or lightly reword an item that already exists in the daily list above.
 Use weekly_goal_ref for the exact weekly goal title each item supports.
 Use monthly_goal_ref and yearly_goal_ref only when the parent chain is clear from the provided context.
-Secondary goals should be quick wins or maintenance, but still intentional and connected when possible.
 Do not invent random tasks that are not grounded in the weekly goals, monthly goals, routines, or yesterday's unfinished work.
-Do NOT include foundational_habits in the output — they are tracked separately in the app.
 
 ### Required JSON Output Schema
 {{

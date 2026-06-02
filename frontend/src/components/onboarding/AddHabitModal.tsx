@@ -37,7 +37,7 @@ interface Props {
   initialYearlyGoalId?: string;
   initialMonthlyGoalId?: string;
   initialWeeklyGoalId?: string;
-  onSubmit: (payload: HabitSubmitPayload) => void;
+  onSubmit: (payload: HabitSubmitPayload) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -91,6 +91,7 @@ export function AddHabitModal({
   const [monthlyGoalId, setMonthlyGoalId] = useState(initialMonthlyGoalId ?? "");
   const [weeklyGoalId, setWeeklyGoalId] = useState(initialWeeklyGoalId ?? "");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const sortedYearlyGoals = useMemo(
     () => [...yearlyGoals].sort((a, b) => (a.year - b.year) || a.title.localeCompare(b.title)),
     [yearlyGoals],
@@ -104,20 +105,31 @@ export function AddHabitModal({
     [weeklyGoals],
   );
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name.trim()) { setError("Routine name is required."); return; }
     if (linkType === "yearly" && !yearlyGoalId) { setError("Choose the yearly goal this routine supports."); return; }
     if (linkType === "monthly" && !monthlyGoalId) { setError("Choose the monthly goal this routine supports."); return; }
     if (linkType === "weekly" && !weeklyGoalId) { setError("Choose the weekly goal this routine supports."); return; }
-    onSubmit({
-      name: name.trim(),
-      icon: selectedIcon,
-      categoryId,
-      frequency,
-      ...(linkType === "yearly" && yearlyGoalId ? { yearlyGoalId } : {}),
-      ...(linkType === "monthly" && monthlyGoalId ? { monthlyGoalId } : {}),
-      ...(linkType === "weekly" && weeklyGoalId ? { weeklyGoalId } : {}),
-    });
+    setSaving(true);
+    try {
+      await onSubmit({
+        name: name.trim(),
+        icon: selectedIcon,
+        categoryId,
+        frequency,
+        ...(linkType === "yearly" && yearlyGoalId ? { yearlyGoalId } : {}),
+        ...(linkType === "monthly" && monthlyGoalId ? { monthlyGoalId } : {}),
+        ...(linkType === "weekly" && weeklyGoalId ? { weeklyGoalId } : {}),
+      });
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Couldn't save this routine. Try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -131,14 +143,14 @@ export function AddHabitModal({
           {/* Header */}
           <div className="flex items-start justify-between mb-1">
             <h2 className="font-headline text-xl font-bold" style={{ color: "#1a1f1e" }}>
-              {isEdit ? "Edit Routine" : "Define Routine"}
+              {isEdit ? "Edit Habit" : "Define Foundational Habit"}
             </h2>
             <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition" style={{ color: "#5a6b65" }}>
               <span className="material-symbols-outlined text-[18px]">close</span>
             </button>
           </div>
           <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
-            {isEdit ? "Update the routine name, icon, category, or frequency." : "Set the routine you want to keep in motion."}
+            {isEdit ? "Update the habit name, icon, category, or frequency." : "Link this to your yearly vision and define your focus for the month."}
           </p>
 
           {/* Icon picker */}
@@ -172,10 +184,10 @@ export function AddHabitModal({
             </div>
           </div>
 
-          {/* Routine name */}
+          {/* Habit name */}
           <div className="mb-5">
             <label className="block mb-2" style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8a9e97" }}>
-              Routine Name
+              Habit Name
             </label>
             <input
               autoFocus
@@ -336,6 +348,7 @@ export function AddHabitModal({
         <div className="flex items-center justify-end gap-3 px-7 py-5" style={{ borderTop: "1px solid #f0f3f1" }}>
           <button
             onClick={onClose}
+            disabled={saving}
             className="px-5 py-2.5 text-sm font-semibold transition"
             style={{ color: "#5a6b65" }}
             onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = "#1a1f1e")}
@@ -345,10 +358,11 @@ export function AddHabitModal({
           </button>
           <button
             onClick={handleSubmit}
-            className="px-6 py-2.5 rounded-full text-sm font-bold text-white transition hover:opacity-90"
+            disabled={saving}
+            className="px-6 py-2.5 rounded-full text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-60"
             style={{ background: "#1a2b24" }}
           >
-            {isEdit ? "Save Changes" : "Add Routine"}
+            {saving ? "Saving..." : isEdit ? "Save Changes" : "Add to Plan"}
           </button>
         </div>
       </div>

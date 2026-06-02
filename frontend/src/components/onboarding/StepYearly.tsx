@@ -16,7 +16,7 @@ interface Props {
 
 const UNCATEGORIZED_CATEGORY_ID = "__uncategorized__";
 
-// ── Right AI Guidance Panel ───────────────────────────────────────────────────
+// ── Right planning strategy panel ─────────────────────────────────────────────
 export function YearlyAIGuidancePanel() {
   return (
     <div className="px-7 pt-10 pb-8 space-y-6 h-full overflow-y-auto">
@@ -25,15 +25,15 @@ export function YearlyAIGuidancePanel() {
           <span className="material-symbols-outlined text-[18px]" style={{ color: "#006c4a" }}>auto_awesome</span>
         </div>
         <div>
-          <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>AI Guidance</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>Goal Architecture</p>
+          <p className="font-headline font-bold text-sm" style={{ color: "#1a1f1e" }}>Planning Strategy</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#a8b5af" }}>Yearly Focus</p>
         </div>
       </div>
       <div className="space-y-5">
         {[
-          { icon: "trending_up", label: "Think Long-Term", body: "Yearly goals are milestones on a longer journey. Make sure they clearly align with your 3–5 year vision." },
-          { icon: "my_location", label: "Be Specific", body: "\u201CGet healthy\u201D is a wish; \u201CRun a half-marathon by October\u201D is a goal." },
-          { icon: "favorite", label: "Align with Values", body: "Productivity without purpose leads to burnout. Ask yourself: \u201CWhy does this matter to me right now?\u201D" },
+          { icon: "explore", label: "Choose A Direction That Matters", body: "Your yearly goals should reflect who you want to become, not just what you want to finish." },
+          { icon: "my_location", label: "Write The Outcome Clearly", body: "A strong yearly goal should be specific enough that you can recognize when it is done." },
+          { icon: "stairs", label: "Think In Real Progress", body: "Your yearly goal should be clear enough that it can break down into monthly, weekly, and daily action." },
         ].map(({ icon, label, body }) => (
           <div key={label}>
             <div className="flex items-center gap-1.5 mb-1.5">
@@ -44,9 +44,27 @@ export function YearlyAIGuidancePanel() {
           </div>
         ))}
       </div>
-      <div className="rounded-xl p-4" style={{ background: "#f4f6f4" }}>
-        <p className="text-xs italic leading-relaxed" style={{ color: "#6b7b74" }}>
-          &ldquo;Setting goals is the first step in turning the invisible into the visible.&rdquo; — Tony Robbins
+
+      <div className="rounded-xl p-4 space-y-2.5" style={{ background: "#f4f6f4" }}>
+        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Example</p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          <strong style={{ color: "#1a1f1e" }}>Yearly:</strong> Earn the AWS Solutions Architect certification this year.
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          This is clear, measurable, and easy to break into smaller periods.
+        </p>
+      </div>
+
+      <div className="rounded-xl p-4 space-y-2" style={{ background: "rgba(0,108,74,0.05)" }}>
+        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#006c4a" }}>Goal Vs Routine</p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          A broad desire like <strong style={{ color: "#1a1f1e" }}>build a closer relationship with God</strong> becomes easier to plan when you make the yearly goal concrete.
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          <strong style={{ color: "#1a1f1e" }}>Goal:</strong> Build a closer relationship with God through a focused study of the life of Jesus this year.
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
+          <strong style={{ color: "#1a1f1e" }}>Routine:</strong> Prayer each morning, daily scripture reading, and worship during the week.
         </p>
       </div>
     </div>
@@ -229,7 +247,7 @@ export function StepYearly({ onNext }: Props) {
             }}
           >
             <span className="material-symbols-outlined text-[17px]">add_circle</span>
-            + Add custom category
+            Add custom category
           </button>
         </div>
 
@@ -392,7 +410,7 @@ function CategoryCard({
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,108,74,0.22)"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
             >
               <span className="material-symbols-outlined text-[16px]">add</span>
-              + Add yearly goal
+              Add yearly goal
             </button>
           )}
         </div>

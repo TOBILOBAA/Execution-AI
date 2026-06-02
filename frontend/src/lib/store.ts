@@ -43,8 +43,9 @@ import { ensureBackendSession, clearSessionId } from "./session";
 import { formatApiError } from "./apiErrors";
 import { getSupabaseBrowser } from "./supabaseClient";
 import type { User } from "@supabase/supabase-js";
-import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudSupabaseConfigured } from "./authMode";
+import { isAuthLocalOnly, isCloudSupabaseConfigured } from "./authMode";
 import { getWeekNumber, listWeeksForYearThroughWeek } from "./goalsView";
+import { buildPublicUrl, describeSupabaseAuthError } from "./authRedirects";
 
 // ── Auth types ─────────────────────────────────────────────────────────────────
 export interface AuthUser { id: string; name: string; email: string; plan: string }
@@ -77,7 +78,7 @@ interface AppState {
   registeredUsers: StoredUser[];
   signIn: (email: string, password: string) => Promise<AuthActionResult>;
   signUp: (name: string, email: string, password: string) => Promise<AuthActionResult>;
-  /** Supabase: send a 6-digit code (Magic Link email template must include `{{ .Token }}`). */
+  /** Supabase: send an email verification code during sign-up. */
   sendEmailOtp: (
     email: string,
     opts: { intent: "signin" | "signup"; fullName?: string },
@@ -973,12 +974,6 @@ export const useAppStore = create<AppState>()(
               : "Invalid email or password, or configure Supabase (NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY) for cloud accounts.",
           };
         }
-        if (isCloudOtpAuthEnabled()) {
-          return {
-            success: false,
-            error: "Cloud accounts use an email code. Enter your email and tap “Send code”.",
-          };
-        }
         const { data, error } = await sb.auth.signInWithPassword({ email: em, password });
         if (error || !data.user) {
           return { success: false, error: error?.message ?? "Sign in failed." };
@@ -1035,20 +1030,12 @@ export const useAppStore = create<AppState>()(
           return { success: true };
         }
 
-        if (isCloudOtpAuthEnabled()) {
-          return {
-            success: false,
-            error: "Cloud sign-up uses a 6-digit email code. Use “Send code” on the sign-up tab.",
-          };
-        }
-
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
         const { data, error } = await sb.auth.signUp({
           email: em,
           password,
           options: {
             data: { full_name: name.trim() },
-            emailRedirectTo: origin ? `${origin}/auth/callback` : undefined,
+            emailRedirectTo: buildPublicUrl("/auth/callback"),
           },
         });
         if (error) {
@@ -1115,10 +1102,11 @@ export const useAppStore = create<AppState>()(
           email: em,
           options: {
             shouldCreateUser: opts.intent === "signup",
+            emailRedirectTo: buildPublicUrl("/auth/callback"),
           },
         });
         if (error) {
-          const msg = error.message;
+          const msg = describeSupabaseAuthError(error.message);
           const mailDown =
             /confirmation email|error sending|smtp|mailer|email.*fail/i.test(msg) ||
             error.status === 500;
@@ -1139,7 +1127,7 @@ export const useAppStore = create<AppState>()(
         const em = email.toLowerCase().trim();
         const clean = token.replace(/\D/g, "");
         if (clean.length !== 6) {
-          return { success: false, error: "Enter the 6-digit code from your email." };
+          return { success: false, error: "Enter the 8-digit code from your email." };
         }
 
         const tryTypes =
@@ -1159,7 +1147,7 @@ export const useAppStore = create<AppState>()(
             data = res.data;
             break;
           }
-          if (res.error?.message) lastMessage = res.error.message;
+          if (res.error?.message) lastMessage = describeSupabaseAuthError(res.error.message);
         }
         if (!data?.user) {
           return { success: false, error: lastMessage };
@@ -1284,11 +1272,10 @@ export const useAppStore = create<AppState>()(
         if (!sb) {
           return { success: false, error: "Configure Supabase environment variables to reset passwords." };
         }
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
         const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-          redirectTo: origin ? `${origin}/auth/update-password` : undefined,
+          redirectTo: buildPublicUrl("/auth/update-password"),
         });
-        if (error) return { success: false, error: error.message };
+        if (error) return { success: false, error: describeSupabaseAuthError(error.message) };
         return { success: true };
       },
 
@@ -2796,17 +2783,29 @@ export const useAppStore = create<AppState>()(
           set({ syncStatus: "saving" });
           try {
             const categoryId = await resolveCategoryIdForSave(habit.categoryId);
+            const yearlyGoalId = await resolveYearlyGoalIdForSave(habit.yearlyGoalId);
+            const monthlyGoalId = await resolveMonthlyGoalIdForSave(habit.monthlyGoalId);
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(habit.weeklyGoalId);
             if (habit.categoryId && !categoryId) {
               throw new Error("The selected category is still syncing. Wait a moment and try again.");
+            }
+            if (habit.yearlyGoalId && !yearlyGoalId) {
+              throw new Error("The linked yearly goal is still syncing. Wait a moment and try again.");
+            }
+            if (habit.monthlyGoalId && !monthlyGoalId) {
+              throw new Error("The linked monthly goal is still syncing. Wait a moment and try again.");
+            }
+            if (habit.weeklyGoalId && !weeklyGoalId) {
+              throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
             }
             const created = await habitsApi.create(writableSessionId, {
               name: habit.name,
               icon: habit.icon,
               frequency: habit.frequency,
               ...(categoryId ? { category_id: categoryId } : {}),
-              ...(isUuid(habit.yearlyGoalId) ? { yearly_goal_id: habit.yearlyGoalId } : {}),
-              ...(isUuid(habit.monthlyGoalId) ? { monthly_goal_id: habit.monthlyGoalId } : {}),
-              ...(isUuid(habit.weeklyGoalId) ? { weekly_goal_id: habit.weeklyGoalId } : {}),
+              ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+              ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
             });
             set((s) => ({
               habits: [
@@ -2836,19 +2835,31 @@ export const useAppStore = create<AppState>()(
           const request = ensureWritableSession(get, set, "Save habit")
             .then(async (writableSessionId) => {
               if (!writableSessionId) return null;
-            const categoryId = await resolveCategoryIdForSave(habit.categoryId);
-            if (habit.categoryId && !categoryId) {
-              throw new Error("The selected category is still syncing. Wait a moment and try again.");
-            }
+              const categoryId = await resolveCategoryIdForSave(habit.categoryId);
+              const yearlyGoalId = await resolveYearlyGoalIdForSave(habit.yearlyGoalId);
+              const monthlyGoalId = await resolveMonthlyGoalIdForSave(habit.monthlyGoalId);
+              const weeklyGoalId = await resolveWeeklyGoalIdForSave(habit.weeklyGoalId);
+              if (habit.categoryId && !categoryId) {
+                throw new Error("The selected category is still syncing. Wait a moment and try again.");
+              }
+              if (habit.yearlyGoalId && !yearlyGoalId) {
+                throw new Error("The linked yearly goal is still syncing. Wait a moment and try again.");
+              }
+              if (habit.monthlyGoalId && !monthlyGoalId) {
+                throw new Error("The linked monthly goal is still syncing. Wait a moment and try again.");
+              }
+              if (habit.weeklyGoalId && !weeklyGoalId) {
+                throw new Error("The linked weekly goal is still syncing. Wait a moment and try again.");
+              }
               return habitsApi.create(writableSessionId, {
-              name: habit.name,
-              icon: habit.icon,
-              frequency: habit.frequency,
-              ...(categoryId ? { category_id: categoryId } : {}),
-              ...(isUuid(habit.yearlyGoalId) ? { yearly_goal_id: habit.yearlyGoalId } : {}),
-              ...(isUuid(habit.monthlyGoalId) ? { monthly_goal_id: habit.monthlyGoalId } : {}),
-              ...(isUuid(habit.weeklyGoalId) ? { weekly_goal_id: habit.weeklyGoalId } : {}),
-            });
+                name: habit.name,
+                icon: habit.icon,
+                frequency: habit.frequency,
+                ...(categoryId ? { category_id: categoryId } : {}),
+                ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+                ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
+                ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
+              });
             })
             .then((created) => {
               if (!created) return;
@@ -3001,17 +3012,29 @@ export const useAppStore = create<AppState>()(
         for (const h of refreshed.habits.filter((item) => !isUuid(item.id))) {
           try {
             const categoryId = await resolveCategoryIdForSave(h.categoryId);
+            const yearlyGoalId = await resolveYearlyGoalIdForSave(h.yearlyGoalId);
+            const monthlyGoalId = await resolveMonthlyGoalIdForSave(h.monthlyGoalId);
+            const weeklyGoalId = await resolveWeeklyGoalIdForSave(h.weeklyGoalId);
             if (h.categoryId && !categoryId) {
               throw new Error(`The category for "${h.name}" is still syncing.`);
+            }
+            if (h.yearlyGoalId && !yearlyGoalId) {
+              throw new Error(`The yearly goal linked to "${h.name}" is still syncing.`);
+            }
+            if (h.monthlyGoalId && !monthlyGoalId) {
+              throw new Error(`The monthly goal linked to "${h.name}" is still syncing.`);
+            }
+            if (h.weeklyGoalId && !weeklyGoalId) {
+              throw new Error(`The weekly goal linked to "${h.name}" is still syncing.`);
             }
             const created = await habitsApi.create(sessionId, {
               name: h.name,
               icon: h.icon,
               frequency: h.frequency,
               ...(categoryId ? { category_id: categoryId } : {}),
-              ...(isUuid(h.yearlyGoalId) ? { yearly_goal_id: h.yearlyGoalId } : {}),
-              ...(isUuid(h.monthlyGoalId) ? { monthly_goal_id: h.monthlyGoalId } : {}),
-              ...(isUuid(h.weeklyGoalId) ? { weekly_goal_id: h.weeklyGoalId } : {}),
+              ...(yearlyGoalId ? { yearly_goal_id: yearlyGoalId } : {}),
+              ...(monthlyGoalId ? { monthly_goal_id: monthlyGoalId } : {}),
+              ...(weeklyGoalId ? { weekly_goal_id: weeklyGoalId } : {}),
             });
             set((s) => ({
               habits: s.habits.map((item) =>

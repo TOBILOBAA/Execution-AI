@@ -117,7 +117,7 @@ export function AddMonthlyGoalModal({
           <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
             {isMain
               ? "Define a major objective for your month tied to your long-term vision."
-              : "Add a secondary goal to strengthen the month without crowding the main goal."}
+              : "Add another meaningful goal for the month without overloading your focus."}
           </p>
 
           {/* Category selector */}
@@ -244,17 +244,18 @@ export function AddMonthlyGoalModal({
           {/* Target date */}
           <div className="mb-7">
             <label className="block mb-2" style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8a9e97" }}>
-              Target Completion Date
+              <span className="sm:hidden">Target Date</span>
+              <span className="hidden sm:inline">Target Completion Date</span>
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <input
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
-                className="px-4 py-3 rounded-xl border text-sm focus:outline-none focus:border-[#006c4a] transition"
+                className="w-full min-w-0 px-4 py-3 rounded-xl border text-[13px] focus:outline-none focus:border-[#006c4a] transition sm:w-auto sm:text-sm"
                 style={{ borderColor: "#e2e8e4", background: "#f7f9f8", color: "#1a1f1e" }}
               />
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-start gap-1.5 sm:items-center">
                 <span className="material-symbols-outlined text-[14px]" style={{ color: "#a8b5af" }}>info</span>
                 <span className="text-xs" style={{ color: "#8a9e97" }}>
                   {daysLeft} days remaining in {monthName}.

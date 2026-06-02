@@ -92,43 +92,72 @@ function HabitCard({ habit, index, onToggle }: HabitCardProps) {
 interface HabitsSectionProps {
   habits: FoundationalHabit[];
   onManage: () => void;
+  description?: string;
+  eyebrow?: string;
+  actionLabel?: string;
+  actionIcon?: string;
 }
 
-export function HabitsSection({ habits, onManage }: HabitsSectionProps) {
+export function HabitsSection({
+  habits,
+  onManage,
+  description,
+  eyebrow = "Routines",
+  actionLabel = "Manage",
+  actionIcon = "settings",
+}: HabitsSectionProps) {
   const toggleHabit = useAppStore((state) => state.toggleHabit);
   const visibleHabits = habits.filter((h) => h.active);
 
   return (
     <div>
       {/* Header */}
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h3
-          className="font-headline font-extrabold tracking-tight"
-          style={{ fontSize: "22px", color: "#1a1f1e" }}
-        >
-          Routines
-        </h3>
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+            {eyebrow}
+          </p>
+          {description ? (
+            <p className="mt-1 text-sm max-w-xl leading-6" style={{ color: "#8a9e97" }}>
+              {description}
+            </p>
+          ) : null}
+        </div>
         <button
           onClick={onManage}
-          className="inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
-          style={{ color: "#006c4a" }}
+          className="inline-flex items-center gap-2 self-start rounded-xl px-3.5 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_22px_rgba(0,108,74,0.10)]"
+          style={{ color: "#006c4a", background: "rgba(0,108,74,0.06)" }}
         >
-          <span className="material-symbols-outlined text-[16px]">settings</span>
-          Manage
+          <span className="material-symbols-outlined text-[16px]">{actionIcon}</span>
+          {actionLabel}
         </button>
       </div>
 
       {/* Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {visibleHabits.map((habit, i) => (
-          <HabitCard
-            key={habit.id}
-            habit={habit}
-            index={i}
-            onToggle={() => toggleHabit(habit.id)}
-          />
-        ))}
-      </div>
+      {visibleHabits.length === 0 ? (
+        <div
+          className="rounded-[24px] px-5 py-6 text-center"
+          style={{ background: "#fafcfb", border: "1.5px dashed rgba(0,108,74,0.18)" }}
+        >
+          <p className="font-semibold" style={{ color: "#1a1f1e" }}>
+            No routines are active yet
+          </p>
+          <p className="mt-2 text-sm max-w-md mx-auto" style={{ color: "#8a9e97" }}>
+            Add the repeated actions that keep your day steady when the goals change.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {visibleHabits.map((habit, i) => (
+            <HabitCard
+              key={habit.id}
+              habit={habit}
+              index={i}
+              onToggle={() => toggleHabit(habit.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

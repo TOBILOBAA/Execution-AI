@@ -96,7 +96,7 @@ export function AddSecondaryTaskModal({
                 {isEdit ? "Edit Secondary Goal" : "Add Secondary Goal"}
               </h2>
               <p className="text-xs leading-relaxed mt-1" style={{ color: "#8a9e97" }}>
-                Add another goal for today without crowding the main goal.
+                Add another meaningful goal for today without overloading your focus.
               </p>
             </div>
             <button

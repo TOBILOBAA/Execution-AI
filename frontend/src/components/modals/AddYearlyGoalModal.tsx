@@ -152,7 +152,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-8 pt-8 pb-5 flex items-start justify-between" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+        <div className="px-5 pb-5 pt-6 sm:px-8 sm:pt-8 flex items-start justify-between" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
           <div>
             <h2 id={titleId} className="font-headline font-extrabold text-xl" style={{ color: "#1a1f1e" }}>
               {isEdit ? "Edit Yearly Goal" : "Add Yearly Goal"}
@@ -174,7 +174,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
         </div>
 
         {/* Body */}
-        <div className="px-8 py-7 space-y-6 overflow-y-auto">
+        <div className="px-5 py-6 space-y-6 overflow-y-auto sm:px-8 sm:py-7">
           {/* Goal Name */}
           <div className="space-y-2">
             <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
@@ -375,8 +375,9 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
 
           {/* Target Date */}
           <div className="space-y-2">
-            <label className="block text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-              Target Completion Date
+            <label className="block text-[10px] font-bold uppercase tracking-[0.18em] sm:tracking-widest" style={{ color: "#8a9e97" }}>
+              <span className="sm:hidden">Target Date</span>
+              <span className="hidden sm:inline">Target Completion Date</span>
             </label>
             <div className="relative">
               <span
@@ -389,7 +390,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full rounded-xl pl-10 pr-4 py-3 text-sm outline-none transition-all"
+                className="w-full min-w-0 rounded-xl pl-10 pr-4 py-3 text-[13px] outline-none transition-all sm:text-sm"
                 style={{
                   background: "#f7f9f8",
                   border: "1.5px solid rgba(0,0,0,0.07)",
@@ -404,7 +405,7 @@ export function AddYearlyGoalModal({ open, onClose, initialData, yearOverride }:
 
         {/* Footer */}
         <div
-          className="px-8 py-5 flex items-center justify-between flex-shrink-0"
+          className="px-5 py-5 flex items-center justify-between flex-shrink-0 sm:px-8"
           style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "#fafbfa" }}
         >
           {/* Left: discard only in edit mode */}

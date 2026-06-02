@@ -1,8 +1,8 @@
 /**
  * Auth routing:
  * - NEXT_PUBLIC_AUTH_LOCAL_ONLY=true → browser registry + seeded users only (no Supabase).
- * - Supabase URL + anon key set, local off, OTP flag off → **email + password** (good for testing without SMTP).
- * - NEXT_PUBLIC_SUPABASE_OTP_AUTH=true → **email OTP** (needs SMTP + {{ .Token }} templates).
+ * - Supabase URL + anon key set, local off → **email + password** sign-in/reset.
+ * - Sign-up verification is handled by Supabase email confirmation links routed through /auth/callback.
  */
 export function isAuthLocalOnly(): boolean {
   const v = process.env.NEXT_PUBLIC_AUTH_LOCAL_ONLY;
@@ -18,14 +18,14 @@ export function isCloudSupabaseConfigured(): boolean {
   return typeof url === "string" && url.length > 0 && typeof key === "string" && key.length > 0;
 }
 
-/** Email OTP (requires working outbound mail). Opt-in only. */
+/** Legacy OTP flag. Kept for compatibility while sign-up uses email confirmation links. */
 export function isCloudOtpAuthEnabled(): boolean {
   if (!isCloudSupabaseConfigured()) return false;
   const v = process.env.NEXT_PUBLIC_SUPABASE_OTP_AUTH;
   return v === "1" || v === "true" || v === "yes";
 }
 
-/** Supabase email + password (signInWithPassword / signUp). Default when cloud is on and OTP is not. */
+/** Supabase email + password remains available for sign-in / reset whenever cloud auth is configured. */
 export function isCloudPasswordAuthEnabled(): boolean {
-  return isCloudSupabaseConfigured() && !isCloudOtpAuthEnabled();
+  return isCloudSupabaseConfigured();
 }
