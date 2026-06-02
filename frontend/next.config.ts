@@ -5,6 +5,7 @@ import type { NextConfig } from "next";
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Keep Next/Turbopack anchored to the frontend app so it does not
   // walk up to the repo root and try to resolve frontend-only deps there.
   outputFileTracingRoot: configDir,

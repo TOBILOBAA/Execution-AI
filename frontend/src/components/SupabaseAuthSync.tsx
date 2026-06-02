@@ -15,7 +15,7 @@ export function SupabaseAuthSync() {
   useEffect(() => {
     const sb = getSupabaseBrowser();
     if (!sb) {
-      useAppStore.setState({ authReady: true });
+      useAppStore.setState({ authReady: true, workspaceHydrating: false });
       return;
     }
 

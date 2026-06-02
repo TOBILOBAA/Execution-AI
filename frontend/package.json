@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "clean": "node scripts/reset-next-cache.mjs",
-    "dev": "next dev --turbo",
-    "dev:webpack": "next dev --webpack",
+    "dev": "NEXT_DIST_DIR=.next-dev next dev --turbo",
+    "dev:webpack": "NEXT_DIST_DIR=.next-dev next dev --webpack",
     "build": "node scripts/reset-next-cache.mjs && next build",
     "start": "next start",
     "lint": "eslint",
