@@ -41,15 +41,15 @@ export function AddGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.35)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[calc(100vh-2rem)] sm:max-h-[88vh] overflow-hidden flex flex-col my-auto"
         style={{ border: "1px solid rgba(0,0,0,0.06)" }}
       >
-        <div className="px-7 pt-7 pb-6">
+        <div className="px-7 pt-7 pb-0 overflow-y-auto min-h-0">
           {/* Header */}
           <h2 className="font-headline text-xl font-bold mb-1" style={{ color: "#1a1f1e" }}>
             {isEdit ? "Edit Goal" : "Add New Goal"}
@@ -101,7 +101,7 @@ export function AddGoalModal({
           </div>
 
           {/* Target date */}
-          <div>
+          <div className="pb-6">
             <label
               className="block mb-2"
               style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8a9e97" }}
@@ -112,7 +112,7 @@ export function AddGoalModal({
             <button
               type="button"
               onClick={() => setCalOpen(!calOpen)}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition"
+              className="w-full min-w-0 flex items-center justify-between rounded-xl px-4 py-3 text-[13px] transition sm:text-sm"
               style={{
                 borderColor: calOpen ? "#006c4a" : "#e2e8e4",
                 background: "#f7f9f8",
@@ -138,8 +138,8 @@ export function AddGoalModal({
 
         {/* Footer */}
         <div
-          className="flex items-center gap-3 px-7 py-5"
-          style={{ borderTop: "1px solid #f0f3f1" }}
+          className="flex items-center gap-3 px-7 py-5 flex-shrink-0"
+          style={{ borderTop: "1px solid #f0f3f1", background: "#fafbfa" }}
         >
           <button
             onClick={onClose}
