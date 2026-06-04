@@ -134,12 +134,12 @@ export function AddHabitModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.35)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[88vh] flex flex-col overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
-        <div className="px-7 pt-7 pb-0 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[88vh] flex flex-col overflow-hidden my-auto" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
+        <div className="px-7 pt-7 pb-0 overflow-y-auto min-h-0">
           {/* Header */}
           <div className="flex items-start justify-between mb-1">
             <h2 className="font-headline text-xl font-bold" style={{ color: "#1a1f1e" }}>
