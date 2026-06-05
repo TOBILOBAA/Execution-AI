@@ -394,7 +394,7 @@ export default function DashboardHome() {
                         <span className="material-symbols-outlined text-[22px]">checklist</span>
                       </div>
                       <p className="font-headline font-bold text-lg" style={{ color: "#1a1f1e" }}>
-                        No supporting goals planned for this day
+                        No secondary goals planned for this day
                       </p>
                       <p className="mt-2 text-sm max-w-md mx-auto" style={{ color: "#8a9e97" }}>
                         That is okay. Keep the day lighter, let your main goals lead, and use routines to carry the rest.

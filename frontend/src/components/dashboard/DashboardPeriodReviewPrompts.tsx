@@ -369,7 +369,7 @@ function aiButtonLabel(type: ReviewType) {
 
 function supportCopy(type: ReviewType) {
   if (type === "weekly") {
-    return "Keep only the main weekly goal and the supporting moves that actually deserve space on the board.";
+    return "Keep only the main weekly goal and the secondary goals that actually deserve space on the board.";
   }
   if (type === "monthly") {
     return "Group the month around a few meaningful anchors, then let the board carry the detail.";
@@ -1590,7 +1590,7 @@ export function DashboardPeriodReviewPrompts() {
               {planSectionUnlocked ? (
                 <div className="flex min-w-0 flex-wrap gap-2">
                   <InfoPill>{existingMainGoals.length} main</InfoPill>
-                  <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
+                  <InfoPill>{existingSecondaryGoals.length} secondary</InfoPill>
                   <InfoPill>{activeHabits.length} habit{activeHabits.length === 1 ? "" : "s"}</InfoPill>
                 </div>
               ) : (
@@ -1634,7 +1634,7 @@ export function DashboardPeriodReviewPrompts() {
                   style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add supporting
+                  Add secondary goal
                 </button>
                 <button
                   type="button"
@@ -1688,7 +1688,7 @@ export function DashboardPeriodReviewPrompts() {
               )}
             </Subsection>
 
-            <Subsection label="Supporting goals">
+            <Subsection label="Secondary goals">
               {planDraft.secondary_goals?.length ? (
                 <div className="space-y-3">
                   {planDraft.secondary_goals.map((goal, index) => (
@@ -1701,7 +1701,7 @@ export function DashboardPeriodReviewPrompts() {
                   ))}
                 </div>
               ) : (
-                <EmptyBlock copy="The draft did not return any supporting goals." />
+                <EmptyBlock copy="The draft did not return any secondary goals." />
               )}
             </Subsection>
 
@@ -1730,7 +1730,7 @@ export function DashboardPeriodReviewPrompts() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 <InfoPill>{existingMainGoals.length} main</InfoPill>
-                <InfoPill>{existingSecondaryGoals.length} supporting</InfoPill>
+                <InfoPill>{existingSecondaryGoals.length} secondary</InfoPill>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -1749,7 +1749,7 @@ export function DashboardPeriodReviewPrompts() {
                   style={{ background: "#ffffff", color: "#5d6d67", border: "1px solid rgba(0,0,0,0.08)" }}
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add supporting
+                  Add secondary goal
                 </button>
               </div>
             </div>
@@ -1791,9 +1791,9 @@ export function DashboardPeriodReviewPrompts() {
               )}
             </Subsection>
 
-            <Subsection label="Supporting goals">
+            <Subsection label="Secondary goals">
               {existingSecondaryGoals.length === 0 ? (
-                <EmptyBlock copy="No supporting goals are saved for this period yet." />
+                <EmptyBlock copy="No secondary goals are saved for this period yet." />
               ) : (
                 <div className="space-y-3">
                   {existingSecondaryGoals.map((goal) => (
@@ -1916,7 +1916,7 @@ export function DashboardPeriodReviewPrompts() {
                   {card.mainGoal?.description ?? "This month still needs a clear anchor before the quarter feels intentional."}
                 </p>
                 <p className="mt-2 text-[11px]" style={{ color: "#8a9e97" }}>
-                  {card.supportCount} supporting goal{card.supportCount === 1 ? "" : "s"}
+                  {card.supportCount} secondary goal{card.supportCount === 1 ? "" : "s"}
                 </p>
               </div>
             ))}
