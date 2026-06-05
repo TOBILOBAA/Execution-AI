@@ -43,8 +43,9 @@ import { ensureBackendSession, clearSessionId } from "./session";
 import { formatApiError } from "./apiErrors";
 import { getSupabaseBrowser } from "./supabaseClient";
 import type { User } from "@supabase/supabase-js";
-import { isAuthLocalOnly, isCloudOtpAuthEnabled, isCloudSupabaseConfigured } from "./authMode";
+import { isAuthLocalOnly, isCloudSupabaseConfigured } from "./authMode";
 import { getWeekNumber, listWeeksForYearThroughWeek } from "./goalsView";
+import { buildPublicUrl, describeSupabaseAuthError } from "./authRedirects";
 
 // ── Auth types ─────────────────────────────────────────────────────────────────
 export interface AuthUser { id: string; name: string; email: string; plan: string }
@@ -77,7 +78,7 @@ interface AppState {
   registeredUsers: StoredUser[];
   signIn: (email: string, password: string) => Promise<AuthActionResult>;
   signUp: (name: string, email: string, password: string) => Promise<AuthActionResult>;
-  /** Supabase: send a 6-digit code (Magic Link email template must include `{{ .Token }}`). */
+  /** Supabase: send an email verification code during sign-up. */
   sendEmailOtp: (
     email: string,
     opts: { intent: "signin" | "signup"; fullName?: string },
@@ -973,12 +974,6 @@ export const useAppStore = create<AppState>()(
               : "Invalid email or password, or configure Supabase (NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY) for cloud accounts.",
           };
         }
-        if (isCloudOtpAuthEnabled()) {
-          return {
-            success: false,
-            error: "Cloud accounts use an email code. Enter your email and tap “Send code”.",
-          };
-        }
         const { data, error } = await sb.auth.signInWithPassword({ email: em, password });
         if (error || !data.user) {
           return { success: false, error: error?.message ?? "Sign in failed." };
@@ -1035,20 +1030,12 @@ export const useAppStore = create<AppState>()(
           return { success: true };
         }
 
-        if (isCloudOtpAuthEnabled()) {
-          return {
-            success: false,
-            error: "Cloud sign-up uses a 6-digit email code. Use “Send code” on the sign-up tab.",
-          };
-        }
-
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
         const { data, error } = await sb.auth.signUp({
           email: em,
           password,
           options: {
             data: { full_name: name.trim() },
-            emailRedirectTo: origin ? `${origin}/auth/callback` : undefined,
+            emailRedirectTo: buildPublicUrl("/auth/callback"),
           },
         });
         if (error) {
@@ -1115,10 +1102,11 @@ export const useAppStore = create<AppState>()(
           email: em,
           options: {
             shouldCreateUser: opts.intent === "signup",
+            emailRedirectTo: buildPublicUrl("/auth/callback"),
           },
         });
         if (error) {
-          const msg = error.message;
+          const msg = describeSupabaseAuthError(error.message);
           const mailDown =
             /confirmation email|error sending|smtp|mailer|email.*fail/i.test(msg) ||
             error.status === 500;
@@ -1139,7 +1127,7 @@ export const useAppStore = create<AppState>()(
         const em = email.toLowerCase().trim();
         const clean = token.replace(/\D/g, "");
         if (clean.length !== 6) {
-          return { success: false, error: "Enter the 6-digit code from your email." };
+          return { success: false, error: "Enter the 8-digit code from your email." };
         }
 
         const tryTypes =
@@ -1159,7 +1147,7 @@ export const useAppStore = create<AppState>()(
             data = res.data;
             break;
           }
-          if (res.error?.message) lastMessage = res.error.message;
+          if (res.error?.message) lastMessage = describeSupabaseAuthError(res.error.message);
         }
         if (!data?.user) {
           return { success: false, error: lastMessage };
@@ -1284,11 +1272,10 @@ export const useAppStore = create<AppState>()(
         if (!sb) {
           return { success: false, error: "Configure Supabase environment variables to reset passwords." };
         }
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
         const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-          redirectTo: origin ? `${origin}/auth/update-password` : undefined,
+          redirectTo: buildPublicUrl("/auth/update-password"),
         });
-        if (error) return { success: false, error: error.message };
+        if (error) return { success: false, error: describeSupabaseAuthError(error.message) };
         return { success: true };
       },
 

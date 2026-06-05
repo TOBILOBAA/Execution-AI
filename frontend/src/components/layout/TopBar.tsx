@@ -6,6 +6,7 @@ import { formatWeekPreference, getTodayLabel, getGreeting } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { SyncStatusPill } from "@/components/layout/SyncStatusPill";
+import { BetaBadge } from "@/components/ui/BetaBadge";
 
 const PAGE_TITLES: Record<string, { title: string; label: string }> = {
   "/dashboard": { title: "", label: "Today" },
@@ -61,18 +62,24 @@ export function TopBar() {
       <div className="flex flex-col">
         {isHome ? (
           <>
-            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>
-              {getTodayLabel()}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>
+                {getTodayLabel()}
+              </span>
+              <BetaBadge compact className="md:hidden" />
+            </div>
             <h2 className="font-headline font-bold text-[22px] leading-tight tracking-tight" style={{ color: "#1a1f1e" }}>
               {getGreeting()}, {firstName}
             </h2>
           </>
         ) : (
           <>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[--color-on-surface-variant]/70">
-              {page.label}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[--color-on-surface-variant]/70">
+                {page.label}
+              </span>
+              <BetaBadge compact className="md:hidden" />
+            </div>
             <h2 className="font-headline font-bold text-lg text-[--color-on-surface] tracking-tight">{page.title}</h2>
           </>
         )}

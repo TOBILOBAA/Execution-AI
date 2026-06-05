@@ -479,6 +479,26 @@ def get_next_day_review(db: Client, session_id: UUID, plan_date: date | None = N
         len(habits),
     )
 
+    recovery_eligible = target_date == ctx.today
+    recoverable_main = [
+        {"id": item["id"], "title": item["title"]}
+        for item in incomplete_main
+        if item.get("id") and item.get("title")
+    ]
+    recoverable_tasks = [
+        {"id": item["id"], "title": item["title"]}
+        for item in incomplete_tasks
+        if item.get("id") and item.get("title")
+    ]
+    recoverable_habits = [
+        {"id": habit["id"], "name": habit["name"]}
+        for habit in missed_habits
+        if habit.get("id") and habit.get("name")
+    ]
+    should_prompt_recovery = recovery_eligible and bool(
+        recoverable_main or recoverable_tasks or recoverable_habits
+    )
+
     should_open = len(target_items) == 0 and (
         bool(source_items) or bool(weekly_goals) or bool(habits)
     )
@@ -486,8 +506,15 @@ def get_next_day_review(db: Client, session_id: UUID, plan_date: date | None = N
     return {
         "today": target_date.isoformat(),
         "source_date": source_date.isoformat(),
-        "should_open": should_open,
+        "should_open": should_open or should_prompt_recovery,
         "already_planned_today": bool(target_plan and target_items),
+        "recovery": {
+            "eligible": recovery_eligible,
+            "should_prompt": should_prompt_recovery,
+            "main_items": recoverable_main,
+            "task_items": recoverable_tasks,
+            "habit_items": recoverable_habits,
+        },
         "yesterday_summary": {
             "completion_rate": source_completion,
             "completed_main_count": len(completed_main),

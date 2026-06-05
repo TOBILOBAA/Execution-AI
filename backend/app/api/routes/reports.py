@@ -2,7 +2,7 @@
 Report generation and retrieval routes.
 """
 from uuid import UUID
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from supabase import Client
 
 from app.api.deps import get_db
@@ -14,14 +14,15 @@ from app.schemas.reports import (
     QuarterlyReportRequest,
     YearlyReportRequest,
 )
-from app.services import report_service
+from app.services import activity_service, report_service
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
 @router.get("/{session_id}")
-def list_reports(session_id: UUID, db: Client = Depends(get_db)):
+def list_reports(session_id: UUID, request: Request, db: Client = Depends(get_db)):
     """List all generated reports for a session."""
+    activity_service.track_opened_reports(db, session_id, user_agent=request.headers.get("user-agent"))
     return report_service.list_reports(db, session_id)
 
 

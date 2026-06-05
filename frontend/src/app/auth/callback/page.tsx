@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabaseClient";
 import { useAppStore } from "@/lib/store";
+import { describeSupabaseAuthError, readSupabaseAuthErrorFromUrl } from "@/lib/authRedirects";
 
 /**
  * Handles Supabase email confirmation / magic-link redirects.
@@ -13,6 +15,7 @@ export default function AuthCallbackPage() {
   const router = useRouter();
   const [message, setMessage] = useState("Verifying your sign-in link…");
   const [step, setStep] = useState("Checking the link");
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -25,16 +28,26 @@ export default function AuthCallbackPage() {
     const run = async () => {
       const sb = getSupabaseBrowser();
       if (!sb) {
+        setFailed(true);
         setMessage("Could not sign you in. Head back to sign in and try again.");
         return;
       }
       const url = new URL(window.location.href);
+      const urlError = readSupabaseAuthErrorFromUrl(url);
+      if (urlError) {
+        setFailed(true);
+        setStep("Link issue");
+        setMessage(urlError);
+        return;
+      }
       const code = url.searchParams.get("code");
       if (code) {
         setStep("Exchanging the secure code");
         const { error } = await sb.auth.exchangeCodeForSession(code);
         if (error) {
-          setMessage(error.message);
+          setFailed(true);
+          setStep("Link issue");
+          setMessage(describeSupabaseAuthError(error.message));
           return;
         }
         setStep("Restoring your workspace");
@@ -55,7 +68,9 @@ export default function AuthCallbackPage() {
           setMessage("Signing you in…");
           const { error } = await sb.auth.setSession({ access_token, refresh_token });
           if (error) {
-            setMessage(error.message);
+            setFailed(true);
+            setStep("Link issue");
+            setMessage(describeSupabaseAuthError(error.message));
             return;
           }
           await useAppStore.getState().hydrateAuthFromSupabase();
@@ -65,6 +80,8 @@ export default function AuthCallbackPage() {
           return;
         }
       }
+      setFailed(true);
+      setStep("Link issue");
       setMessage("Could not sign you in. Head back to sign in and try again.");
     };
     void run();
@@ -85,15 +102,25 @@ export default function AuthCallbackPage() {
         <p className="mt-3 text-sm font-medium text-center max-w-md mx-auto" style={{ color: "#6b7c75" }}>
           {message}
         </p>
-        <div className="mt-5 flex justify-center gap-2">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <span
-              key={index}
-              className="h-2.5 w-2.5 rounded-full animate-pulse"
-              style={{ background: index === 1 ? "#006c4a" : "rgba(0,108,74,0.22)", animationDelay: `${index * 140}ms` }}
-            />
-          ))}
-        </div>
+        {failed ? (
+          <Link
+            href="/auth"
+            className="mt-6 inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold text-white"
+            style={{ background: "#006c4a" }}
+          >
+            Back to sign in
+          </Link>
+        ) : (
+          <div className="mt-5 flex justify-center gap-2">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <span
+                key={index}
+                className="h-2.5 w-2.5 rounded-full animate-pulse"
+                style={{ background: index === 1 ? "#006c4a" : "rgba(0,108,74,0.22)", animationDelay: `${index * 140}ms` }}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

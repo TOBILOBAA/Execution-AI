@@ -1591,7 +1591,7 @@ export function DashboardPeriodReviewPrompts() {
                 <div className="flex min-w-0 flex-wrap gap-2">
                   <InfoPill>{existingMainGoals.length} main</InfoPill>
                   <InfoPill>{existingSecondaryGoals.length} secondary</InfoPill>
-                  <InfoPill>{activeHabits.length} habit{activeHabits.length === 1 ? "" : "s"}</InfoPill>
+                  <InfoPill>{activeHabits.length} routine{activeHabits.length === 1 ? "" : "s"}</InfoPill>
                 </div>
               ) : (
                 <p className="min-w-0 flex-1 text-xs leading-relaxed" style={{ color: "#6f817a" }}>
@@ -1855,7 +1855,7 @@ export function DashboardPeriodReviewPrompts() {
             </div>
 
             {activeHabits.length === 0 ? (
-              <EmptyBlock copy="No active foundational habits yet. Add only the ones that should still carry this period." />
+              <EmptyBlock copy="No active routines yet. Add only the ones that should still carry this period." />
             ) : (
               <div className="grid gap-3 md:grid-cols-2">
                 {activeHabits.map((habit) => (

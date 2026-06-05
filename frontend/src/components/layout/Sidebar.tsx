@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
+import { BetaBadge } from "@/components/ui/BetaBadge";
 
 const NAV_ITEMS = [
   { href: "/dashboard",         label: "Home",    icon: "home",          activeIcon: "home" },
@@ -37,9 +38,12 @@ export function Sidebar() {
     <aside className="hidden md:flex flex-col h-screen w-64 bg-white sticky top-0 flex-shrink-0 z-30">
       {/* Brand */}
       <div className="px-8 pt-8 pb-6">
-        <h1 className="font-headline text-xl font-extrabold tracking-tighter" style={{ color: "#006c4a" }}>
-          Execution AI
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-headline text-xl font-extrabold tracking-tighter" style={{ color: "#006c4a" }}>
+            Execution AI
+          </h1>
+          <BetaBadge compact />
+        </div>
         <p className="text-[10px] uppercase tracking-widest font-bold mt-0.5" style={{ color: "rgba(107,124,117,0.6)" }}>
           Your Execution Engine
         </p>

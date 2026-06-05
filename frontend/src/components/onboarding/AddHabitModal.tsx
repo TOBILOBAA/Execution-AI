@@ -134,23 +134,23 @@ export function AddHabitModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.35)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[88vh] flex flex-col overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
-        <div className="px-7 pt-7 pb-0 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[88vh] flex flex-col overflow-hidden my-auto" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
+        <div className="px-7 pt-7 pb-0 overflow-y-auto min-h-0">
           {/* Header */}
           <div className="flex items-start justify-between mb-1">
             <h2 className="font-headline text-xl font-bold" style={{ color: "#1a1f1e" }}>
-              {isEdit ? "Edit Habit" : "Define Foundational Habit"}
+              {isEdit ? "Edit Routine" : "Define Routine"}
             </h2>
             <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition" style={{ color: "#5a6b65" }}>
               <span className="material-symbols-outlined text-[18px]">close</span>
             </button>
           </div>
           <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
-            {isEdit ? "Update the habit name, icon, category, or frequency." : "Link this to your yearly vision and define your focus for the month."}
+            {isEdit ? "Update the routine name, icon, category, or frequency." : "Define a routine that can stay visible and support your goals over time."}
           </p>
 
           {/* Icon picker */}
@@ -187,7 +187,7 @@ export function AddHabitModal({
           {/* Habit name */}
           <div className="mb-5">
             <label className="block mb-2" style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8a9e97" }}>
-              Habit Name
+              Routine Name
             </label>
             <input
               autoFocus

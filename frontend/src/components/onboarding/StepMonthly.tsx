@@ -592,15 +592,15 @@ export function StepMonthly({ onNext, onBack }: Props) {
             ))}
             {secondaryGoals.length === 0 && (
               <div className="col-span-2">
-                <EmptySlot label="Add supporting goals" onAdd={() => setGoalModal("secondary")} />
+                <EmptySlot label="Add secondary goals" onAdd={() => setGoalModal("secondary")} />
               </div>
             )}
           </div>
         </section>
 
-        {/* ── Foundational Habits ── */}
+        {/* ── Routines ── */}
         <section>
-          <SectionHeader label="Foundational Habits" action="Define Routine" onAction={() => setHabitModal(true)} />
+          <SectionHeader label="Routines" action="Define Routine" onAction={() => setHabitModal(true)} />
           <div className="space-y-2">
             {activeHabits.map((habit) => (
               <HabitRow
@@ -613,7 +613,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
               />
             ))}
             {activeHabits.length === 0 && (
-              <EmptySlot label="Define your foundational habits" onAdd={() => setHabitModal(true)} />
+              <EmptySlot label="Define your routines" onAdd={() => setHabitModal(true)} />
             )}
           </div>
         </section>
