@@ -259,7 +259,7 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
 
       <div className="mt-6 space-y-4">
         <p className="text-[14px] leading-7" style={{ color: "rgba(255,255,255,0.58)" }}>
-          Stay consistent. Small daily actions = big yearly results.
+          Yearly progress moves when your monthly and weekly goals stay connected to what you actually complete.
         </p>
         <div className="inline-flex items-center gap-2 text-[15px] font-semibold" style={{ color: "#85f8c4" }}>
           <span className="material-symbols-outlined text-[18px]">north_east</span>
