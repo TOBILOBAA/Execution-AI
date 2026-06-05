@@ -268,6 +268,10 @@ export interface ApiDashboard {
     habits_total_today: number;
     weekly_completion_rate: number;
     monthly_completion_rate: number;
+    yearly_progress?: number;
+    weekly_goal_progress_by_id?: Record<string, number>;
+    monthly_goal_progress_by_id?: Record<string, number>;
+    yearly_goal_progress_by_id?: Record<string, number>;
   };
   weekly_objective?: string;
   monthly_context_text?: string;

@@ -156,7 +156,7 @@ export default function DashboardHome() {
                         </div>
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                            Daily Streak
+                            Main Goal Streak
                           </p>
                           <div className="mt-1 flex items-end gap-2">
                             <span className="font-headline text-[34px] font-extrabold leading-none tracking-tight" style={{ color: "#1a1f1e" }}>
@@ -166,6 +166,9 @@ export default function DashboardHome() {
                               days
                             </span>
                           </div>
+                          <p className="mt-2 max-w-[190px] text-[11px] leading-5" style={{ color: "#8a9e97" }}>
+                            Counts only when your main goal for the day is completed.
+                          </p>
                         </div>
                       </div>
                     </div>
