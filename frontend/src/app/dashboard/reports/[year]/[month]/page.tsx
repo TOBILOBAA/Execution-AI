@@ -4,6 +4,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { reportsApi, type ApiReport } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
+import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 import {
   getMonthlyReport,
   getWeeklyReportsForMonth,
@@ -128,11 +129,6 @@ export default function MonthlyReportPage({
             {label}
           </h1>
         </div>
-        {reports === null && (
-          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c4d0cb" }}>
-            Loading
-          </span>
-        )}
       </div>
 
       {error && (
@@ -149,7 +145,9 @@ export default function MonthlyReportPage({
             Sign in and create a backend session to view your report history.
           </p>
         </div>
-      ) : !report && reports !== null ? (
+      ) : reports === null ? (
+        <AppLoadingScreen fullscreen={false} title="Loading report" />
+      ) : !report ? (
         <div className="rounded-2xl p-6 bg-white" style={{ border: "1.5px dashed rgba(0,108,74,0.25)" }}>
           <p className="text-sm" style={{ color: "#8a9e97" }}>
             {periodState === "future"

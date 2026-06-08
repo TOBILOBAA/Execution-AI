@@ -103,13 +103,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
   }
 
   if (!ready && !hasCachedData) {
-    return (
-      <GoalsLoadingShell
-        eyebrow={`${year} monthly goals`}
-        title="Loading the monthly goals layer"
-        detail="We are pulling every month across the year so the system can show where the yearly strategy actually becomes a monthly plan."
-      />
-    );
+    return <GoalsLoadingShell title="Loading monthly goals" />;
   }
 
   const filteredRows = selectedMonth === "all" ? rows : rows.filter((row) => row.month === selectedMonth);

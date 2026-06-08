@@ -207,6 +207,9 @@ h6,
 .animate-slide-in-bottom { animation: slide-in-bottom 0.3s ease-out; }
 
 .loading-orbit { animation: orbit 1.8s ease-in-out infinite; }
+.loading-iteration { animation: orbit 2.2s cubic-bezier(0.33, 1, 0.68, 1) infinite; }
+.loading-iteration-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+.loading-iteration-dot-delayed { animation: pulse-dot 1.2s ease-in-out infinite 0.6s; }
 
 .loading-sheen,
 .skeleton-wave {
