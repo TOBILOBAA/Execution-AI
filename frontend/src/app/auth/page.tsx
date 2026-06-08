@@ -123,17 +123,7 @@ export default function AuthPage() {
   }
 
   if (!authReady || workspaceHydrating || handingOffToWorkspace) {
-    return (
-      <AppLoadingScreen
-        eyebrow={handingOffToWorkspace ? "Preparing your execution engine" : "Loading authentication"}
-        title={handingOffToWorkspace ? "Opening your next step" : "Checking your sign-in state"}
-        detail={
-          handingOffToWorkspace
-            ? "We are restoring your session, syncing your latest planning data, and routing you to the right workspace."
-            : "We are checking your local or cloud session before showing the right auth state."
-        }
-      />
-    );
+    return <AppLoadingScreen title={handingOffToWorkspace ? "Loading workspace" : "Loading auth"} />;
   }
 
   const switchMode = (m: Mode) => {
