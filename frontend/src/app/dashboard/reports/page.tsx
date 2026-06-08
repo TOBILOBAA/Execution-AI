@@ -6,7 +6,6 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { getCurrentYear } from "@/lib/mockData";
 import { ReportMetricCard } from "@/components/reports/ReportMetricCard";
-import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 import {
   listYearSnapshots,
   monthlyCompletionRate,
@@ -204,6 +203,11 @@ export default function ReportsPage() {
               Historical report archive
             </h2>
           </div>
+          {showInitialLoading && (
+            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c4d0cb" }}>
+              Loading
+            </span>
+          )}
         </div>
 
         {!sessionId ? (
@@ -213,7 +217,20 @@ export default function ReportsPage() {
             </p>
           </div>
         ) : showInitialLoading ? (
-          <AppLoadingScreen fullscreen={false} title="Loading reports" />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={index}
+                className="rounded-2xl p-5 animate-pulse"
+                style={{ background: "#fff", border: "1.5px solid rgba(0,0,0,0.07)" }}
+              >
+                <div className="h-8 w-20 rounded-full" style={{ background: "#ecf1ee" }} />
+                <div className="mt-3 h-3 w-28 rounded-full" style={{ background: "#f0f4f2" }} />
+                <div className="mt-6 h-3 w-full rounded-full" style={{ background: "#f3f6f4" }} />
+                <div className="mt-2 h-3 w-4/5 rounded-full" style={{ background: "#f3f6f4" }} />
+              </div>
+            ))}
+          </div>
         ) : pastYears.length === 0 ? (
           <div className="rounded-2xl p-6 bg-white" style={{ border: "1.5px dashed rgba(0,108,74,0.25)" }}>
             <p className="text-sm" style={{ color: "#8a9e97" }}>

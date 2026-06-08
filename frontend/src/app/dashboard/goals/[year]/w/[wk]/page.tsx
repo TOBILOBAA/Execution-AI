@@ -63,7 +63,13 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
   }
 
   if (!ready && !hasCachedData) {
-    return <GoalsLoadingShell title="Loading this week" />;
+    return (
+      <GoalsLoadingShell
+        eyebrow={`Week ${focusWeek}`}
+        title="Loading this week's execution picture"
+        detail="We are pulling the sprint, its monthly parent, and the saved daily goals for this ISO week before rendering the page."
+      />
+    );
   }
 
   const weekGoals = weeklyGoals.filter((goal) => goal.weekNumber === focusWeek);

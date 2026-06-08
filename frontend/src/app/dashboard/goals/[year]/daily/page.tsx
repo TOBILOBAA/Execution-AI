@@ -325,7 +325,13 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
   }
 
   if (!ready && !hasCachedData) {
-    return <GoalsLoadingShell title="Loading daily goals" />;
+    return (
+      <GoalsLoadingShell
+        eyebrow={`${year} daily goals`}
+        title="Loading the daily execution layer"
+        detail="We are pulling daily goals across the year so the table reflects the real day-by-day progression of execution."
+      />
+    );
   }
 
   const prioritiesForRows = (year === liveYear ? activeYearDailyPriorities : yearDailyPriorities).filter(

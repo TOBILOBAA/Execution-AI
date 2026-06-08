@@ -52,7 +52,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!canRenderShell) {
     return (
-      <AppLoadingScreen title="Loading dashboard" />
+      <AppLoadingScreen
+        eyebrow="Loading the dashboard"
+        title="Bringing today&apos;s workspace online"
+        detail="We are reconnecting your session, syncing the latest execution data, and restoring your dashboard shell."
+      />
     );
   }
 

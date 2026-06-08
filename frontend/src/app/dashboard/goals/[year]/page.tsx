@@ -96,7 +96,13 @@ export default function YearlyGoalsPage({ params }: { params: Promise<{ year: st
   }
 
   if (!ready && !hasCachedData) {
-    return <GoalsLoadingShell title="Loading yearly goals" />;
+    return (
+      <GoalsLoadingShell
+        eyebrow={`${year} yearly goals`}
+        title="Loading your yearly goals list"
+        detail="We are checking every yearly outcome, its monthly children, and the weekly support underneath it before showing the list."
+      />
+    );
   }
 
   const rows = yearlyGoals.map((goal) => {

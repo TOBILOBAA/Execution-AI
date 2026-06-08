@@ -9,7 +9,6 @@ import { describeSyncError } from "@/lib/apiErrors";
 import { isAuthLocalOnly, isCloudPasswordAuthEnabled, isCloudSupabaseConfigured } from "@/lib/authMode";
 import { PASSWORD_REQUIREMENTS_COPY, validateStrongPassword } from "@/lib/passwordRules";
 import { BetaBadge } from "@/components/ui/BetaBadge";
-import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 
 type Mode = "signin" | "signup" | "forgot" | "verify-email";
 
@@ -123,7 +122,13 @@ export default function AuthPage() {
   }
 
   if (!authReady || workspaceHydrating || handingOffToWorkspace) {
-    return <AppLoadingScreen title={handingOffToWorkspace ? "Loading workspace" : "Loading auth"} />;
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f4f6f4" }}>
+        <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#a8b5af" }}>
+          {handingOffToWorkspace ? "Preparing your execution engine…" : "Loading…"}
+        </p>
+      </div>
+    );
   }
 
   const switchMode = (m: Mode) => {
