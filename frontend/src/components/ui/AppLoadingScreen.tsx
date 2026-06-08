@@ -25,18 +25,18 @@ export function AppLoadingScreen({
       aria-live="polite"
       aria-busy="true"
     >
-      <div className="relative w-full max-w-sm rounded-[32px] border border-white/70 bg-white/78 px-8 py-10 text-center shadow-[0_24px_80px_rgba(0,108,74,0.08)] backdrop-blur-xl sm:px-10 sm:py-12">
-        <div className="mx-auto flex w-full justify-center">
-          <div className="loading-iteration relative h-20 w-20" aria-hidden="true">
-            <span className="absolute inset-0 rounded-full border border-[rgba(0,108,74,0.10)]" />
-            <span className="absolute inset-[8px] rounded-full border border-[rgba(0,108,74,0.18)]" />
-            <span className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[--color-primary]" />
-            <span className="loading-iteration-dot absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 rounded-full bg-[--color-primary]" />
-            <span className="loading-iteration-dot-delayed absolute bottom-0 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-[rgba(0,108,74,0.48)]" />
-          </div>
+      <div className="flex flex-col items-center justify-center gap-4 text-center">
+        <div
+          className="loading-spinner relative h-12 w-12 rounded-full"
+          style={{
+            background:
+              "conic-gradient(from 180deg, rgba(0,108,74,0.08) 0deg, rgba(0,108,74,0.22) 110deg, #006c4a 260deg, rgba(0,108,74,0.08) 360deg)",
+          }}
+          aria-hidden="true"
+        >
+          <span className="absolute inset-[5px] rounded-full bg-[#f4f8f5]" />
         </div>
-
-        <p className="mt-6 text-sm font-semibold tracking-[0.02em] text-[--color-on-surface-variant]">
+        <p className="text-xs font-semibold tracking-[0.03em] text-[--color-on-surface-variant]">
           {title}
         </p>
       </div>

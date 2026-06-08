@@ -505,7 +505,7 @@ def get_next_day_review(db: Client, session_id: UUID, plan_date: date | None = N
         for habit in missed_habits
         if habit.get("id") and habit.get("name")
     ]
-    should_prompt_recovery = recovery_eligible and bool(
+    should_prompt_recovery = recovery_eligible and not bool(target_plan and target_items) and bool(
         recoverable_main or recoverable_tasks or recoverable_habits
     )
 
