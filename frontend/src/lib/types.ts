@@ -127,6 +127,10 @@ export interface DashboardMetrics {
   monthlyContext: string;
   weeklyCompletionRate?: number;
   monthlyCompletionRate?: number;
+  yearlyProgress?: number;
+  weeklyGoalProgressById?: Record<string, number>;
+  monthlyGoalProgressById?: Record<string, number>;
+  yearlyGoalProgressById?: Record<string, number>;
   /** From dashboard API (optional for older persisted state). */
   tasksCompletedToday?: number;
   tasksTotalToday?: number;

@@ -268,6 +268,10 @@ export interface ApiDashboard {
     habits_total_today: number;
     weekly_completion_rate: number;
     monthly_completion_rate: number;
+    yearly_progress?: number;
+    weekly_goal_progress_by_id?: Record<string, number>;
+    monthly_goal_progress_by_id?: Record<string, number>;
+    yearly_goal_progress_by_id?: Record<string, number>;
   };
   weekly_objective?: string;
   monthly_context_text?: string;
@@ -318,6 +322,13 @@ export interface ApiNextDayReview {
     weekly_objective?: string | null;
     monthly_context?: string | null;
   };
+}
+
+export interface ApiNextDayRecoveryResult {
+  kind: string;
+  id: string;
+  date: string;
+  completed: boolean;
 }
 
 export interface ApiGoalsHierarchy {
@@ -618,6 +629,11 @@ export const dashboardApi = {
       { priorities: data.priorities, tasks: data.tasks },
     );
   },
+
+  approveNextDayRecovery: (
+    sessionId: string,
+    data: { source_date: string; item_id: string; item_kind: "main" | "task" | "habit" },
+  ) => post<ApiNextDayRecoveryResult>(`/dashboard/${sessionId}/next-day-review/recovery`, data),
 };
 
 // ─── Goals Hierarchy ──────────────────────────────────────────────────────────

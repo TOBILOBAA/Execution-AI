@@ -2,7 +2,7 @@
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { dashboardApi, habitsApi, tasksApi, type ApiNextDayReview, type ApiNextDayReviewItem } from "@/lib/api";
+import { dashboardApi, type ApiNextDayReview, type ApiNextDayReviewItem } from "@/lib/api";
 import { AddDailyPriorityModal } from "@/components/onboarding/AddDailyPriorityModal";
 import { AddSecondaryTaskModal } from "@/components/onboarding/AddSecondaryTaskModal";
 import { AddHabitModal } from "@/components/onboarding/AddHabitModal";
@@ -27,6 +27,11 @@ type PlannerModalState =
   | { type: "habit"; habit?: FoundationalHabit };
 
 const MAX_MAIN_PRIORITIES = 3;
+const REVIEW_DISMISS_KEY_PREFIX = "execution-ai:next-day-review:dismissed";
+
+function makeReviewDismissKey(sessionId: string, today: string, sourceDate: string) {
+  return `${REVIEW_DISMISS_KEY_PREFIX}:${sessionId}:${today}:${sourceDate}`;
+}
 
 function makeLocalId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
@@ -685,7 +690,10 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
         setMobilePlanView("priorities");
         setAiNote(null);
         setError(null);
-        setOpen(startOpen || data.should_open);
+        const dismissed =
+          typeof window !== "undefined" &&
+          window.localStorage.getItem(makeReviewDismissKey(sessionId, data.today, data.source_date)) === "1";
+        setOpen(startOpen || (data.should_open && !dismissed));
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Could not load next-day review");
@@ -751,6 +759,14 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     ? `Build ${formatReviewDateLabel(review.today)} yourself. AI can help only when you ask it to.`
     : `Set up ${formatReviewDateLabel(review.today)} clearly before execution begins.`;
 
+  function dismissCurrentReview() {
+    if (sessionId && review && typeof window !== "undefined") {
+      window.localStorage.setItem(makeReviewDismissKey(sessionId, review.today, review.source_date), "1");
+    }
+    setOpen(false);
+    onClose?.();
+  }
+
   async function handleRecoverItem(item: RecoverableEntry) {
     const currentReview = review;
     if (!sessionId || !currentReview) return;
@@ -758,11 +774,11 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     setRecoveringKey(key);
     setError(null);
     try {
-      if (item.kind === "habit") {
-        await habitsApi.toggle(sessionId, item.id, true, currentReview.source_date);
-      } else {
-        await tasksApi.toggleStatus(sessionId, item.id, true);
-      }
+      await dashboardApi.approveNextDayRecovery(sessionId, {
+        source_date: currentReview.source_date,
+        item_id: item.id,
+        item_kind: item.kind,
+      });
       await refreshReviewState(currentReview.today);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update yesterday's record");
@@ -788,8 +804,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
       });
       await loadDashboard(currentReview.today);
       startTransition(() => {
-        setOpen(false);
-        onClose?.();
+        dismissCurrentReview();
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the plan");
@@ -1343,12 +1358,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       Back to review
                     </button>
                   )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOpen(false);
-                        onClose?.();
-                      }}
+                  <button
+                    type="button"
+                    onClick={dismissCurrentReview}
                     className="w-full rounded-xl px-5 py-3 text-sm font-semibold sm:w-auto"
                     style={{ border: "1.5px solid #e2e8e4", color: "#5a6b65", background: "white" }}
                   >
