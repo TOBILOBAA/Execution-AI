@@ -18,6 +18,7 @@ from uuid import UUID
 
 from supabase import Client
 
+from app.core.exceptions import ConflictError, NotFoundError
 import app.db.sessions as sessions_db
 from app.utils.date_utils import get_temporal_context, get_week_boundaries, week_number_for
 from app.utils.metrics import (
@@ -26,6 +27,7 @@ from app.utils.metrics import (
 )
 import app.db.plans as plans_db
 import app.db.habits as habits_db
+import app.db.reports as reports_db
 import app.db.yearly_goals as yg_db
 from app.utils.period_guards import (
     get_session_now,
@@ -562,6 +564,45 @@ def get_next_day_review(db: Client, session_id: UUID, plan_date: date | None = N
             ),
         },
     }
+
+
+def approve_next_day_recovery(
+    db: Client,
+    session_id: UUID,
+    source_date: date,
+    item_id: str,
+    item_kind: str,
+) -> dict:
+    today = get_session_today(db, session_id)
+    if source_date != today - timedelta(days=1):
+        raise ConflictError("Yesterday recovery is only available for the previous day.")
+
+    if item_kind == "habit":
+        habit = habits_db.get_habit(db, UUID(item_id), session_id)
+        if not habit:
+            raise NotFoundError("Habit", item_id)
+        result = habits_db.upsert_habit_log(db, UUID(item_id), session_id, source_date, True)
+        reports_db.mark_daily_report_stale(db, session_id, source_date)
+        return {"kind": item_kind, "id": item_id, "date": source_date.isoformat(), "completed": True, "result": result}
+
+    item = plans_db.get_daily_priority(db, UUID(item_id), session_id)
+    if not item:
+        raise NotFoundError("Daily priority", item_id)
+    if date.fromisoformat(item["date"]) != source_date:
+        raise ConflictError("That item does not belong to the review day you are recovering.")
+
+    updated = plans_db.update_daily_priority(
+        db,
+        UUID(item_id),
+        session_id,
+        {
+            "completed": True,
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    reports_db.mark_daily_report_stale(db, session_id, source_date)
+    return {"kind": item_kind, "id": item_id, "date": source_date.isoformat(), "completed": True, "result": updated}
 
 
 def approve_next_day_review(

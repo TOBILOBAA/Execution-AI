@@ -324,6 +324,13 @@ export interface ApiNextDayReview {
   };
 }
 
+export interface ApiNextDayRecoveryResult {
+  kind: string;
+  id: string;
+  date: string;
+  completed: boolean;
+}
+
 export interface ApiGoalsHierarchy {
   year: number;
   last_synced_at: string;
@@ -622,6 +629,11 @@ export const dashboardApi = {
       { priorities: data.priorities, tasks: data.tasks },
     );
   },
+
+  approveNextDayRecovery: (
+    sessionId: string,
+    data: { source_date: string; item_id: string; item_kind: "main" | "task" | "habit" },
+  ) => post<ApiNextDayRecoveryResult>(`/dashboard/${sessionId}/next-day-review/recovery`, data),
 };
 
 // ─── Goals Hierarchy ──────────────────────────────────────────────────────────

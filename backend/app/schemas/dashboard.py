@@ -58,3 +58,9 @@ class NextDayReviewItem(BaseModel):
 class NextDayReviewApproveRequest(BaseModel):
     priorities: list[NextDayReviewItem] = []
     tasks: list[NextDayReviewItem] = []
+
+
+class NextDayRecoveryApproveRequest(BaseModel):
+    source_date: str
+    item_id: str
+    item_kind: str
