@@ -2449,6 +2449,7 @@ export const useAppStore = create<AppState>()(
         const priority = get().dailyPriorities.find((p) => p.id === id);
         if (!priority) return;
         const newCompleted = !priority?.completed;
+        const { activeDashboardDate } = get();
         set((s) => ({
           dailyPriorities: s.dailyPriorities.map((p) =>
             p.id === id
@@ -2461,7 +2462,10 @@ export const useAppStore = create<AppState>()(
         if (sessionId && isUuid(id)) {
           tasksApi
             .toggleStatus(sessionId, id, newCompleted!)
-            .then(() => set({ syncError: null }))
+            .then(async () => {
+              set({ syncError: null });
+              await get().loadDashboard(activeDashboardDate);
+            })
             .catch((e) =>
               set((s) => ({
                 dailyPriorities: s.dailyPriorities.map((p) =>
@@ -2643,6 +2647,7 @@ export const useAppStore = create<AppState>()(
         const task = get().secondaryTasks.find((t) => t.id === id);
         if (!task) return;
         const newCompleted = !task?.completed;
+        const { activeDashboardDate } = get();
         set((s) => ({
           secondaryTasks: s.secondaryTasks.map((t) =>
             t.id === id
@@ -2654,7 +2659,10 @@ export const useAppStore = create<AppState>()(
         if (sessionId && isUuid(id)) {
           tasksApi
             .toggleStatus(sessionId, id, newCompleted!)
-            .then(() => set({ syncError: null }))
+            .then(async () => {
+              set({ syncError: null });
+              await get().loadDashboard(activeDashboardDate);
+            })
             .catch((e) =>
               set((s) => ({
                 secondaryTasks: s.secondaryTasks.map((t) =>
@@ -2718,7 +2726,10 @@ export const useAppStore = create<AppState>()(
         if (sessionId && isUuid(id)) {
           habitsApi
             .toggle(sessionId, id, newCompleted!, activeDashboardDate)
-            .then(() => set({ syncError: null }))
+            .then(async () => {
+              set({ syncError: null });
+              await get().loadDashboard(activeDashboardDate);
+            })
             .catch((e) =>
               set((s) => ({
                 habits: s.habits.map((h) =>
