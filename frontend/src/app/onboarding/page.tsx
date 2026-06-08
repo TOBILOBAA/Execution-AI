@@ -107,13 +107,7 @@ export default function OnboardingPage() {
   }
 
   if (!authReady || workspaceHydrating || !currentUser || !backendReady || onboardingComplete) {
-    return (
-      <AppLoadingScreen
-        eyebrow="Preparing onboarding"
-        title="Building your setup flow"
-        detail="We are confirming your account and loading the yearly, monthly, weekly, and daily planning steps."
-      />
-    );
+    return <AppLoadingScreen title="Loading onboarding" />;
   }
 
   const handleNext = async () => {
