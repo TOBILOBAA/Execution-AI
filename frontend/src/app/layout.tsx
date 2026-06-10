@@ -1,7 +1,18 @@
 import type { Metadata, Viewport } from "next";
+import { Archivo, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { SupabaseAuthSync } from "@/components/SupabaseAuthSync";
 import type { CSSProperties } from "react";
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+});
+
+const archivo = Archivo({
+  subsets: ["latin"],
+  variable: "--font-archivo",
+});
 
 export const metadata: Metadata = {
   title: "Execution AI",
@@ -29,17 +40,15 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <style>{`
-          @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap");
-          @import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap");
           @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200");
         `}</style>
       </head>
       <body
-        className="antialiased"
+        className={`${plusJakarta.variable} ${archivo.variable} antialiased`}
         style={{
-          "--font-headline": "\"Plus Jakarta Sans\", sans-serif",
-          "--font-body": "\"Archivo\", sans-serif",
-          "--font-label": "\"Archivo\", sans-serif",
+          "--font-headline": "var(--font-jakarta), sans-serif",
+          "--font-body": "var(--font-archivo), sans-serif",
+          "--font-label": "var(--font-archivo), sans-serif",
         } as CSSProperties}
       >
         <SupabaseAuthSync />

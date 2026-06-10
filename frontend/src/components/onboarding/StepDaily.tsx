@@ -706,13 +706,13 @@ export function StepDaily({ onFinish, onBack }: Props) {
           </div>
         </section>
 
-        {/* ── 02. Supporting Priorities ── */}
+        {/* ── 02. Secondary Goals ── */}
         <section>
           <SectionHeader
             number="02"
-            title="Supporting Priorities"
-            subtitle="Supporting tasks to be addressed after primary focus."
-            action="Add Task"
+            title="Secondary Goals"
+            subtitle="Secondary goals to be handled after your main focus."
+            action="Add Goal"
             onAction={() => setTaskModal(true)}
           />
           <div
@@ -722,7 +722,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             {todayTasks.length === 0 ? (
               <div className="py-8 text-center">
                 <p className="text-sm" style={{ color: "#a8b5af" }}>
-                  No supporting tasks — add tasks to stay on top of everything.
+                  No secondary goals yet — add the other goals that still deserve attention today.
                 </p>
               </div>
             ) : (
@@ -740,13 +740,13 @@ export function StepDaily({ onFinish, onBack }: Props) {
           </div>
         </section>
 
-        {/* ── 03. High-Performance Habits ── */}
+        {/* ── 03. Routines ── */}
         <section>
           <SectionHeader
             number="03"
-            title="High-Performance Habits"
-            subtitle="Micro-actions that fuel your long-term output."
-            action="Add Habit"
+            title="Routines"
+            subtitle="Repeated actions that stay visible and support consistent execution."
+            action="Add Routine"
             onAction={() => setHabitModal(true)}
           />
           <div className="space-y-2.5">

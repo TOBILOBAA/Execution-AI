@@ -54,7 +54,7 @@ def compute_monthly_workload(ctx: TemporalContext) -> WorkloadBudget:
             max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
             max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="full",
-            rationale=f"Full month available ({days} days remaining). Keep the month focused around one main goal and a small set of supporting goals.",
+            rationale=f"Full month available ({days} days remaining). Keep the month focused around one main goal and a small set of secondary goals.",
         )
     elif days >= 14:
         return WorkloadBudget(
@@ -64,7 +64,7 @@ def compute_monthly_workload(ctx: TemporalContext) -> WorkloadBudget:
             max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
             max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="moderate",
-            rationale=f"{days} days remaining. Keep one clear main goal and only the supporting goals that still matter.",
+            rationale=f"{days} days remaining. Keep one clear main goal and only the secondary goals that still matter.",
         )
     elif days >= 7:
         return WorkloadBudget(
@@ -74,7 +74,7 @@ def compute_monthly_workload(ctx: TemporalContext) -> WorkloadBudget:
             max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
             max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="compressed",
-            rationale=f"Only {days} days left. Compress scope around one realistic main goal and a few supporting goals.",
+            rationale=f"Only {days} days left. Compress scope around one realistic main goal and a few secondary goals.",
         )
     else:
         return WorkloadBudget(
@@ -102,7 +102,7 @@ def compute_weekly_workload(ctx: TemporalContext) -> WorkloadBudget:
             max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
             max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="full",
-            rationale=f"Nearly full week ({days} days remaining). Keep the week anchored by one main goal and a tight set of supporting goals.",
+            rationale=f"Nearly full week ({days} days remaining). Keep the week anchored by one main goal and a tight set of secondary goals.",
         )
     elif days >= 3:
         return WorkloadBudget(
@@ -139,7 +139,7 @@ def compute_daily_workload(ctx: TemporalContext, total_weekly_remaining: int) ->
             max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
             max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="full",
-            rationale="Heavy weekly backlog. Keep today anchored to one main goal and only a few supporting tasks.",
+            rationale="Heavy weekly backlog. Keep today anchored to one main goal and only a few secondary goals.",
         )
     elif total_weekly_remaining > 4:
         return WorkloadBudget(
@@ -149,7 +149,7 @@ def compute_daily_workload(ctx: TemporalContext, total_weekly_remaining: int) ->
             max_daily_priorities=DAILY_MAIN_PRIORITY_CAP,
             max_daily_secondary=DAILY_SECONDARY_TASK_CAP,
             workload_label="moderate",
-            rationale="Moderate weekly backlog. Stay focused on one main outcome and only the supporting tasks that fit today.",
+            rationale="Moderate weekly backlog. Stay focused on one main outcome and only the secondary goals that fit today.",
         )
     else:
         return WorkloadBudget(
@@ -221,6 +221,7 @@ def build_weekly_planning_payload(
     Monthly goals are the parent — weekly goals must serve them.
     """
     budget = compute_weekly_workload(ctx)
+    yearly_by_id = {str(g["id"]): g for g in (yearly_goals or []) if g.get("id")}
 
     monthly_summary = [
         {
@@ -230,6 +231,11 @@ def build_weekly_planning_payload(
             "progress_pct": g.get("progress", 0),
             "description": g.get("description", ""),
             "workload": g.get("workload", ""),
+            "parent_yearly_title": (
+                yearly_by_id.get(str(g.get("yearly_goal_id")), {}).get("title")
+                if g.get("yearly_goal_id")
+                else None
+            ),
         }
         for g in monthly_goals
     ]
@@ -282,6 +288,8 @@ def build_daily_planning_payload(
     Reflects today's position in the week and remaining weekly workload.
     """
     budget = compute_daily_workload(ctx, weekly_remaining_tasks)
+    monthly_by_id = {str(g["id"]): g for g in (monthly_goals or []) if g.get("id")}
+    yearly_by_id = {str(g["id"]): g for g in (yearly_goals or []) if g.get("id")}
 
     weekly_summary = [
         {
@@ -289,6 +297,24 @@ def build_daily_planning_payload(
             "is_main": g.get("is_main", False),
             "progress_pct": g.get("progress", 0),
             "description": g.get("description", ""),
+            "parent_monthly_title": (
+                monthly_by_id.get(str(g.get("monthly_goal_id")), {}).get("title")
+                if g.get("monthly_goal_id")
+                else None
+            ),
+            "parent_yearly_title": (
+                yearly_by_id.get(
+                    str(
+                        monthly_by_id.get(str(g.get("monthly_goal_id")), {}).get("yearly_goal_id")
+                    )
+                ).get("title")
+                if g.get("monthly_goal_id")
+                and monthly_by_id.get(str(g.get("monthly_goal_id")), {}).get("yearly_goal_id")
+                and yearly_by_id.get(
+                    str(monthly_by_id.get(str(g.get("monthly_goal_id")), {}).get("yearly_goal_id"))
+                )
+                else None
+            ),
         }
         for g in weekly_goals
     ]

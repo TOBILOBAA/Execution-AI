@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { getToday } from "@/lib/mockData";
-import { PriorityCard } from "@/components/dashboard/PriorityCard";
 import { SecondaryTaskRow } from "@/components/dashboard/SecondaryTaskRow";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
 import { HabitsSection } from "@/components/dashboard/HabitsSection";
@@ -20,6 +19,12 @@ function formatPlanDateLabel(isoDate: string) {
   } catch {
     return isoDate;
   }
+}
+
+function compactDescription(value?: string, fallback?: string) {
+  const copy = (value?.trim() || fallback || "").replace(/\s+/g, " ");
+  if (!copy) return "";
+  return copy.length > 120 ? `${copy.slice(0, 117).trimEnd()}...` : copy;
 }
 
 export default function DashboardHome() {
@@ -52,11 +57,34 @@ export default function DashboardHome() {
 
   const todayRows = dailyPriorities.filter((p) => p.date === activeDashboardDate);
   const todayTasks = secondaryTasks.filter((task) => task.date === activeDashboardDate);
-  const remaining = todayRows.filter((p) => !p.completed).length;
+  const featuredMainGoal =
+    todayRows.find((priority) => !priority.completed) ??
+    todayRows[0] ??
+    null;
+  const completedGoalsToday =
+    (featuredMainGoal?.completed ? 1 : 0) + todayTasks.filter((task) => task.completed).length;
+  const totalGoalsToday = (featuredMainGoal ? 1 : 0) + todayTasks.length;
+  const todaysProgress = totalGoalsToday > 0 ? Math.round((completedGoalsToday / totalGoalsToday) * 100) : 0;
   const mainPriorityCapReached = todayRows.length >= 3;
   const isPreviewingAnotherDay = activeDashboardDate !== getToday();
   const displayDateLabel = useMemo(() => formatPlanDateLabel(activeDashboardDate), [activeDashboardDate]);
   const showDashboardHydratingState = dashboardLoading && todayRows.length === 0 && todayTasks.length === 0;
+  const softActionStyle = {
+    background: "rgba(0,108,74,0.06)",
+    color: "#006c4a",
+    border: "1px solid rgba(0,108,74,0.08)",
+  } as const;
+  const sectionSurfaceStyle = {
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(251,252,251,0.98) 100%)",
+    border: "1.5px solid rgba(0,0,0,0.05)",
+    boxShadow: "0 14px 40px rgba(15, 23, 42, 0.045)",
+  } as const;
+  const interactiveButtonClass =
+    "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]";
+  const featuredDescription = featuredMainGoal
+    ? compactDescription(featuredMainGoal.description, "Keep this goal clear, focused, and easy to move forward today.")
+    : "";
 
   return (
     <>
@@ -86,46 +114,94 @@ export default function DashboardHome() {
                         Today&apos;s Focus
                       </h3>
                     </div>
-                    {remaining > 0 && (
-                      <span
-                        className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
-                        style={{ background: "rgba(0,108,74,0.10)", color: "#006c4a" }}
-                      >
-                        {remaining} {remaining === 1 ? "Goal" : "Goals"} Remaining
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="rounded-[24px] p-5 sm:rounded-[30px] sm:p-6"
+                style={sectionSurfaceStyle}
+              >
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-center">
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                      Today&apos;s Progress
+                    </p>
+                    <div className="flex items-end gap-3">
+                      <span className="font-headline text-[42px] font-extrabold leading-none tracking-tight" style={{ color: "#1a1f1e" }}>
+                        {completedGoalsToday}
                       </span>
-                    )}
+                      <span className="pb-1 text-[24px] font-semibold" style={{ color: "#8a9e97" }}>
+                        of {totalGoalsToday || 0}
+                      </span>
+                    </div>
+                    <p className="text-sm" style={{ color: "#8a9e97" }}>
+                      goals completed
+                    </p>
+                    <div className="pt-1">
+                      <div className="h-3 w-full rounded-full bg-black/5">
+                        <div
+                          className="h-3 rounded-full"
+                          style={{ width: `${todaysProgress}%`, background: "linear-gradient(90deg, #006c4a 0%, #0a8754 100%)" }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="lg:justify-self-end">
+                    <div className="rounded-[22px] px-4 py-4" style={{ background: "rgba(0,108,74,0.04)", border: "1px solid rgba(0,108,74,0.08)" }}>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}>
+                          <span className="material-symbols-outlined text-[24px]">local_fire_department</span>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                            Daily Streak
+                          </p>
+                          <div className="mt-1 flex items-end gap-2">
+                            <span className="font-headline text-[34px] font-extrabold leading-none tracking-tight" style={{ color: "#1a1f1e" }}>
+                              {metrics.executionStreak}
+                            </span>
+                            <span className="pb-1 text-sm" style={{ color: "#8a9e97" }}>
+                              days
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
               <div
                 className="space-y-4 rounded-[24px] p-4 sm:rounded-[30px] sm:p-6 sm:space-y-5"
-                style={{ background: "#ffffff", border: "1.5px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 34px rgba(15, 23, 42, 0.04)" }}
+                style={sectionSurfaceStyle}
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
                       Main Goals
                     </p>
-                    <span className="text-xs font-medium" style={{ color: "#8a9e97" }}>
-                      {displayDateLabel}
-                    </span>
+                    <p className="mt-1 text-sm leading-6" style={{ color: "#8a9e97" }}>
+                      The primary goals shaping today&apos;s execution.
+                    </p>
                   </div>
                   <button
                     onClick={() => openModal("add-daily-priority")}
                     disabled={mainPriorityCapReached}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold sm:w-auto"
+                    className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold sm:w-auto ${mainPriorityCapReached ? "" : interactiveButtonClass}`}
                     style={{
-                      background: mainPriorityCapReached ? "rgba(0,0,0,0.06)" : "rgba(0,108,74,0.08)",
-                      color: mainPriorityCapReached ? "#8a9e97" : "#006c4a",
+                      ...(mainPriorityCapReached
+                        ? { background: "rgba(0,0,0,0.06)", color: "#8a9e97", border: "1px solid rgba(0,0,0,0.03)" }
+                        : softActionStyle),
                     }}
                   >
                     <span className="material-symbols-outlined text-[15px]">add</span>
-                    {mainPriorityCapReached ? "Main goal cap reached" : "Add main goal"}
+                    {mainPriorityCapReached ? "Main goal cap reached" : "Add goal"}
                   </button>
                 </div>
 
-                {todayRows.length === 0 ? (
+                {featuredMainGoal === null ? (
                   showDashboardHydratingState ? (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                       {Array.from({ length: 3 }).map((_, index) => (
@@ -144,22 +220,28 @@ export default function DashboardHome() {
                     </div>
                   ) : (
                     <div
-                      className="rounded-2xl p-6 text-center sm:p-8"
+                      className="rounded-[24px] p-6 text-center sm:p-8"
                       style={{ background: "#fafcfb", border: "1.5px dashed rgba(0,108,74,0.25)" }}
                     >
-                      <p className="font-headline font-bold text-base mb-1" style={{ color: "#1a1f1e" }}>
+                      <div
+                        className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl"
+                        style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
+                      >
+                        <span className="material-symbols-outlined text-[24px]">target</span>
+                      </div>
+                      <p className="font-headline font-bold text-lg mb-1" style={{ color: "#1a1f1e" }}>
                         No main goals saved yet
                       </p>
                       <p className="text-sm mb-5 max-w-md mx-auto" style={{ color: "#8a9e97" }}>
                         {isPreviewingAnotherDay
-                          ? `Nothing is locked in for ${displayDateLabel} yet. Add the main goals you want the user to execute first.`
-                          : `The home screen shows the main goals scheduled for ${displayDateLabel}. Add them during onboarding or from here.`}
+                          ? `Nothing is planned for ${displayDateLabel} yet. Add the main goals that should lead that day.`
+                          : "Start with the one to three goals that matter most today and let everything else support them."}
                       </p>
                       <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                         <button
                           type="button"
                           onClick={() => openModal("add-daily-priority")}
-                          className="rounded-xl px-5 py-2.5 text-sm font-bold text-white"
+                          className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white ${interactiveButtonClass}`}
                           style={{ background: "#006c4a" }}
                         >
                           Add first main goal
@@ -167,7 +249,7 @@ export default function DashboardHome() {
                         <button
                           type="button"
                           onClick={() => router.push("/dashboard/goals")}
-                          className="rounded-xl px-5 py-2.5 text-sm font-bold"
+                          className={`rounded-xl px-5 py-2.5 text-sm font-semibold ${interactiveButtonClass}`}
                           style={{ background: "#fff", color: "#006c4a", border: "1.5px solid rgba(0,108,74,0.25)" }}
                         >
                           View goals hub
@@ -176,16 +258,86 @@ export default function DashboardHome() {
                     </div>
                   )
                 ) : (
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    {todayRows.map((priority, i) => (
-                      <PriorityCard
-                        key={priority.id}
-                        priority={priority}
-                        index={i}
-                        onToggle={() => toggleDailyPriority(priority.id)}
-                        onEdit={() => openModal("edit-daily-priority", priority)}
-                      />
-                    ))}
+                  <div
+                    className="rounded-[26px] px-5 py-5 sm:px-6 sm:py-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(0,108,74,0.10)]"
+                    style={{
+                      background: "linear-gradient(180deg, rgba(248,252,250,0.98) 0%, rgba(255,255,255,0.98) 100%)",
+                      border: "1px solid rgba(0,108,74,0.10)",
+                      boxShadow: "0 6px 26px rgba(15,23,42,0.035)",
+                    }}
+                  >
+                    <div className="space-y-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-4">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                                Main Goal
+                              </p>
+                              <h4 className="mt-2 font-headline text-[22px] font-extrabold leading-tight tracking-tight" style={{ color: "#101615" }}>
+                                {featuredMainGoal.title}
+                              </h4>
+                              {featuredMainGoal.tag ? (
+                                <div className="mt-3">
+                                  <span
+                                    className="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide"
+                                    style={{
+                                      background: "rgba(0,108,74,0.08)",
+                                      color: "#0a8754",
+                                    }}
+                                  >
+                                    {featuredMainGoal.tag}
+                                  </span>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => void useAppStore.getState().removeDailyPriority(featuredMainGoal.id)}
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/6 bg-white text-[#8a9e97] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#fff4f4] hover:text-[#d43d3d] hover:shadow-[0_10px_20px_rgba(212,61,61,0.10)]"
+                            aria-label="Delete main goal"
+                          >
+                            <span className="material-symbols-outlined text-[20px]">delete</span>
+                          </button>
+                        </div>
+
+                        <p className="max-w-2xl text-[15px] leading-7 line-clamp-2" style={{ color: "#667670" }}>
+                          {featuredDescription}
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 text-sm" style={{ color: "#667670" }}>
+                          {featuredMainGoal.estimatedMinutes ? (
+                            <span className="inline-flex items-center gap-2">
+                              <span className="material-symbols-outlined text-[18px]">schedule</span>
+                              {featuredMainGoal.estimatedMinutes} min
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                          <button
+                            type="button"
+                            onClick={() => toggleDailyPriority(featuredMainGoal.id)}
+                            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white ${interactiveButtonClass}`}
+                            style={{ background: "#0a8754" }}
+                          >
+                            <span className="material-symbols-outlined text-[18px]">
+                              {featuredMainGoal.completed ? "undo" : "task_alt"}
+                            </span>
+                            {featuredMainGoal.completed ? "Mark as active" : "Mark as complete"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openModal("edit-daily-priority", featuredMainGoal)}
+                            className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold ${interactiveButtonClass}`}
+                            style={{ background: "#fff", color: "#5d6c67", border: "1.5px solid rgba(0,0,0,0.08)" }}
+                          >
+                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                            Edit Goal
+                          </button>
+                        </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -194,25 +346,25 @@ export default function DashboardHome() {
             {/* Secondary Goals */}
             <div
               className="rounded-[24px] sm:rounded-[30px]"
-              style={{ background: "#fbfcfb", border: "1.5px solid rgba(0,0,0,0.05)" }}
+              style={sectionSurfaceStyle}
             >
-              <div className="flex flex-col gap-3 px-4 pb-4 pt-4 sm:px-6 sm:pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                    Secondary Goals
-                  </p>
-                  <p className="text-[11px] mt-0.5 font-medium" style={{ color: "#a8b5af" }}>
-                    Additional goals for the day that still deserve attention.
-                  </p>
-                </div>
-                <button
-                  onClick={() => openModal("add-secondary-task")}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full px-3.5 py-2 text-xs font-bold sm:w-auto"
-                  style={{ background: "rgba(0,108,74,0.08)", color: "#006c4a" }}
-                >
-                  <span className="material-symbols-outlined text-[15px]">add</span>
-                  Add secondary goal
-                </button>
+                <div className="flex flex-col gap-3 px-4 pb-4 pt-4 sm:px-6 sm:pt-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                      Secondary Goals
+                    </p>
+                    <p className="mt-1 text-sm leading-6" style={{ color: "#8a9e97" }}>
+                      Additional goals for the day that still deserve attention.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => openModal("add-secondary-task")}
+                    className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold sm:w-auto ${interactiveButtonClass}`}
+                    style={softActionStyle}
+                  >
+                    <span className="material-symbols-outlined text-[15px]">add</span>
+                    Add goal
+                  </button>
               </div>
 
               <div className="px-2 pb-3">
@@ -231,12 +383,23 @@ export default function DashboardHome() {
                       ))}
                     </div>
                   ) : (
-                    <p
-                      className="text-sm text-center py-8"
-                      style={{ color: "#c4d0cb" }}
+                    <div
+                      className="mx-3 mb-2 rounded-[24px] px-5 py-5 text-center"
+                      style={{ background: "#ffffff", border: "1px dashed rgba(0,108,74,0.18)" }}
                     >
-                      No secondary goals saved for this day yet
-                    </p>
+                      <div
+                        className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl"
+                        style={{ background: "rgba(0,108,74,0.06)", color: "#006c4a" }}
+                      >
+                        <span className="material-symbols-outlined text-[22px]">checklist</span>
+                      </div>
+                      <p className="font-headline font-bold text-lg" style={{ color: "#1a1f1e" }}>
+                        No supporting goals planned for this day
+                      </p>
+                      <p className="mt-2 text-sm max-w-md mx-auto" style={{ color: "#8a9e97" }}>
+                        That is okay. Keep the day lighter, let your main goals lead, and use routines to carry the rest.
+                      </p>
+                    </div>
                   )
                 ) : (
                   todayTasks.map((task) => (
@@ -251,19 +414,26 @@ export default function DashboardHome() {
                 )}
               </div>
             </div>
+
+            {/* Routines */}
+            <div
+              className="rounded-[24px] p-4 sm:rounded-[30px] sm:p-6"
+              style={sectionSurfaceStyle}
+            >
+              <HabitsSection
+                habits={habits}
+                onManage={() => openModal("manage-habits")}
+                description="These are the repeated actions that steady the day around your main and secondary goals."
+                eyebrow="Today’s Routines"
+                actionLabel="View all"
+                actionIcon="arrow_forward"
+              />
+            </div>
           </section>
 
           {/* ── Right Sidebar ── */}
-          <section className="hidden md:block lg:col-span-4">
+          <section className="hidden lg:block lg:col-span-4">
             <AnalyticsPanel metrics={metrics} />
-          </section>
-
-          {/* ── Habits ── */}
-          <section className="lg:col-span-12">
-            <HabitsSection
-              habits={habits}
-              onManage={() => openModal("manage-habits")}
-            />
           </section>
         </div>
       </div>

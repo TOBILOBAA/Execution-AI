@@ -18,6 +18,7 @@ import app.db.plans as plans_db
 import app.db.habits as habits_db
 import app.db.reports as reports_db
 import app.db.yearly_goals as yg_db
+from app.services import activity_service
 from app.utils.period_guards import assert_period_current_daily, assert_period_current_monthly, assert_period_current_weekly, assert_period_current_yearly, get_session_today
 
 
@@ -47,6 +48,7 @@ def toggle_daily_priority(
         priority_id=str(priority_id),
         completed=completed,
     )
+    activity_service.refresh_daily_completion_counts(db, session_id, date.fromisoformat(item["date"]))
     return result
 
 
@@ -90,6 +92,7 @@ def toggle_habit(
         date=log_date.isoformat(),
         completed=completed,
     )
+    activity_service.refresh_daily_completion_counts(db, session_id, log_date)
     return result
 
 

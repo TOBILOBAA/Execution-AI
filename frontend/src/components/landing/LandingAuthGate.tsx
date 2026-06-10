@@ -7,20 +7,26 @@ import { useAppStore } from "@/lib/store";
 
 export function LandingAuthGate() {
   const router = useRouter();
-  const { currentUser, onboardingComplete, authReady, backendReady, workspaceHydrating } = useAppStore(
+  const { currentUser, onboardingComplete, authReady, backendReady, workspaceHydrating, syncError } = useAppStore(
     useShallow((state) => ({
       currentUser: state.currentUser,
       onboardingComplete: state.onboardingComplete,
       authReady: state.authReady,
       backendReady: state.backendReady,
       workspaceHydrating: state.workspaceHydrating,
+      syncError: state.syncError,
     })),
   );
 
   useEffect(() => {
     if (!authReady || workspaceHydrating || !currentUser) return;
 
-    if (!backendReady) return;
+    if (!backendReady) {
+      if (syncError) {
+        router.replace("/auth");
+      }
+      return;
+    }
 
     if (onboardingComplete) {
       router.replace("/dashboard");
@@ -28,7 +34,7 @@ export function LandingAuthGate() {
     }
 
     router.replace("/onboarding");
-  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, router]);
+  }, [authReady, workspaceHydrating, currentUser, onboardingComplete, backendReady, syncError, router]);
 
   return null;
 }

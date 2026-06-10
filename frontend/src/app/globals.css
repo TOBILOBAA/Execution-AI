@@ -46,9 +46,9 @@
   --color-inverse-primary: #7ff3be;
 
   /* ── Typography ── */
-  --font-headline: "Manrope", sans-serif;
-  --font-body: "Inter", sans-serif;
-  --font-label: "Inter", sans-serif;
+  --font-headline: var(--font-jakarta), sans-serif;
+  --font-body: var(--font-jakarta), sans-serif;
+  --font-label: var(--font-jakarta), sans-serif;
 
   /* ── Border radius ── */
   --radius-sm: 0.375rem;
