@@ -29,16 +29,17 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <style>{`
-          @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap");
+          @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap");
+          @import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap");
           @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200");
         `}</style>
       </head>
       <body
         className="antialiased"
         style={{
-          "--font-headline": "Manrope, sans-serif",
-          "--font-body": "Inter, sans-serif",
-          "--font-label": "Inter, sans-serif",
+          "--font-headline": "\"Plus Jakarta Sans\", sans-serif",
+          "--font-body": "\"Archivo\", sans-serif",
+          "--font-label": "\"Archivo\", sans-serif",
         } as CSSProperties}
       >
         <SupabaseAuthSync />
