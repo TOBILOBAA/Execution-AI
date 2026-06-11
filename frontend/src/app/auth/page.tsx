@@ -231,20 +231,20 @@ export default function AuthPage() {
     mode === "forgot"
       ? "Reset your password."
       : mode === "verify-email"
-        ? "Check your email."
+        ? "Verify your email."
         : mode === "signin"
           ? "Welcome back."
-          : "Build your execution engine.";
+          : "Start your execution system.";
 
   const subline =
     mode === "forgot"
-      ? "Enter the email you signed up with. We'll send a reset link."
+      ? "Enter the email linked to your account and we'll send a secure reset link."
       : mode === "verify-email"
-        ? `We sent a secure verification link to ${email.trim() || "your email"}. Open it to confirm your account and continue into yearly onboarding.`
+        ? `We sent a secure verification link to ${email.trim() || "your email"}. Open it to confirm your account and continue into onboarding.`
         : mode === "signup"
-          ? "Create your account, then verify your email through the secure link we send before entering onboarding."
+          ? "Create your account to connect yearly goals to daily action and start seeing what is helping your growth or causing drift."
           : cloudPassword
-            ? "Step back into your plans, protect your focus, and keep today moving."
+            ? "Step back into your yearly plan, protect today's main goal, and keep your progress moving."
             : authLocalOnly
               ? "Sign in with your local account to continue."
               : "Sign in with your email and password.";
@@ -252,12 +252,12 @@ export default function AuthPage() {
   const submitLabel = () => {
     if (mode === "forgot") return "Send reset link";
     if (mode === "verify-email") return "Back to sign in";
-    return mode === "signup" ? "Begin" : "Sign in";
+    return mode === "signup" ? "Create account" : "Sign in";
   };
 
   const loadingLabel = () => {
     if (mode === "forgot") return "Sending…";
-    if (mode === "signup") return "Setting up your account…";
+    if (mode === "signup") return "Creating your account…";
     return "Signing in…";
   };
 
@@ -272,26 +272,26 @@ export default function AuthPage() {
         <div className="space-y-6">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest mb-4" style={{ color: "#85f8c4" }}>
-              Built for Execution
+              Built for intentional growth
             </p>
             <h1
               className="font-headline font-extrabold leading-tight"
               style={{ fontSize: "40px", color: "#fff", lineHeight: 1.15 }}
             >
-              Your goals.
+              See what is helping
               <br />
-              Your behavior.
+              your growth.
               <br />
-              <span style={{ color: "#85f8c4" }}>Your growth.</span>
+              <span style={{ color: "#85f8c4" }}>See what is causing drift.</span>
             </h1>
           </div>
           <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.5)" }}>
-            Execution AI helps you plan, execute, track, and understand your growth journey by turning goals into action
-            and revealing the habits and patterns shaping your progress.
+            Execution AI connects yearly goals to daily action so you can see what is moving progress, what is slowing it down,
+            and what to adjust next.
           </p>
 
           <div className="flex flex-wrap gap-2">
-            {["AI Planning", "Behavior Insights", "Execution Patterns", "Daily Focus", "Performance Reports"].map((f) => (
+            {["Year-to-day alignment", "Behavior insights", "Weekly correction", "Progress visibility"].map((f) => (
               <span
                 key={f}
                 className="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full"
@@ -307,8 +307,8 @@ export default function AuthPage() {
             style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
           >
             <p className="text-sm italic leading-relaxed mb-3" style={{ color: "rgba(255,255,255,0.65)" }}>
-              &ldquo;Execution AI gave me clarity I didn&apos;t know I was missing. My productivity went from scattered to
-              strategic in the first week.&rdquo;
+              &ldquo;I thought I was staying busy, but my real yearly goal was barely moving. Execution AI made that gap obvious
+              and helped me plan with more intention.&rdquo;
             </p>
             <div className="flex items-center gap-2.5">
               <div
@@ -318,9 +318,9 @@ export default function AuthPage() {
                 S
               </div>
               <div>
-                <p className="text-xs font-bold text-white">Sarah M.</p>
+                <p className="text-xs font-bold text-white">Nina O.</p>
                 <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-                  Product Designer · Early Access
+                  Solopreneur · Early access
                 </p>
               </div>
             </div>
@@ -362,6 +362,18 @@ export default function AuthPage() {
           )}
 
           <div className="p-7 pt-6">
+            {mode === "forgot" && (
+              <button
+                type="button"
+                onClick={() => switchMode("signin")}
+                className="mb-4 inline-flex items-center gap-1 text-xs font-bold transition-opacity hover:opacity-70"
+                style={{ color: "#006c4a" }}
+              >
+                <span className="material-symbols-outlined text-[14px]">arrow_back</span>
+                Back to sign in
+              </button>
+            )}
+
             <div className="mb-6">
               <h2 className="font-headline font-extrabold text-2xl mb-1" style={{ color: "#1a1f1e" }}>
                 {heading}
@@ -391,7 +403,7 @@ export default function AuthPage() {
                   className="rounded-2xl px-4 py-3 text-sm"
                   style={{ background: "#f8faf9", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
                 >
-                  Once you open the link in your email, we&apos;ll verify your account and sign you in automatically.
+                  Once you open the link in your email, we'll verify your account and sign you in automatically.
                 </div>
 
                 <button
@@ -406,18 +418,6 @@ export default function AuthPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
-                {mode === "forgot" && (
-                  <button
-                    type="button"
-                    onClick={() => switchMode("signin")}
-                    className="text-xs font-bold mb-2 flex items-center gap-1 transition-opacity hover:opacity-70"
-                    style={{ color: "#006c4a" }}
-                  >
-                    <span className="material-symbols-outlined text-[14px]">arrow_back</span>
-                    Back to sign in
-                  </button>
-                )}
-
                 {mode === "signup" && (
                   <div>
                     <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: "#6b7c75" }}>
