@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabaseClient";
 import { useAppStore } from "@/lib/store";
@@ -20,6 +19,14 @@ export default function UpdatePasswordPage() {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState("Checking your reset link…");
+
+  const handleGoBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.replace("/auth");
+  };
 
   useEffect(() => {
     const sb = getSupabaseBrowser();
@@ -100,61 +107,69 @@ export default function UpdatePasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-5 py-12" style={{ background: "#f4f6f4" }}>
       <div className="bg-white rounded-3xl w-full p-8 shadow-sm" style={{ maxWidth: 420, border: "1.5px solid rgba(0,0,0,0.07)" }}>
+        <button
+          type="button"
+          onClick={handleGoBack}
+          className="mb-4 inline-flex items-center gap-1 text-xs font-bold transition-opacity hover:opacity-70"
+          style={{ color: "#006c4a" }}
+        >
+          <span className="material-symbols-outlined text-[14px]">arrow_back</span>
+          Go back
+        </button>
         <h1 className="font-headline font-extrabold text-xl mb-1" style={{ color: "#1a1f1e" }}>Set a new password.</h1>
         <p className="text-sm mb-6" style={{ color: "#8a9e97" }}>
-          {ready ? PASSWORD_REQUIREMENTS_COPY : status}
+          {ready ? "Create a strong new password to get back into your execution system." : status}
         </p>
-        {!ready && (
+        {ready && (
+          <p className="text-[11px] mb-6" style={{ color: "#a8b5af" }}>
+            {PASSWORD_REQUIREMENTS_COPY}
+          </p>
+        )}
+        {!ready && !error && (
           <div className="mb-5 flex items-center gap-2 text-xs font-semibold" style={{ color: "#6b7c75" }}>
             <span className="h-2.5 w-2.5 rounded-full animate-pulse" style={{ background: "#006c4a" }} />
             {status}
           </div>
         )}
-        {error && !ready && (
-          <div className="mb-5">
-            <p className="text-xs font-semibold mb-3" style={{ color: "#ef4444" }}>{error}</p>
-            <Link
-              href="/auth"
-              className="inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold text-white"
-              style={{ background: "#006c4a" }}
+        {error && !ready ? (
+          <div className="space-y-4">
+            <p className="text-xs font-semibold leading-5" style={{ color: "#ef4444" }}>{error}</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{ color: "#6b7c75" }}>New password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                style={{ border: "1.5px solid rgba(0,0,0,0.1)", background: "#fafcfb" }}
+                disabled={!ready || loading}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{ color: "#6b7c75" }}>Confirm new password</label>
+              <input
+                type="password"
+                value={password2}
+                onChange={(e) => setPassword2(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                style={{ border: "1.5px solid rgba(0,0,0,0.1)", background: "#fafcfb" }}
+                disabled={!ready || loading}
+              />
+            </div>
+            {error && ready && <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>{error}</p>}
+            <button
+              type="submit"
+              disabled={!ready || loading}
+              className="w-full py-3.5 rounded-2xl text-sm font-bold text-white"
+              style={{ background: ready && !loading ? "#006c4a" : "#8ab5a0" }}
             >
-              Back to sign in
-            </Link>
-          </div>
+              {loading ? "Updating…" : "Update password"}
+            </button>
+          </form>
         )}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{ color: "#6b7c75" }}>New password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl text-sm outline-none"
-              style={{ border: "1.5px solid rgba(0,0,0,0.1)", background: "#fafcfb" }}
-              disabled={!ready || loading}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold mb-1 uppercase tracking-wider" style={{ color: "#6b7c75" }}>Confirm new password</label>
-            <input
-              type="password"
-              value={password2}
-              onChange={(e) => setPassword2(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl text-sm outline-none"
-              style={{ border: "1.5px solid rgba(0,0,0,0.1)", background: "#fafcfb" }}
-              disabled={!ready || loading}
-            />
-          </div>
-          {error && ready && <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>{error}</p>}
-          <button
-            type="submit"
-            disabled={!ready || loading}
-            className="w-full py-3.5 rounded-2xl text-sm font-bold text-white"
-            style={{ background: ready && !loading ? "#006c4a" : "#8ab5a0" }}
-          >
-            {loading ? "Updating…" : "Update password"}
-          </button>
-        </form>
       </div>
     </div>
   );
