@@ -403,7 +403,7 @@ export default function AuthPage() {
                   className="rounded-2xl px-4 py-3 text-sm"
                   style={{ background: "#f8faf9", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
                 >
-                  Once you open the link in your email, we'll verify your account and sign you in automatically.
+                  Once you open the link in your email, we&rsquo;ll verify your account and sign you in automatically.
                 </div>
 
                 <button
