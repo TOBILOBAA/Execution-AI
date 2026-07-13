@@ -15,6 +15,8 @@ from app.schemas.plans import (
 )
 from app.schemas.goals import MonthlyGoalCreate, MonthlyGoalUpdate, WeeklyGoalCreate, WeeklyGoalUpdate
 from app.services import activity_service, planning_service
+from app.services.goal_truth_service import decorate_goal_truth
+import app.db.yearly_goals as yg_db
 import app.db.plans as plans_db
 import app.db.sessions as sessions_db
 from app.utils.date_utils import get_week_boundaries
@@ -146,9 +148,26 @@ def get_monthly_plan(
     )
     if not plan:
         raise NotFoundError("Monthly plan")
-    goals = plans_db.list_monthly_goals(
-        db, session_id, year or ctx.current_year, month or ctx.current_month
+    target_year = year or ctx.current_year
+    target_month = month or ctx.current_month
+    decorated = decorate_goal_truth(
+        yearly_goals=yg_db.list_yearly_goals(db, session_id, target_year),
+        monthly_goals=plans_db.list_monthly_goals_for_year(db, session_id, target_year),
+        weekly_goals=plans_db.list_weekly_goals_for_year(db, session_id, target_year),
+        daily_priorities=plans_db.list_daily_priorities_for_range(
+            db,
+            session_id,
+            date(target_year, 1, 1),
+            ctx.today if target_year == ctx.current_year else date(target_year, 12, 31),
+        ),
+        today=ctx.today,
+        week_starts_on=week_starts_on,
     )
+    goals = [
+        goal
+        for goal in decorated["monthly_goals"]
+        if int(goal["year"]) == target_year and int(goal["month"]) == target_month
+    ]
     return {**plan, "goals": goals}
 
 
@@ -275,9 +294,26 @@ def get_weekly_plan(
     )
     if not plan:
         raise NotFoundError("Weekly plan")
-    goals = plans_db.list_weekly_goals(
-        db, session_id, year or ctx.current_year, week_number or ctx.current_week_number
+    target_year = year or ctx.current_year
+    target_week_number = week_number or ctx.current_week_number
+    decorated = decorate_goal_truth(
+        yearly_goals=yg_db.list_yearly_goals(db, session_id, target_year),
+        monthly_goals=plans_db.list_monthly_goals_for_year(db, session_id, target_year),
+        weekly_goals=plans_db.list_weekly_goals_for_year(db, session_id, target_year),
+        daily_priorities=plans_db.list_daily_priorities_for_range(
+            db,
+            session_id,
+            date(target_year, 1, 1),
+            ctx.today if target_year == ctx.current_year else date(target_year, 12, 31),
+        ),
+        today=ctx.today,
+        week_starts_on=sessions_db.get_effective_week_starts_on(db, session_id),
     )
+    goals = [
+        goal
+        for goal in decorated["weekly_goals"]
+        if int(goal["year"]) == target_year and int(goal["week_number"]) == target_week_number
+    ]
     return {**plan, "goals": goals}
 
 

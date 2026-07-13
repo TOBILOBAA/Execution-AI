@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from supabase import Client
@@ -9,7 +10,10 @@ from app.schemas.goals import (
     YearlyGoalCreate, YearlyGoalUpdate, YearlyGoalResponse,
 )
 from app.services import activity_service
+from app.services.goal_truth_service import decorate_goal_truth
 import app.db.categories as cat_db
+import app.db.plans as plans_db
+import app.db.sessions as sessions_db
 import app.db.yearly_goals as yg_db
 from app.utils.period_guards import (
     assert_period_plannable_yearly,
@@ -56,10 +60,24 @@ def list_yearly_goals(
     db: Client = Depends(get_db),
 ):
     ctx = get_session_temporal_context(db, session_id)
-    goals = yg_db.list_yearly_goals(db, session_id, year or ctx.current_year)
+    target_year = year or ctx.current_year
+    goals = yg_db.list_yearly_goals(db, session_id, target_year)
     for goal in goals:
         goal["editable"] = is_plannable_yearly_period(db, session_id, int(goal["year"]))
-    return goals
+    decorated = decorate_goal_truth(
+        yearly_goals=goals,
+        monthly_goals=plans_db.list_monthly_goals_for_year(db, session_id, target_year),
+        weekly_goals=plans_db.list_weekly_goals_for_year(db, session_id, target_year),
+        daily_priorities=plans_db.list_daily_priorities_for_range(
+            db,
+            session_id,
+            date(target_year, 1, 1),
+            ctx.today if target_year == ctx.current_year else date(target_year, 12, 31),
+        ),
+        today=ctx.today,
+        week_starts_on=sessions_db.get_effective_week_starts_on(db, session_id),
+    )
+    return decorated["yearly_goals"]
 
 
 @router.post("/{session_id}", response_model=YearlyGoalResponse, status_code=201)

@@ -10,6 +10,14 @@ class GoalStatus(str, Enum):
     pending = "pending"
 
 
+class GoalTruthStatus(str, Enum):
+    completed = "completed"
+    in_progress = "in_progress"
+    review_ready = "review_ready"
+    at_risk = "at_risk"
+    not_started = "not_started"
+
+
 class PriorityLevel(str, Enum):
     high = "high"
     medium = "medium"
