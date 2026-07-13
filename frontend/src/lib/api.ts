@@ -139,7 +139,17 @@ export interface ApiCategory {
   created_at: string;
 }
 
-export interface ApiYearlyGoal {
+export interface ApiGoalTruthFields {
+  truth_status?: string;
+  truth_progress?: number;
+  truth_reason?: string;
+  has_activity?: boolean;
+  linked_children_count?: number;
+  completed_children_count?: number;
+  period_closed?: boolean;
+}
+
+export interface ApiYearlyGoal extends ApiGoalTruthFields {
   id: string;
   session_id: string;
   category_id?: string;
@@ -155,7 +165,7 @@ export interface ApiYearlyGoal {
   updated_at: string;
 }
 
-export interface ApiMonthlyGoal {
+export interface ApiMonthlyGoal extends ApiGoalTruthFields {
   id: string;
   session_id: string;
   monthly_plan_id: string;
@@ -177,7 +187,7 @@ export interface ApiMonthlyGoal {
   updated_at: string;
 }
 
-export interface ApiWeeklyGoal {
+export interface ApiWeeklyGoal extends ApiGoalTruthFields {
   id: string;
   session_id: string;
   weekly_plan_id: string;
@@ -199,7 +209,7 @@ export interface ApiWeeklyGoal {
   updated_at: string;
 }
 
-export interface ApiDailyPriority {
+export interface ApiDailyPriority extends ApiGoalTruthFields {
   id: string;
   session_id: string;
   daily_plan_id: string;

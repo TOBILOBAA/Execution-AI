@@ -10,7 +10,9 @@ import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
 import {
   averageProgress,
   countGoalStates,
+  getGoalDisplayProgress,
   getProgressTone,
+  isGoalComplete,
   GOALS_MONTH_NAMES,
 } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
@@ -512,7 +514,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
                                   Main goal
                                 </span>
                                 <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                                  {goal.progress}% complete
+                                  {getGoalDisplayProgress(goal)}% complete
                                 </span>
                               </div>
                               <h3 className="font-semibold text-base mt-3" style={{ color: "#1a1f1e" }}>
@@ -526,11 +528,11 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
                               {goal.editable ? (
                                 <>
                                   <GoalCompletionButton
-                                    completed={goal.status === "completed" || goal.progress >= 100}
+                                    completed={isGoalComplete(goal)}
                                     onClick={() =>
                                       updateMonthlyGoal(goal.id, {
-                                        status: goal.status === "completed" || goal.progress >= 100 ? "active" : "completed",
-                                        progress: goal.status === "completed" || goal.progress >= 100 ? Math.min(goal.progress, 99) : 100,
+                                        status: isGoalComplete(goal) ? "active" : "completed",
+                                        progress: isGoalComplete(goal) ? Math.min(getGoalDisplayProgress(goal), 99) : 100,
                                       })
                                     }
                                   />
@@ -587,19 +589,19 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
                               {goal.title}
                             </p>
                             <p className="text-xs mt-1" style={{ color: "#6b7c75" }}>
-                              {goal.progress}% complete
+                              {getGoalDisplayProgress(goal)}% complete
                             </p>
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">
                             {goal.editable ? (
                               <>
                                 <GoalCompletionButton
-                                  completed={goal.status === "completed" || goal.progress >= 100}
+                                  completed={isGoalComplete(goal)}
                                   compact
                                   onClick={() =>
                                     updateMonthlyGoal(goal.id, {
-                                      status: goal.status === "completed" || goal.progress >= 100 ? "active" : "completed",
-                                      progress: goal.status === "completed" || goal.progress >= 100 ? Math.min(goal.progress, 99) : 100,
+                                      status: isGoalComplete(goal) ? "active" : "completed",
+                                      progress: isGoalComplete(goal) ? Math.min(getGoalDisplayProgress(goal), 99) : 100,
                                     })
                                   }
                                 />

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import type { DashboardMetrics } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
-import { getWeekNumber } from "@/lib/goalsView";
+import { getGoalDisplayProgress, getWeekNumber } from "@/lib/goalsView";
 import { useShallow } from "zustand/react/shallow";
 
 interface AnalyticsPanelProps {
@@ -45,10 +45,7 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
   const currentWeek = getWeekNumber(referenceDate, sessionWeekStartsOn);
 
   const currentYearGoals = useMemo(
-    () =>
-      yearlyGoals
-        .filter((goal) => goal.year === currentYear)
-        .sort((a, b) => clampProgress(b.progress) - clampProgress(a.progress)),
+    () => yearlyGoals.filter((goal) => goal.year === currentYear),
     [currentYear, yearlyGoals],
   );
 
@@ -91,10 +88,10 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
       const linkedMonthlyGoals = monthlyGoalsByYearlyGoal.get(goal.id) ?? [];
       const progress = linkedMonthlyGoals.length
         ? Math.round(
-            linkedMonthlyGoals.reduce((sum, monthlyGoal) => sum + clampProgress(monthlyGoal.progress), 0) /
+            linkedMonthlyGoals.reduce((sum, monthlyGoal) => sum + getGoalDisplayProgress(monthlyGoal), 0) /
               linkedMonthlyGoals.length,
           )
-        : clampProgress(goal.progress);
+        : getGoalDisplayProgress(goal);
       derived.set(goal.id, progress);
     });
     return derived;
@@ -102,33 +99,49 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
 
   const averageProgress = currentYearGoals.length
     ? Math.round(
-        currentYearGoals.reduce((sum, goal) => sum + (yearlyProgressByGoalId.get(goal.id) ?? clampProgress(goal.progress)), 0) /
+        currentYearGoals.reduce((sum, goal) => sum + (yearlyProgressByGoalId.get(goal.id) ?? getGoalDisplayProgress(goal)), 0) /
           currentYearGoals.length,
       )
     : 0;
 
-  const highlightedYearlyGoals = currentYearGoals.slice(0, 2);
-  const currentWeeklyObjective =
-    currentWeeklyGoals.find((goal) => goal.isMain) ??
-    currentWeeklyGoals.sort((a, b) => clampProgress(b.progress) - clampProgress(a.progress))[0] ??
-    null;
-  const currentMonthlyObjective =
-    currentMonthlyGoals.find((goal) => goal.isMain) ??
-    currentMonthlyGoals.sort((a, b) => clampProgress(b.progress) - clampProgress(a.progress))[0] ??
-    null;
+  const highlightedYearlyGoals = useMemo(
+    () =>
+      [...currentYearGoals]
+        .sort(
+          (a, b) =>
+            (yearlyProgressByGoalId.get(b.id) ?? getGoalDisplayProgress(b)) -
+            (yearlyProgressByGoalId.get(a.id) ?? getGoalDisplayProgress(a)),
+        )
+        .slice(0, 2),
+    [currentYearGoals, yearlyProgressByGoalId],
+  );
+  const currentWeeklyObjective = useMemo(
+    () =>
+      currentWeeklyGoals.find((goal) => goal.isMain) ??
+      [...currentWeeklyGoals].sort((a, b) => getGoalDisplayProgress(b) - getGoalDisplayProgress(a))[0] ??
+      null,
+    [currentWeeklyGoals],
+  );
+  const currentMonthlyObjective = useMemo(
+    () =>
+      currentMonthlyGoals.find((goal) => goal.isMain) ??
+      [...currentMonthlyGoals].sort((a, b) => getGoalDisplayProgress(b) - getGoalDisplayProgress(a))[0] ??
+      null,
+    [currentMonthlyGoals],
+  );
 
   const weeklyObjectiveProgress = currentWeeklyObjective
-    ? clampProgress(currentWeeklyObjective.progress)
+    ? getGoalDisplayProgress(currentWeeklyObjective)
     : clampProgress(metrics.weeklyCompletionRate);
   const monthlyObjectiveProgress = currentMonthlyObjective
     ? (() => {
         const linkedWeeklyGoals = weeklyGoalsByMonthlyGoal.get(currentMonthlyObjective.id) ?? [];
         return linkedWeeklyGoals.length
           ? Math.round(
-              linkedWeeklyGoals.reduce((sum, weeklyGoal) => sum + clampProgress(weeklyGoal.progress), 0) /
+              linkedWeeklyGoals.reduce((sum, weeklyGoal) => sum + getGoalDisplayProgress(weeklyGoal), 0) /
                 linkedWeeklyGoals.length,
             )
-          : clampProgress(currentMonthlyObjective.progress);
+          : getGoalDisplayProgress(currentMonthlyObjective);
       })()
     : clampProgress(metrics.monthlyCompletionRate);
 
@@ -192,7 +205,7 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
           ) : (
             highlightedYearlyGoals.map((goal, index) => {
               const category = goal.categoryId ? categoryById.get(goal.categoryId) : null;
-              const progress = yearlyProgressByGoalId.get(goal.id) ?? clampProgress(goal.progress);
+              const progress = yearlyProgressByGoalId.get(goal.id) ?? getGoalDisplayProgress(goal);
               return (
                 <div
                   key={goal.id}

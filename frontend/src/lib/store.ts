@@ -9,6 +9,7 @@ import type {
   WeeklyGoal,
   DailyPriority,
   FoundationalHabit,
+  GoalTruthStatus,
   ModalType,
   WeekStartsOn,
   DashboardRecapEntry,
@@ -753,6 +754,8 @@ function mapApiGoalToPriority(p: {
   id: string; title: string; description?: string; date: string;
   status: string; completed: boolean; priority: string; estimated_minutes?: number;
   is_main: boolean; tag?: string; ai_suggested: boolean; weekly_goal_id?: string; editable?: boolean;
+  truth_status?: string; truth_progress?: number; truth_reason?: string; has_activity?: boolean;
+  linked_children_count?: number; completed_children_count?: number; period_closed?: boolean;
 }): DailyPriority {
   return {
     id: p.id,
@@ -768,6 +771,13 @@ function mapApiGoalToPriority(p: {
     tag: p.tag,
     aiSuggested: p.ai_suggested,
     editable: p.editable,
+    truthStatus: p.truth_status as GoalTruthStatus | undefined,
+    truthProgress: p.truth_progress,
+    truthReason: p.truth_reason,
+    hasActivity: p.has_activity,
+    linkedChildrenCount: p.linked_children_count,
+    completedChildrenCount: p.completed_children_count,
+    periodClosed: p.period_closed,
   };
 }
 
@@ -821,6 +831,13 @@ function mapApiYearlyGoalToStore(g: ApiYearlyGoal): YearlyGoal {
     progress: g.progress,
     aiSuggested: g.ai_suggested,
     editable: g.editable,
+    truthStatus: g.truth_status as GoalTruthStatus | undefined,
+    truthProgress: g.truth_progress,
+    truthReason: g.truth_reason,
+    hasActivity: g.has_activity,
+    linkedChildrenCount: g.linked_children_count,
+    completedChildrenCount: g.completed_children_count,
+    periodClosed: g.period_closed,
   };
 }
 
@@ -841,6 +858,13 @@ function mapApiMonthlyGoalToStore(g: ApiMonthlyGoal): MonthlyGoal {
     isMain: g.is_main,
     aiSuggested: g.ai_suggested,
     editable: g.editable,
+    truthStatus: g.truth_status as GoalTruthStatus | undefined,
+    truthProgress: g.truth_progress,
+    truthReason: g.truth_reason,
+    hasActivity: g.has_activity,
+    linkedChildrenCount: g.linked_children_count,
+    completedChildrenCount: g.completed_children_count,
+    periodClosed: g.period_closed,
   };
 }
 
@@ -861,6 +885,51 @@ function mapApiWeeklyGoalToStore(g: ApiWeeklyGoal): WeeklyGoal {
     workload: g.workload,
     aiSuggested: g.ai_suggested,
     editable: g.editable,
+    truthStatus: g.truth_status as GoalTruthStatus | undefined,
+    truthProgress: g.truth_progress,
+    truthReason: g.truth_reason,
+    hasActivity: g.has_activity,
+    linkedChildrenCount: g.linked_children_count,
+    completedChildrenCount: g.completed_children_count,
+    periodClosed: g.period_closed,
+  };
+}
+
+function deriveGoalTruthStatus(
+  status: string | undefined,
+  progress: number | undefined,
+  fallback: GoalTruthStatus = "in_progress",
+): GoalTruthStatus {
+  if (status === "completed" || (progress ?? 0) >= 100) return "completed";
+  if (status === "missed") return "at_risk";
+  if (status === "pending" || status === "locked") return "not_started";
+  if ((progress ?? 0) <= 0 && fallback !== "in_progress") return "not_started";
+  return fallback;
+}
+
+function applyOptimisticGoalTruth<T extends { status?: string; progress?: number; truthStatus?: GoalTruthStatus; truthProgress?: number }>(
+  goal: T,
+  updates: Partial<T>,
+): T {
+  const merged = { ...goal, ...updates };
+  const nextProgress = typeof merged.progress === "number" ? merged.progress : 0;
+  const nextTruthStatus = deriveGoalTruthStatus(merged.status, nextProgress);
+  return {
+    ...merged,
+    truthStatus: nextTruthStatus,
+    truthProgress: nextTruthStatus === "completed" ? 100 : nextProgress,
+  };
+}
+
+function applyOptimisticPriorityTruth<T extends DailyPriority>(priority: T, completed: boolean): T {
+  return {
+    ...priority,
+    completed,
+    status: completed ? "completed" : "active",
+    truthStatus: completed ? "completed" : "in_progress",
+    truthProgress: completed ? 100 : 0,
+    truthReason: completed ? "This task was completed." : "This task is already part of the execution plan.",
+    hasActivity: true,
   };
 }
 
@@ -1619,7 +1688,7 @@ export const useAppStore = create<AppState>()(
           try {
             await yearlyGoalsApi.update(sessionId, id, patch);
             set((s) => ({
-              yearlyGoals: s.yearlyGoals.map((g) => g.id === id ? { ...g, ...updates } : g),
+              yearlyGoals: s.yearlyGoals.map((g) => (g.id === id ? applyOptimisticGoalTruth(g, updates) : g)),
               syncError: null,
               syncStatus: "saved",
             }));
@@ -1630,7 +1699,7 @@ export const useAppStore = create<AppState>()(
           }
         }
         set((s) => ({
-          yearlyGoals: s.yearlyGoals.map((g) => g.id === id ? { ...g, ...updates } : g),
+          yearlyGoals: s.yearlyGoals.map((g) => (g.id === id ? applyOptimisticGoalTruth(g, updates) : g)),
         }));
         if (!sessionId || !isUuid(id)) return true;
         if (Object.keys(patch).length) {
@@ -2049,7 +2118,7 @@ export const useAppStore = create<AppState>()(
             set((s) => ({
               monthlyGoals: s.monthlyGoals.map((g) => {
                 if (g.id !== id) return g;
-                const merged: MonthlyGoal = { ...g, ...updates };
+                const merged: MonthlyGoal = applyOptimisticGoalTruth(g, updates);
                 if (updates.description !== undefined) merged.description = updates.description ? updates.description : undefined;
                 if (updates.workload !== undefined) merged.workload = updates.workload ? updates.workload : undefined;
                 return merged;
@@ -2066,7 +2135,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           monthlyGoals: s.monthlyGoals.map((g) => {
             if (g.id !== id) return g;
-            const merged: MonthlyGoal = { ...g, ...updates };
+            const merged: MonthlyGoal = applyOptimisticGoalTruth(g, updates);
             if (updates.description !== undefined) {
               merged.description = updates.description ? updates.description : undefined;
             }
@@ -2247,7 +2316,7 @@ export const useAppStore = create<AppState>()(
             set((s) => ({
               weeklyGoals: s.weeklyGoals.map((g) => {
                 if (g.id !== id) return g;
-                const merged: WeeklyGoal = { ...g, ...updates };
+                const merged: WeeklyGoal = applyOptimisticGoalTruth(g, updates);
                 if (updates.description !== undefined) merged.description = updates.description ? updates.description : undefined;
                 if (updates.workload !== undefined) merged.workload = updates.workload ? updates.workload : undefined;
                 return merged;
@@ -2264,7 +2333,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           weeklyGoals: s.weeklyGoals.map((g) => {
             if (g.id !== id) return g;
-            const merged: WeeklyGoal = { ...g, ...updates };
+            const merged: WeeklyGoal = applyOptimisticGoalTruth(g, updates);
             if (updates.description !== undefined) {
               merged.description = updates.description ? updates.description : undefined;
             }
@@ -2448,7 +2517,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           dailyPriorities: s.dailyPriorities.map((p) =>
             p.id === id
-              ? { ...p, completed: newCompleted, status: newCompleted ? "completed" : "active" }
+              ? applyOptimisticPriorityTruth(p, newCompleted)
               : p
           ),
         }));
@@ -2461,7 +2530,7 @@ export const useAppStore = create<AppState>()(
             .catch((e) =>
               set((s) => ({
                 dailyPriorities: s.dailyPriorities.map((p) =>
-                  p.id === id ? { ...p, completed: priority.completed, status: priority.status } : p
+                  p.id === id ? priority : p
                 ),
                 syncError: formatApiError("Update task completion", e),
               }))
@@ -2642,7 +2711,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           secondaryTasks: s.secondaryTasks.map((t) =>
             t.id === id
-              ? { ...t, completed: newCompleted, status: newCompleted ? "completed" : "active" }
+              ? applyOptimisticPriorityTruth(t, newCompleted)
               : t
           ),
         }));
@@ -2654,7 +2723,7 @@ export const useAppStore = create<AppState>()(
             .catch((e) =>
               set((s) => ({
                 secondaryTasks: s.secondaryTasks.map((t) =>
-                  t.id === id ? { ...t, completed: task.completed, status: task.status } : t
+                  t.id === id ? task : t
                 ),
                 syncError: formatApiError("Update secondary task", e),
               }))

@@ -6,6 +6,7 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { getCurrentYear } from "@/lib/mockData";
 import { ReportMetricCard } from "@/components/reports/ReportMetricCard";
+import { averageProgress } from "@/lib/goalsView";
 import {
   listYearSnapshots,
   monthlyCompletionRate,
@@ -57,9 +58,7 @@ export default function ReportsPage() {
   const completionFromReports = yearlyCompletionRate(activeYearSnapshot?.yearly ?? null);
   const completionRate =
     completionFromReports ??
-    (currentYearGoals.length
-      ? Math.round(currentYearGoals.reduce((sum, goal) => sum + (goal.progress ?? 0), 0) / currentYearGoals.length)
-      : Math.min(100, metrics.monthlyCompletionRate ?? 0));
+    (currentYearGoals.length ? averageProgress(currentYearGoals) : Math.min(100, metrics.monthlyCompletionRate ?? 0));
   const consistencyScore = average(metrics.weeklyConsistency ?? []);
   const linkedMonthlyGoals = currentYearMonthlyGoals.filter((goal) => goal.yearlyGoalId).length;
   const alignmentScore = currentYearMonthlyGoals.length

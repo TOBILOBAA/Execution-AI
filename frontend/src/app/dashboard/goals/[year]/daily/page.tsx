@@ -10,6 +10,7 @@ import { dashboardApi, type ApiDailyPriority, type ApiDashboard } from "@/lib/ap
 import {
   countGoalStates,
   formatGoalDay,
+  isGoalComplete,
   getGoalStateMeta,
   getProgressTone,
   listDaysForYearThroughDate,
@@ -50,6 +51,13 @@ function mapApiPriorityToStoreShape(priority: ApiDailyPriority): DailyPriority {
     tag: priority.tag,
     aiSuggested: priority.ai_suggested,
     editable: priority.editable,
+    truthStatus: priority.truth_status as DailyPriority["truthStatus"],
+    truthProgress: priority.truth_progress,
+    truthReason: priority.truth_reason,
+    hasActivity: priority.has_activity,
+    linkedChildrenCount: priority.linked_children_count,
+    completedChildrenCount: priority.completed_children_count,
+    periodClosed: priority.period_closed,
   };
 }
 
@@ -70,6 +78,13 @@ function mapStorePriorityToApiShape(priority: DailyPriority): ApiDailyPriority {
     tag: priority.tag,
     ai_suggested: priority.aiSuggested ?? false,
     editable: priority.editable,
+    truth_status: priority.truthStatus,
+    truth_progress: priority.truthProgress,
+    truth_reason: priority.truthReason,
+    has_activity: priority.hasActivity,
+    linked_children_count: priority.linkedChildrenCount,
+    completed_children_count: priority.completedChildrenCount,
+    period_closed: priority.periodClosed,
     created_at: "",
     updated_at: "",
   };
@@ -346,13 +361,12 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     const taskStateCounts = countGoalStates(taskItems, today);
     const completedHabits = activeHabits.filter((habit) => habit.completedToday).length;
     const openHabits = activeHabits.length - completedHabits;
-    const completedCount =
-      taskItems.filter((item) => item.completed || item.status === "completed").length + completedHabits;
+    const completedCount = taskItems.filter((item) => isGoalComplete(item)).length + completedHabits;
     const totalCount = taskItems.length + activeHabits.length;
     const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
     return {
       date,
-      prioritiesCount: totalCount,
+      plannedItemsCount: totalCount,
       completed: taskStateCounts.completed + completedHabits,
       inProgress: taskStateCounts["on-track"],
       atRisk: taskStateCounts["at-risk"],
@@ -847,7 +861,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                         {formatGoalDay(row.date)}
                       </p>
                       <p className="mt-1 text-xs" style={{ color: "#8a9e97" }}>
-                        {row.prioritiesCount} planned main goal{row.prioritiesCount === 1 ? "" : "s"}
+                        {row.plannedItemsCount} planned item{row.plannedItemsCount === 1 ? "" : "s"}
                       </p>
                     </div>
                     <span
@@ -909,7 +923,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           <table className="min-w-full">
             <thead>
               <tr className="text-left" style={{ background: "#fbfcfb" }}>
-                {["Day", "Goals", "Completed", "In Progress", "At Risk", "Not Started", "Progress"].map((label) => (
+                {["Day", "Planned Items", "Completed", "In Progress", "At Risk", "Not Started", "Progress"].map((label) => (
                   <th
                     key={label}
                     className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]"
@@ -940,7 +954,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                         </p>
                       </td>
                       <td className="px-4 py-4 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
-                        {row.prioritiesCount}
+                        {row.plannedItemsCount}
                       </td>
                       <td className="px-4 py-4 text-sm" style={{ color: getGoalStateMeta("completed").text }}>
                         {row.completed}

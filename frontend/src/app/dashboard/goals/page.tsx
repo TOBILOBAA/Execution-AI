@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
 import { goalsApi } from "@/lib/api";
-import { averageProgress, countGoalStates, getQuarterFromMonth } from "@/lib/goalsView";
+import { averageProgress, countGoalStates, getQuarterFromMonth, isGoalComplete } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
 
 function weeksRemainingInQuarter(todayIso: string, month: number) {
@@ -102,7 +102,7 @@ export default function GoalsOverviewPage() {
       year,
       count: goals.length,
       progress: averageProgress(goals),
-      completed: goals.filter((goal) => goal.status === "completed" || goal.progress >= 100).length,
+      completed: goals.filter((goal) => isGoalComplete(goal)).length,
     };
   });
 

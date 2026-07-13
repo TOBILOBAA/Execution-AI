@@ -7,6 +7,13 @@ export type GoalStatus =
   | "locked"
   | "pending";
 
+export type GoalTruthStatus =
+  | "completed"
+  | "in_progress"
+  | "review_ready"
+  | "at_risk"
+  | "not_started";
+
 export type PriorityLevel = "high" | "medium" | "low";
 
 export type TimeHorizon = "yearly" | "monthly" | "weekly" | "daily";
@@ -37,6 +44,13 @@ export interface YearlyGoal {
   targetDate?: string; // ISO date string
   aiSuggested?: boolean;
   editable?: boolean;
+  truthStatus?: GoalTruthStatus;
+  truthProgress?: number;
+  truthReason?: string;
+  hasActivity?: boolean;
+  linkedChildrenCount?: number;
+  completedChildrenCount?: number;
+  periodClosed?: boolean;
 }
 
 export interface MonthlyGoal {
@@ -55,6 +69,13 @@ export interface MonthlyGoal {
   isMain: boolean;
   aiSuggested?: boolean;
   editable?: boolean;
+  truthStatus?: GoalTruthStatus;
+  truthProgress?: number;
+  truthReason?: string;
+  hasActivity?: boolean;
+  linkedChildrenCount?: number;
+  completedChildrenCount?: number;
+  periodClosed?: boolean;
 }
 
 export interface WeeklyGoal {
@@ -73,6 +94,13 @@ export interface WeeklyGoal {
   workload?: string;
   aiSuggested?: boolean;
   editable?: boolean;
+  truthStatus?: GoalTruthStatus;
+  truthProgress?: number;
+  truthReason?: string;
+  hasActivity?: boolean;
+  linkedChildrenCount?: number;
+  completedChildrenCount?: number;
+  periodClosed?: boolean;
 }
 
 export interface DailyPriority {
@@ -89,6 +117,13 @@ export interface DailyPriority {
   tag?: string;
   aiSuggested?: boolean;
   editable?: boolean;
+  truthStatus?: GoalTruthStatus;
+  truthProgress?: number;
+  truthReason?: string;
+  hasActivity?: boolean;
+  linkedChildrenCount?: number;
+  completedChildrenCount?: number;
+  periodClosed?: boolean;
 }
 
 // ─── Habits ───────────────────────────────────────────────────────────────────

@@ -62,8 +62,8 @@ export default function DashboardHome() {
     todayRows[0] ??
     null;
   const completedGoalsToday =
-    (featuredMainGoal?.completed ? 1 : 0) + todayTasks.filter((task) => task.completed).length;
-  const totalGoalsToday = (featuredMainGoal ? 1 : 0) + todayTasks.length;
+    todayRows.filter((priority) => priority.completed).length + todayTasks.filter((task) => task.completed).length;
+  const totalGoalsToday = todayRows.length + todayTasks.length;
   const todaysProgress = totalGoalsToday > 0 ? Math.round((completedGoalsToday / totalGoalsToday) * 100) : 0;
   const mainPriorityCapReached = todayRows.length >= 3;
   const isPreviewingAnotherDay = activeDashboardDate !== getToday();
@@ -85,6 +85,7 @@ export default function DashboardHome() {
   const featuredDescription = featuredMainGoal
     ? compactDescription(featuredMainGoal.description, "Keep this goal clear, focused, and easy to move forward today.")
     : "";
+  const featuredTruthReason = featuredMainGoal?.truthReason?.trim() || "";
 
   return (
     <>
@@ -305,6 +306,12 @@ export default function DashboardHome() {
                         <p className="max-w-2xl text-[15px] leading-7 line-clamp-2" style={{ color: "#667670" }}>
                           {featuredDescription}
                         </p>
+
+                        {featuredTruthReason ? (
+                          <p className="text-sm leading-6" style={{ color: "#6b7c75" }}>
+                            {featuredTruthReason}
+                          </p>
+                        ) : null}
 
                         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 text-sm" style={{ color: "#667670" }}>
                           {featuredMainGoal.estimatedMinutes ? (
