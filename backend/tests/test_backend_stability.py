@@ -403,6 +403,7 @@ class BackendStabilityTests(unittest.TestCase):
         fake_priority = {"id": "priority-1", "title": "Ship backend fixes"}
 
         with (
+            patch.object(execution_routes, "assert_period_current_daily"),
             patch.object(execution_routes.plans_db, "get_daily_plan", return_value=None),
             patch.object(execution_routes.plans_db, "get_weekly_plan", return_value=None),
             patch.object(execution_routes.plans_db, "upsert_daily_plan", return_value=fake_plan) as upsert_plan,

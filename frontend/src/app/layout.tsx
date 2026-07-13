@@ -1,11 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { SupabaseAuthSync } from "@/components/SupabaseAuthSync";
 import type { CSSProperties } from "react";
 
-const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
+const plusJakarta = localFont({
+  src: [
+    {
+      path: "./fonts/PlusJakartaSans-VariableFont_wght.ttf",
+      style: "normal",
+      weight: "200 800",
+    },
+    {
+      path: "./fonts/PlusJakartaSans-Italic-VariableFont_wght.ttf",
+      style: "italic",
+      weight: "200 800",
+    },
+  ],
   variable: "--font-jakarta",
 });
 
