@@ -32,13 +32,18 @@ import {
   tasksApi,
   habitsApi,
   dashboardApi,
+  goalsApi,
   reportsApi,
   sessionsApi,
   type ApiDashboard,
+  type ApiGoalsHierarchy,
+  type ApiDailyPlan,
+  type ApiMonthlyPlan,
   type ApiReport,
   type ApiYearlyGoal,
   type ApiMonthlyGoal,
   type ApiWeeklyGoal,
+  type ApiWeeklyPlan,
 } from "./api";
 import { ensureBackendSession, clearSessionId } from "./session";
 import { formatApiError } from "./apiErrors";
@@ -123,6 +128,9 @@ interface AppState {
   onboardingStep: number;
   onboardingComplete: boolean;
   kickoffPending: boolean;
+  monthlyPlanDraft: unknown | null;
+  weeklyPlanDraft: unknown | null;
+  dailyPlanDraft: unknown | null;
   setOnboardingStep: (step: number) => Promise<boolean>;
   completeOnboarding: () => Promise<boolean>;
   dismissKickoff: () => void;
@@ -550,6 +558,112 @@ async function loadDashboardIntoStore(
   return request;
 }
 
+function isNotFoundApiError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
+function extractPendingPlanDraft<
+  T extends { status: string; ai_draft?: Record<string, unknown> | null },
+>(plan: T | null | undefined): Record<string, unknown> | null {
+  if (!plan || plan.status !== "draft") {
+    return null;
+  }
+  return plan.ai_draft ?? null;
+}
+
+function mapOnboardingHierarchyToStore(data: ApiGoalsHierarchy) {
+  const todaysItems = data.year_daily_priorities
+    .filter((priority) => priority.date === data.today)
+    .map(mapApiGoalToPriority);
+
+  return {
+    categories: data.categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      icon: category.icon,
+      color: category.color,
+    })),
+    yearlyGoals: data.yearly_goals.map(mapApiYearlyGoalToStore),
+    monthlyGoals: data.monthly_goals.map(mapApiMonthlyGoalToStore),
+    weeklyGoals: data.weekly_goals.map(mapApiWeeklyGoalToStore),
+    dailyPriorities: todaysItems.filter((item) => item.isMain),
+    secondaryTasks: todaysItems.filter((item) => !item.isMain),
+    activeDashboardDate: data.today,
+  };
+}
+
+async function loadOnboardingWorkspaceSnapshot(
+  sessionId: string,
+  timezone: string,
+  weekStartsOn: WeekStartsOn,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+  get: () => AppState,
+): Promise<void> {
+  const today = getToday(timezone);
+  const referenceDate = getReferenceDate(today);
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth() + 1;
+  const weekNumber = getWeekNumber(referenceDate, weekStartsOn);
+
+  const [hierarchyResult, habitsResult, monthlyPlanResult, weeklyPlanResult, dailyPlanResult] =
+    await Promise.allSettled([
+      goalsApi.hierarchy(sessionId, { year, weekNumber }),
+      habitsApi.list(sessionId),
+      monthlyPlanApi.get(sessionId, year, month),
+      weeklyPlanApi.get(sessionId, year, weekNumber),
+      dailyPlanApi.get(sessionId, today),
+    ]);
+
+  if (get().sessionId !== sessionId) {
+    return;
+  }
+
+  const nextState: Partial<AppState> = {
+    monthlyPlanDraft: null,
+    weeklyPlanDraft: null,
+    dailyPlanDraft: null,
+  };
+  let firstError: string | null = null;
+
+  if (hierarchyResult.status === "fulfilled") {
+    Object.assign(nextState, mapOnboardingHierarchyToStore(hierarchyResult.value));
+    loadedCategoriesForSession.add(sessionId);
+  } else {
+    firstError = formatApiError("Restore onboarding planning state", hierarchyResult.reason);
+  }
+
+  if (habitsResult.status === "fulfilled") {
+    nextState.habits = habitsResult.value.map(mapApiHabit);
+  } else if (!firstError) {
+    firstError = formatApiError("Restore onboarding routines", habitsResult.reason);
+  }
+
+  const applyPlanDraft = <
+    T extends ApiMonthlyPlan | ApiWeeklyPlan | ApiDailyPlan,
+  >(
+    result: PromiseSettledResult<T>,
+    field: "monthlyPlanDraft" | "weeklyPlanDraft" | "dailyPlanDraft",
+    label: string,
+  ) => {
+    if (result.status === "fulfilled") {
+      nextState[field] = extractPendingPlanDraft(result.value);
+      return;
+    }
+    if (!isNotFoundApiError(result.reason) && !firstError) {
+      firstError = formatApiError(label, result.reason);
+    }
+  };
+
+  applyPlanDraft(monthlyPlanResult, "monthlyPlanDraft", "Restore monthly draft");
+  applyPlanDraft(weeklyPlanResult, "weeklyPlanDraft", "Restore weekly draft");
+  applyPlanDraft(dailyPlanResult, "dailyPlanDraft", "Restore daily draft");
+
+  set({
+    ...nextState,
+    syncError: firstError,
+  });
+}
+
 // Pre-seeded demo user
 const DEMO_USER: StoredUser = {
   id: "user-demo",
@@ -617,6 +731,9 @@ function buildSignedOutWorkspaceState(): Partial<AppState> {
     onboardingStep: 1,
     onboardingComplete: false,
     kickoffPending: false,
+    monthlyPlanDraft: null,
+    weeklyPlanDraft: null,
+    dailyPlanDraft: null,
     categories: DEFAULT_CATEGORIES,
     yearlyGoals: [],
     monthlyGoals: [],
@@ -676,6 +793,9 @@ async function attachBackendAfterAuth(
       onboardingComplete: false,
       onboardingStep: 1,
       kickoffPending: false,
+      monthlyPlanDraft: null,
+      weeklyPlanDraft: null,
+      dailyPlanDraft: null,
       categories: DEFAULT_CATEGORIES,
       yearlyGoals: [],
       monthlyGoals: [],
@@ -759,7 +879,7 @@ async function attachBackendAfterAuth(
         dashboardPromise = get().loadCurrentDashboard();
       }
       if (!done) {
-        await categoriesPromise;
+        await loadOnboardingWorkspaceSnapshot(sid, ob.timezone, ob.week_starts_on, set, get);
       }
       if (done && !ob.onboarding_done) {
         void sessionsApi
@@ -1149,6 +1269,9 @@ export const useAppStore = create<AppState>()(
             onboardingComplete: false,
             onboardingStep: 1,
             kickoffPending: false,
+            monthlyPlanDraft: null,
+            weeklyPlanDraft: null,
+            dailyPlanDraft: null,
             categories: DEFAULT_CATEGORIES,
             yearlyGoals: [],
             monthlyGoals: [],
@@ -1209,6 +1332,9 @@ export const useAppStore = create<AppState>()(
           onboardingComplete: false,
           onboardingStep: 1,
           kickoffPending: false,
+          monthlyPlanDraft: null,
+          weeklyPlanDraft: null,
+          dailyPlanDraft: null,
           categories: DEFAULT_CATEGORIES,
           yearlyGoals: [],
           monthlyGoals: [],
@@ -1306,6 +1432,9 @@ export const useAppStore = create<AppState>()(
             onboardingComplete: false,
             onboardingStep: 1,
             kickoffPending: false,
+            monthlyPlanDraft: null,
+            weeklyPlanDraft: null,
+            dailyPlanDraft: null,
             categories: DEFAULT_CATEGORIES,
             yearlyGoals: [],
             monthlyGoals: [],
@@ -1431,6 +1560,9 @@ export const useAppStore = create<AppState>()(
       onboardingStep: 1,
       onboardingComplete: false,
       kickoffPending: false,
+      monthlyPlanDraft: null,
+      weeklyPlanDraft: null,
+      dailyPlanDraft: null,
       setOnboardingStep: async (step) => {
         const { sessionId, backendReady } = get();
         if (sessionId && backendReady) {
@@ -1456,7 +1588,15 @@ export const useAppStore = create<AppState>()(
         if (sessionId && backendReady) {
           try {
             await sessionsApi.update(sessionId, { onboarding_done: true, onboarding_step: 4 });
-            set({ onboardingComplete: true, kickoffPending: true, onboardingStep: 4, syncError: null });
+            set({
+              onboardingComplete: true,
+              kickoffPending: true,
+              onboardingStep: 4,
+              monthlyPlanDraft: null,
+              weeklyPlanDraft: null,
+              dailyPlanDraft: null,
+              syncError: null,
+            });
             await get().loadCurrentDashboard();
             return true;
           } catch (e) {
@@ -1468,7 +1608,14 @@ export const useAppStore = create<AppState>()(
           set({ syncError: "Complete onboarding on server: Backend session is not ready." });
           return false;
         }
-        set({ onboardingComplete: true, kickoffPending: true, onboardingStep: 4 });
+        set({
+          onboardingComplete: true,
+          kickoffPending: true,
+          onboardingStep: 4,
+          monthlyPlanDraft: null,
+          weeklyPlanDraft: null,
+          dailyPlanDraft: null,
+        });
         return true;
       },
       dismissKickoff: () => set({ kickoffPending: false }),
@@ -1763,7 +1910,8 @@ export const useAppStore = create<AppState>()(
       },
       syncYearlyGoalsToServer: async (options) => {
         const mode = options?.mode ?? "sync";
-        const { yearlyGoals } = get();
+        const { yearlyGoals, activeDashboardDate } = get();
+        const currentPlanningYear = Number(activeDashboardDate.slice(0, 4)) || getCurrentYear();
         let sessionId = get().sessionId;
         if (!sessionId) {
           if (requiresServerPersistence()) {
@@ -1776,10 +1924,10 @@ export const useAppStore = create<AppState>()(
         }
         set({ syncStatus: "saving" });
         const localIds = yearlyGoals
-          .filter((g) => g.year === getCurrentYear() && !isUuid(g.id))
+          .filter((g) => g.year === currentPlanningYear && !isUuid(g.id))
           .map((g) => g.id);
         await waitForPendingCreates(pendingYearlyGoalCreates, localIds);
-        const pending = get().yearlyGoals.filter((g) => g.year === getCurrentYear() && !isUuid(g.id));
+        const pending = get().yearlyGoals.filter((g) => g.year === currentPlanningYear && !isUuid(g.id));
         if (mode === "verify" && pending.length > 0) {
           set({
             syncError: `${pending.length} yearly goal(s) are still saving. Wait a moment and try again.`,
@@ -1821,7 +1969,7 @@ export const useAppStore = create<AppState>()(
             return false;
           }
         }
-        const stillLocal = get().yearlyGoals.filter((g) => g.year === getCurrentYear() && !isUuid(g.id));
+        const stillLocal = get().yearlyGoals.filter((g) => g.year === currentPlanningYear && !isUuid(g.id));
         if (stillLocal.length > 0) {
           set({
             syncError: `${stillLocal.length} yearly goal(s) could not be synced (still local-only). Check your connection and try again.`,
@@ -1830,10 +1978,10 @@ export const useAppStore = create<AppState>()(
           return false;
         }
         try {
-          const serverGoals = await yearlyGoalsApi.list(sessionId, getCurrentYear());
+          const serverGoals = await yearlyGoalsApi.list(sessionId, currentPlanningYear);
           set((s) => ({
             yearlyGoals: [
-              ...s.yearlyGoals.filter((goal) => goal.year !== getCurrentYear()),
+              ...s.yearlyGoals.filter((goal) => goal.year !== currentPlanningYear),
               ...serverGoals.map(mapApiYearlyGoalToStore),
             ],
             syncError: null,
@@ -3205,7 +3353,7 @@ export const useAppStore = create<AppState>()(
             syncStatus: "saved",
           }));
           const result = await monthlyPlanApi.generate(sessionId, year, month);
-          set({ syncError: null, syncStatus: "saved" });
+          set({ syncError: null, syncStatus: "saved", monthlyPlanDraft: result.ai_draft });
           return { ok: true as const, draft: result.ai_draft };
         } catch (e) {
           if (
@@ -3248,6 +3396,7 @@ export const useAppStore = create<AppState>()(
                 ...s.monthlyGoals.filter((g) => g.month !== month || g.year !== year),
                 ...mapped,
               ],
+              monthlyPlanDraft: null,
               syncError: null,
             }));
           }
@@ -3292,7 +3441,7 @@ export const useAppStore = create<AppState>()(
           }
 
           const result = await weeklyPlanApi.generate(sessionId, year, weekNumber);
-          set({ syncError: null, syncStatus: "saved" });
+          set({ syncError: null, syncStatus: "saved", weeklyPlanDraft: result.ai_draft });
           return { ok: true as const, draft: result.ai_draft };
         } catch (e) {
           if (
@@ -3337,6 +3486,7 @@ export const useAppStore = create<AppState>()(
                 ...s.weeklyGoals.filter((g) => g.weekNumber !== weekNumber || g.year !== year),
                 ...mapped,
               ],
+              weeklyPlanDraft: null,
               syncError: null,
             }));
           }
@@ -3377,7 +3527,7 @@ export const useAppStore = create<AppState>()(
           }
 
           const result = await dailyPlanApi.generate(sessionId, date);
-          set({ syncError: null, syncStatus: "saved" });
+          set({ syncError: null, syncStatus: "saved", dailyPlanDraft: result.ai_draft });
           return { ok: true as const, draft: result.ai_draft };
         } catch (e) {
           if (
@@ -3411,6 +3561,7 @@ export const useAppStore = create<AppState>()(
                 ...s.secondaryTasks.filter((t) => t.date !== date),
                 ...secondaryItems,
               ],
+              dailyPlanDraft: null,
               syncError: null,
             }));
           }

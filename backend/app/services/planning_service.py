@@ -25,6 +25,7 @@ from app.utils.planning_logic import (
     build_weekly_planning_payload,
     build_daily_planning_payload,
 )
+from app.schemas.reports import AIGoalItem
 from app.services import ai_service
 import app.db.plans as plans_db
 import app.db.yearly_goals as yg_db
@@ -168,6 +169,14 @@ def _normalize_ref_title(
     return None
 
 
+def _coerce_ai_goal_item(item: object) -> AIGoalItem:
+    if isinstance(item, AIGoalItem):
+        return item
+    if hasattr(item, "model_dump"):
+        return AIGoalItem.model_validate(item.model_dump())
+    return AIGoalItem.model_validate(item)
+
+
 def _normalize_monthly_ai_output(ai_output, yearly_goals: list[dict]):
     def normalize_item(item: dict) -> dict:
         yearly_title = _normalize_ref_title(
@@ -185,8 +194,14 @@ def _normalize_monthly_ai_output(ai_output, yearly_goals: list[dict]):
 
     return ai_output.model_copy(
         update={
-            "main_goals": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.main_goals],
-            "secondary_goals": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.secondary_goals],
+            "main_goals": [
+                _coerce_ai_goal_item(normalize_item(item.model_dump() if hasattr(item, "model_dump") else item))
+                for item in ai_output.main_goals
+            ],
+            "secondary_goals": [
+                _coerce_ai_goal_item(normalize_item(item.model_dump() if hasattr(item, "model_dump") else item))
+                for item in ai_output.secondary_goals
+            ],
         }
     )
 
@@ -218,8 +233,14 @@ def _normalize_weekly_ai_output(ai_output, monthly_goals: list[dict], yearly_goa
 
     return ai_output.model_copy(
         update={
-            "main_goals": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.main_goals],
-            "secondary_goals": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.secondary_goals],
+            "main_goals": [
+                _coerce_ai_goal_item(normalize_item(item.model_dump() if hasattr(item, "model_dump") else item))
+                for item in ai_output.main_goals
+            ],
+            "secondary_goals": [
+                _coerce_ai_goal_item(normalize_item(item.model_dump() if hasattr(item, "model_dump") else item))
+                for item in ai_output.secondary_goals
+            ],
         }
     )
 
@@ -258,10 +279,18 @@ def _normalize_daily_ai_output(ai_output, weekly_goals: list[dict], monthly_goal
 
     return ai_output.model_copy(
         update={
-            "top_priorities": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.top_priorities],
-            "secondary_tasks": [normalize_item(item.model_dump() if hasattr(item, "model_dump") else item) for item in ai_output.secondary_tasks],
+            "top_priorities": [
+                _coerce_ai_goal_item(normalize_item(item.model_dump() if hasattr(item, "model_dump") else item))
+                for item in ai_output.top_priorities
+            ],
+            "secondary_tasks": [
+                _coerce_ai_goal_item(normalize_item(item.model_dump() if hasattr(item, "model_dump") else item))
+                for item in ai_output.secondary_tasks
+            ],
         }
     )
+
+
 def _single_main_goal(rows: list[dict]) -> dict | None:
     mains = [row for row in rows if row.get("is_main")]
     if len(mains) == 1:

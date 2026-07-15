@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { DailyPriority, FoundationalHabit, HabitFrequency } from "@/lib/types";
@@ -317,6 +317,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
     removeHabit,
     generateDailyPlan,
     approveDailyPlan,
+    dailyPlanDraft,
     syncDailySetupToServer,
     sessionTimezone,
   } = useAppStore(
@@ -337,6 +338,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       removeHabit: state.removeHabit,
       generateDailyPlan: state.generateDailyPlan,
       approveDailyPlan: state.approveDailyPlan,
+      dailyPlanDraft: state.dailyPlanDraft,
       syncDailySetupToServer: state.syncDailySetupToServer,
       sessionTimezone: state.sessionTimezone,
     })),
@@ -359,6 +361,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
   const [aiAccepting, setAiAccepting] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
   const [aiRowKeys, setAiRowKeys] = useState<Set<string>>(() => new Set());
+  const [draftSeeded, setDraftSeeded] = useState(false);
 
   const buildAiRowKeys = (draft: DailyAIDraft) => {
     const next = new Set<string>();
@@ -366,6 +369,14 @@ export function StepDaily({ onFinish, onBack }: Props) {
     (draft.secondary_tasks ?? []).forEach((_, i) => next.add(`t:${i}`));
     return next;
   };
+
+  useEffect(() => {
+    if (draftSeeded || !dailyPlanDraft) return;
+    const draft = dailyPlanDraft as DailyAIDraft;
+    setAiDraft(draft);
+    setAiRowKeys(buildAiRowKeys(draft));
+    setDraftSeeded(true);
+  }, [dailyPlanDraft, draftSeeded]);
 
   const aiSelectedCount = useMemo(() => {
     if (!aiDraft) return 0;
@@ -421,6 +432,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       const draft = result.draft as DailyAIDraft;
       setAiDraft(draft);
       setAiRowKeys(buildAiRowKeys(draft));
+      setDraftSeeded(true);
     }
     setAiLoading(false);
   };
@@ -677,7 +689,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
           <SectionHeader
             number="01"
             title="Essential Priorities"
-            subtitle="The three non-negotiables for a successful day."
+            subtitle="The main goal that should define a successful day."
             action="Add Priority"
             onAction={() => setPriorityModal(true)}
           />
@@ -688,7 +700,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             {todayPriorities.length === 0 ? (
               <div className="py-8 text-center">
                 <p className="text-sm" style={{ color: "#a8b5af" }}>
-                  No priorities yet — add your top 3 for today.
+                  No main goal yet — add the one priority that matters most today.
                 </p>
               </div>
             ) : (
@@ -699,7 +711,9 @@ export function StepDaily({ onFinish, onBack }: Props) {
                   index={idx}
                   isLast={idx === todayPriorities.length - 1}
                   onEdit={() => setPriorityModal(p)}
-                  onDelete={() => removeDailyPriority(p.id)}
+                  onDelete={async () => {
+                    await removeDailyPriority(p.id, { persistMode: "blocking" });
+                  }}
                 />
               ))
             )}
@@ -733,7 +747,9 @@ export function StepDaily({ onFinish, onBack }: Props) {
                   index={idx}
                   isLast={idx === todayTasks.length - 1}
                   onEdit={() => setTaskModal(t)}
-                  onDelete={() => removeSecondaryTask(t.id)}
+                  onDelete={async () => {
+                    await removeSecondaryTask(t.id, { persistMode: "blocking" });
+                  }}
                 />
               ))
             )}
@@ -755,7 +771,9 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 key={habit.id}
                 habit={habit}
                 onEdit={() => setHabitModal(habit)}
-                onDelete={() => removeHabit(habit.id)}
+                onDelete={async () => {
+                  await removeHabit(habit.id, { persistMode: "blocking" });
+                }}
               />
             ))}
             {activeHabits.length === 0 && (
@@ -816,6 +834,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
         <AddDailyPriorityModal
           categories={categories}
           weeklyGoals={weeklyGoals}
+          mainGoalCapReached={!isEditingPriority && todayPriorities.length >= 1}
           initialTitle={isEditingPriority ? (priorityModal as DailyPriority).title : ""}
           initialCategoryId={
             isEditingPriority
@@ -825,29 +844,38 @@ export function StepDaily({ onFinish, onBack }: Props) {
           initialWeeklyGoalId={isEditingPriority ? (priorityModal as DailyPriority).weeklyGoalId : undefined}
           initialAllocation={isEditingPriority ? (priorityModal as DailyPriority).estimatedMinutes : 30}
           initialDescription={isEditingPriority ? (priorityModal as DailyPriority).description : undefined}
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
             if (isEditingPriority) {
-              updateDailyPriority((priorityModal as DailyPriority).id, {
-                title: data.title,
-                estimatedMinutes: data.estimatedMinutes,
-                tag: data.tag,
-                weeklyGoalId: data.weeklyGoalId,
-                description: data.description,
-              });
+              const ok = await updateDailyPriority(
+                (priorityModal as DailyPriority).id,
+                {
+                  title: data.title,
+                  estimatedMinutes: data.estimatedMinutes,
+                  tag: data.tag,
+                  weeklyGoalId: data.weeklyGoalId,
+                  description: data.description,
+                },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             } else {
-              addDailyPriority({
-                title: data.title,
-                estimatedMinutes: data.estimatedMinutes,
-                tag: data.tag,
-                weeklyGoalId: data.weeklyGoalId,
-                ...(data.description ? { description: data.description } : {}),
-                date: todayStr,
-                status: "active",
-                completed: false,
-                priority: "high",
-                isMain: true,
-                aiSuggested: false,
-              });
+              const ok = await addDailyPriority(
+                {
+                  title: data.title,
+                  estimatedMinutes: data.estimatedMinutes,
+                  tag: data.tag,
+                  weeklyGoalId: data.weeklyGoalId,
+                  ...(data.description ? { description: data.description } : {}),
+                  date: todayStr,
+                  status: "active",
+                  completed: false,
+                  priority: "high",
+                  isMain: true,
+                  aiSuggested: false,
+                },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             }
             setPriorityModal(null);
           }}
@@ -859,6 +887,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
         <AddSecondaryTaskModal
           categories={categories}
           weeklyGoals={weeklyGoals}
+          secondaryGoalCapReached={!isEditingTask && todayTasks.length >= 3}
           initialTitle={isEditingTask ? (taskModal as DailyPriority).title : ""}
           initialCategoryId={isEditingTask
             ? categories.find((c) => c.name === (taskModal as DailyPriority).tag)?.id
@@ -866,29 +895,38 @@ export function StepDaily({ onFinish, onBack }: Props) {
           initialWeeklyGoalId={isEditingTask ? (taskModal as DailyPriority).weeklyGoalId : undefined}
           initialAllocation={isEditingTask ? (taskModal as DailyPriority).estimatedMinutes : 30}
           initialDescription={isEditingTask ? (taskModal as DailyPriority).description : undefined}
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
             if (isEditingTask) {
-              updateSecondaryTask((taskModal as DailyPriority).id, {
-                title: data.title,
-                estimatedMinutes: data.estimatedMinutes,
-                tag: data.tag,
-                weeklyGoalId: data.weeklyGoalId,
-                description: data.description,
-              });
+              const ok = await updateSecondaryTask(
+                (taskModal as DailyPriority).id,
+                {
+                  title: data.title,
+                  estimatedMinutes: data.estimatedMinutes,
+                  tag: data.tag,
+                  weeklyGoalId: data.weeklyGoalId,
+                  description: data.description,
+                },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             } else {
-              addSecondaryTask({
-                title: data.title,
-                estimatedMinutes: data.estimatedMinutes,
-                tag: data.tag,
-                weeklyGoalId: data.weeklyGoalId,
-                ...(data.description ? { description: data.description } : {}),
-                date: todayStr,
-                status: "active",
-                completed: false,
-                priority: "medium",
-                isMain: false,
-                aiSuggested: false,
-              });
+              const ok = await addSecondaryTask(
+                {
+                  title: data.title,
+                  estimatedMinutes: data.estimatedMinutes,
+                  tag: data.tag,
+                  weeklyGoalId: data.weeklyGoalId,
+                  ...(data.description ? { description: data.description } : {}),
+                  date: todayStr,
+                  status: "active",
+                  completed: false,
+                  priority: "medium",
+                  isMain: false,
+                  aiSuggested: false,
+                },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             }
             setTaskModal(null);
           }}

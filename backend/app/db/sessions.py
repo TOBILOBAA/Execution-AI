@@ -128,6 +128,8 @@ def get_session(db: Client, session_id: UUID) -> dict | None:
     result = (
         db.table(TABLE).select("*").eq("id", str(session_id)).maybe_single().execute()
     )
+    if result is None or getattr(result, "data", None) is None:
+        return None
     return _hydrate_session_defaults(result.data)
 
 

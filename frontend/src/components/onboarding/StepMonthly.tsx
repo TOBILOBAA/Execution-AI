@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { getCurrentMonth, getCurrentYear, MONTH_NAMES } from "@/lib/mockData";
@@ -128,6 +128,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
     removeHabit,
     generateMonthlyPlan,
     approveMonthlyPlan,
+    monthlyPlanDraft,
     syncMonthlyGoalsToServer,
   } = useAppStore(
     useShallow((state) => ({
@@ -144,6 +145,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       removeHabit: state.removeHabit,
       generateMonthlyPlan: state.generateMonthlyPlan,
       approveMonthlyPlan: state.approveMonthlyPlan,
+      monthlyPlanDraft: state.monthlyPlanDraft,
       syncMonthlyGoalsToServer: state.syncMonthlyGoalsToServer,
     })),
   );
@@ -161,6 +163,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
   const [leaveError, setLeaveError] = useState<string | null>(null);
   /** Which AI draft rows are included when saving (`m:0` main, `s:0` secondary). */
   const [aiRowKeys, setAiRowKeys] = useState<Set<string>>(() => new Set());
+  const [draftSeeded, setDraftSeeded] = useState(false);
 
   const buildAiRowKeys = (draft: AIDraft) => {
     const next = new Set<string>();
@@ -184,6 +187,14 @@ export function StepMonthly({ onNext, onBack }: Props) {
   const currentYear = Number(activeDashboardDate.slice(0, 4)) || getCurrentYear();
   const currentMonth = Number(activeDashboardDate.slice(5, 7)) || getCurrentMonth();
 
+  useEffect(() => {
+    if (draftSeeded || !monthlyPlanDraft) return;
+    const draft = monthlyPlanDraft as AIDraft;
+    setAiDraft(draft);
+    setAiRowKeys(buildAiRowKeys(draft));
+    setDraftSeeded(true);
+  }, [draftSeeded, monthlyPlanDraft]);
+
   const toggleAiRow = (key: string) => {
     setAiRowKeys((prev) => {
       const next = new Set(prev);
@@ -202,6 +213,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
       const draft = result.draft as AIDraft;
       setAiDraft(draft);
       setAiRowKeys(buildAiRowKeys(draft));
+      setDraftSeeded(true);
     } else if (!result.ok && result.code === "no_yearly_on_server") {
       setAiError(
         "The server does not have yearly goals for this year yet. Go back to Step 1 and save at least one yearly goal, then try AI again.",
@@ -266,7 +278,7 @@ export function StepMonthly({ onNext, onBack }: Props) {
   const isEditMode = goalModal !== null && typeof goalModal === "object";
   const addMode = typeof goalModal === "string" ? goalModal : null;
 
-  const handleGoalSubmit = (
+  const handleGoalSubmit = async (
     title: string,
     categoryId: string,
     yearlyGoalId: string,
@@ -278,30 +290,39 @@ export function StepMonthly({ onNext, onBack }: Props) {
     const wl = workload.trim();
     if (isEditMode && goalModal) {
       const g = goalModal as MonthlyGoal;
-      updateMonthlyGoal(g.id, {
-        title,
-        categoryId,
-        yearlyGoalId: yearlyGoalId || undefined,
-        targetDate,
-        description: desc,
-        workload: wl,
-      });
+      const ok = await updateMonthlyGoal(
+        g.id,
+        {
+          title,
+          categoryId,
+          yearlyGoalId: yearlyGoalId || undefined,
+          targetDate,
+          description: desc,
+          workload: wl,
+        },
+        { persistMode: "blocking" },
+      );
+      if (!ok) return;
     } else if (addMode) {
-      addMonthlyGoal({
-        title,
-        categoryId,
-        yearlyGoalId: yearlyGoalId || undefined,
-        targetDate,
-        ...(desc ? { description: desc } : {}),
-        ...(wl ? { workload: wl } : {}),
-        isMain: addMode === "main",
-        month: currentMonth,
-        year: currentYear,
-        status: "active",
-        progress: 0,
-        priority: addMode === "main" ? "high" : "medium",
-        aiSuggested: false,
-      });
+      const ok = await addMonthlyGoal(
+        {
+          title,
+          categoryId,
+          yearlyGoalId: yearlyGoalId || undefined,
+          targetDate,
+          ...(desc ? { description: desc } : {}),
+          ...(wl ? { workload: wl } : {}),
+          isMain: addMode === "main",
+          month: currentMonth,
+          year: currentYear,
+          status: "active",
+          progress: 0,
+          priority: addMode === "main" ? "high" : "medium",
+          aiSuggested: false,
+        },
+        { persistMode: "blocking" },
+      );
+      if (!ok) return;
     }
     setGoalModal(null);
   };
@@ -569,7 +590,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 goal={goal}
                 categoryName={getCategoryName(goal.categoryId)}
                 onEdit={() => setGoalModal(goal)}
-                onDelete={() => removeMonthlyGoal(goal.id)}
+                onDelete={async () => {
+                  await removeMonthlyGoal(goal.id, { persistMode: "blocking" });
+                }}
               />
             ))}
             {mainGoals.length === 0 && (
@@ -587,7 +610,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 key={goal.id}
                 goal={goal}
                 onEdit={() => setGoalModal(goal)}
-                onDelete={() => removeMonthlyGoal(goal.id)}
+                onDelete={async () => {
+                  await removeMonthlyGoal(goal.id, { persistMode: "blocking" });
+                }}
               />
             ))}
             {secondaryGoals.length === 0 && (
@@ -609,7 +634,9 @@ export function StepMonthly({ onNext, onBack }: Props) {
                 categoryName={getCategoryName(habit.categoryId)}
                 freqLabel={FREQ_LABELS[habit.frequency]}
                 onEdit={() => setHabitModal(habit)}
-                onDelete={() => removeHabit(habit.id)}
+                onDelete={async () => {
+                  await removeHabit(habit.id, { persistMode: "blocking" });
+                }}
               />
             ))}
             {activeHabits.length === 0 && (
@@ -653,6 +680,13 @@ export function StepMonthly({ onNext, onBack }: Props) {
           mode={isEditMode ? ((goalModal as MonthlyGoal).isMain ? "main" : "secondary") : (addMode as "main" | "secondary")}
           categories={categories}
           yearlyGoals={yearlyGoals.filter((g) => g.year === currentYear)}
+          currentCount={isEditMode ? 0 : addMode === "main" ? mainGoals.length : secondaryGoals.length}
+          maxCount={isEditMode ? undefined : addMode === "main" ? 1 : 2}
+          limitMessage={
+            addMode === "main"
+              ? "You can only save 1 main goal for this month."
+              : "You can only save up to 2 secondary goals for this month."
+          }
           initialTitle={isEditMode ? (goalModal as MonthlyGoal).title : ""}
           initialCategoryId={isEditMode ? (goalModal as MonthlyGoal).categoryId : undefined}
           initialYearlyGoalId={isEditMode ? (goalModal as MonthlyGoal).yearlyGoalId : undefined}

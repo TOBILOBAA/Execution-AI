@@ -28,7 +28,7 @@ interface Props {
     targetDate: string,
     description: string,
     workload: string,
-  ) => void;
+  ) => void | Promise<void>;
   onClose: () => void;
 }
 

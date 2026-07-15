@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { WeeklyGoal } from "@/lib/types";
@@ -349,6 +349,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
     removeHabit,
     generateWeeklyPlan,
     approveWeeklyPlan,
+    weeklyPlanDraft,
     syncWeeklyGoalsToServer,
     activeDashboardDate,
     sessionWeekStartsOn,
@@ -366,6 +367,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       removeHabit: state.removeHabit,
       generateWeeklyPlan: state.generateWeeklyPlan,
       approveWeeklyPlan: state.approveWeeklyPlan,
+      weeklyPlanDraft: state.weeklyPlanDraft,
       syncWeeklyGoalsToServer: state.syncWeeklyGoalsToServer,
       activeDashboardDate: state.activeDashboardDate,
       sessionWeekStartsOn: state.sessionWeekStartsOn,
@@ -403,6 +405,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
   const [aiAccepting, setAiAccepting] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
   const [aiRowKeys, setAiRowKeys] = useState<Set<string>>(() => new Set());
+  const [draftSeeded, setDraftSeeded] = useState(false);
 
   const buildAiRowKeys = (draft: WeeklyAIDraft) => {
     const next = new Set<string>();
@@ -410,6 +413,14 @@ export function StepWeekly({ onNext, onBack }: Props) {
     draft.secondary_goals?.forEach((_, i) => next.add(`s:${i}`));
     return next;
   };
+
+  useEffect(() => {
+    if (draftSeeded || !weeklyPlanDraft) return;
+    const draft = weeklyPlanDraft as WeeklyAIDraft;
+    setAiDraft(draft);
+    setAiRowKeys(buildAiRowKeys(draft));
+    setDraftSeeded(true);
+  }, [draftSeeded, weeklyPlanDraft]);
 
   const aiSelectedCount = useMemo(() => {
     if (!aiDraft) return 0;
@@ -466,6 +477,7 @@ export function StepWeekly({ onNext, onBack }: Props) {
       const draft = result.draft as WeeklyAIDraft;
       setAiDraft(draft);
       setAiRowKeys(buildAiRowKeys(draft));
+      setDraftSeeded(true);
     }
     setAiLoading(false);
   };
@@ -510,8 +522,8 @@ export function StepWeekly({ onNext, onBack }: Props) {
       setLeaveError("You need exactly one main goal for the week before continuing.");
       return;
     }
-    if (secondaryGoalsCount > 3) {
-      setLeaveError("You can have at most three secondary goals for the week.");
+    if (secondaryGoalsCount > 2) {
+      setLeaveError("You can have at most two secondary goals for the week.");
       return;
     }
     const ok = await syncWeeklyGoalsToServer(currentYear, currentWeek);
@@ -717,7 +729,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
               goal={goal}
               supportTitle={getMonthlyTitle(goal.monthlyGoalId)}
               onEdit={() => { setEditGoal(goal); setAddMainOpen(true); }}
-              onDelete={() => removeWeeklyGoal(goal.id)}
+              onDelete={async () => {
+                await removeWeeklyGoal(goal.id, { persistMode: "blocking" });
+              }}
             />
           ))}
           {mainGoals.length === 0 && (
@@ -759,7 +773,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
               key={goal.id}
               goal={goal}
               onEdit={() => { setEditGoal(goal); setAddSecOpen(true); }}
-              onDelete={() => removeWeeklyGoal(goal.id)}
+              onDelete={async () => {
+                await removeWeeklyGoal(goal.id, { persistMode: "blocking" });
+              }}
             />
           ))}
           {secondaryGoals.length === 0 && (
@@ -814,7 +830,9 @@ export function StepWeekly({ onNext, onBack }: Props) {
               key={habit.id}
               habit={habit}
               onEdit={() => setEditHabitId(habit.id)}
-              onDelete={() => removeHabit(habit.id)}
+              onDelete={async () => {
+                await removeHabit(habit.id, { persistMode: "blocking" });
+              }}
             />
           ))}
           {habits.length === 0 && (
@@ -868,25 +886,33 @@ export function StepWeekly({ onNext, onBack }: Props) {
         <AddWeeklyGoalModal
           mode="main"
           monthlyGoals={currentMonthlyGoals}
+          currentCount={mainGoals.length}
+          maxCount={1}
+          limitMessage="You can only save 1 main goal for this week."
           initialTitle={editGoal?.title}
           initialMonthlyGoalId={editGoal?.monthlyGoalId}
           initialTargetDay={editGoal?.targetDay}
           initialDescription={editGoal?.description}
           initialWorkload={editGoal?.workload}
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
             if (editGoal) {
-              updateWeeklyGoal(editGoal.id, data);
+              const ok = await updateWeeklyGoal(editGoal.id, data, { persistMode: "blocking" });
+              if (!ok) return;
             } else {
-              addWeeklyGoal({
-                ...data,
-                isMain: true,
-                weekNumber: currentWeek,
-                month: currentMonth,
-                year: currentYear,
-                status: "active",
-                progress: 0,
-                aiSuggested: false,
-              });
+              const ok = await addWeeklyGoal(
+                {
+                  ...data,
+                  isMain: true,
+                  weekNumber: currentWeek,
+                  month: currentMonth,
+                  year: currentYear,
+                  status: "active",
+                  progress: 0,
+                  aiSuggested: false,
+                },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             }
             setAddMainOpen(false);
             setEditGoal(null);
@@ -899,25 +925,33 @@ export function StepWeekly({ onNext, onBack }: Props) {
         <AddWeeklyGoalModal
           mode="secondary"
           monthlyGoals={currentMonthlyGoals}
+          currentCount={secondaryGoals.length}
+          maxCount={2}
+          limitMessage="You can only save up to 2 secondary goals for this week."
           initialTitle={editGoal?.title}
           initialMonthlyGoalId={editGoal?.monthlyGoalId}
           initialTargetDay={editGoal?.targetDay}
           initialDescription={editGoal?.description}
           initialWorkload={editGoal?.workload}
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
             if (editGoal) {
-              updateWeeklyGoal(editGoal.id, data);
+              const ok = await updateWeeklyGoal(editGoal.id, data, { persistMode: "blocking" });
+              if (!ok) return;
             } else {
-              addWeeklyGoal({
-                ...data,
-                isMain: false,
-                weekNumber: currentWeek,
-                month: currentMonth,
-                year: currentYear,
-                status: "active",
-                progress: 0,
-                aiSuggested: false,
-              });
+              const ok = await addWeeklyGoal(
+                {
+                  ...data,
+                  isMain: false,
+                  weekNumber: currentWeek,
+                  month: currentMonth,
+                  year: currentYear,
+                  status: "active",
+                  progress: 0,
+                  aiSuggested: false,
+                },
+                { persistMode: "blocking" },
+              );
+              if (!ok) return;
             }
             setAddSecOpen(false);
             setEditGoal(null);

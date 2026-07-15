@@ -347,6 +347,53 @@ export interface ApiGoalsHierarchy {
   selected_week_daily_priorities: ApiDailyPriority[];
 }
 
+export interface ApiMonthlyPlan {
+  id: string;
+  session_id: string;
+  year: number;
+  month: number;
+  status: string;
+  days_in_month: number;
+  days_remaining: number;
+  ai_draft?: Record<string, unknown> | null;
+  ai_generated_at?: string | null;
+  approved_at?: string | null;
+  goals: ApiMonthlyGoal[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiWeeklyPlan {
+  id: string;
+  session_id: string;
+  year: number;
+  month: number;
+  week_number: number;
+  week_start: string;
+  week_end: string;
+  status: string;
+  days_remaining: number;
+  ai_draft?: Record<string, unknown> | null;
+  ai_generated_at?: string | null;
+  approved_at?: string | null;
+  goals: ApiWeeklyGoal[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiDailyPlan {
+  id: string;
+  session_id: string;
+  date: string;
+  status: string;
+  ai_draft?: Record<string, unknown> | null;
+  ai_generated_at?: string | null;
+  approved_at?: string | null;
+  priorities: ApiDailyPriority[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiReport {
   id: string;
   session_id: string;
@@ -455,7 +502,7 @@ export const monthlyPlanApi = {
     post<{ id: string; status: string }>(`/monthly-plan/save?session_id=${sessionId}&year=${year}&month=${month}`, { goals }),
 
   get: (sessionId: string, year: number, month: number) =>
-    get<{ id: string; goals: ApiMonthlyGoal[]; status: string }>
+    get<ApiMonthlyPlan>
       (`/monthly-plan/${sessionId}?year=${year}&month=${month}`),
 
   addGoal: (sessionId: string, year: number, month: number, data: {
@@ -490,7 +537,7 @@ export const weeklyPlanApi = {
     post<{ id: string; status: string }>(`/weekly-plan/save?session_id=${sessionId}&year=${year}&week_number=${weekNumber}`, { goals }),
 
   get: (sessionId: string, year: number, weekNumber: number) =>
-    get<{ id: string; goals: ApiWeeklyGoal[]; status: string }>
+    get<ApiWeeklyPlan>
       (`/weekly-plan/${sessionId}?year=${year}&week_number=${weekNumber}`),
 
   addGoal: (sessionId: string, year: number, weekNumber: number, data: {
@@ -524,7 +571,7 @@ export const dailyPlanApi = {
     post<{ id: string; status: string }>(`/daily-plan/save?session_id=${sessionId}&date=${date}`, { priorities }),
 
   get: (sessionId: string, date: string) =>
-    get<{ id: string; priorities: ApiDailyPriority[]; status: string }>
+    get<ApiDailyPlan>
       (`/daily-plan/${sessionId}?date=${date}`),
 };
 

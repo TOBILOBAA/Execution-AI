@@ -26,35 +26,86 @@ export default function UpdatePasswordPage() {
     if (!sb) {
       return;
     }
-    const url = new URL(window.location.href);
-    const urlError = readSupabaseAuthErrorFromUrl(url);
-    if (urlError) {
-      setError(urlError);
-      setStatus("Reset link issue.");
+
+    let timeout = 0;
+    let cancelled = false;
+
+    const markReady = () => {
+      if (cancelled) return;
+      setReady(true);
+      setStatus("Reset link verified.");
+      setError("");
+    };
+
+    const failLink = (message: string) => {
+      if (cancelled) return;
       setReady(false);
-      return;
-    }
-    const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setReady(true);
-        setStatus("Reset link verified.");
+      setStatus("Reset link issue.");
+      setError(message);
+    };
+
+    const hydrateRecoverySession = async () => {
+      const url = new URL(window.location.href);
+      const urlError = readSupabaseAuthErrorFromUrl(url);
+      if (urlError) {
+        failLink(urlError);
+        return;
       }
-    });
-    void sb.auth.getSession().then(({ data: { session } }) => {
+
+      const code = url.searchParams.get("code");
+      if (code) {
+        const { error: codeError } = await sb.auth.exchangeCodeForSession(code);
+        if (codeError) {
+          failLink(describeSupabaseAuthError(codeError.message));
+          return;
+        }
+        markReady();
+        return;
+      }
+
+      const hash = window.location.hash.replace(/^#/, "");
+      if (hash) {
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+        if (accessToken && refreshToken) {
+          const { error: sessionError } = await sb.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (sessionError) {
+            failLink(describeSupabaseAuthError(sessionError.message));
+            return;
+          }
+          markReady();
+          return;
+        }
+      }
+
+      const { data: { session } } = await sb.auth.getSession();
       if (session) {
-        setReady(true);
-        setStatus("Reset link verified.");
+        markReady();
+      }
+    };
+
+    const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+        markReady();
       }
     });
-    const timeout = window.setTimeout(() => {
+
+    void hydrateRecoverySession();
+
+    timeout = window.setTimeout(() => {
       setReady((currentReady) => {
         if (currentReady) return currentReady;
-        setError("This reset link is invalid or has expired. Request a new reset email and try again.");
-        setStatus("Reset link issue.");
+        failLink("This reset link is invalid or has expired. Request a new reset email and try again.");
         return currentReady;
       });
     }, 6000);
+
     return () => {
+      cancelled = true;
       subscription.unsubscribe();
       window.clearTimeout(timeout);
     };
