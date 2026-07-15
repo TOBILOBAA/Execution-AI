@@ -95,6 +95,8 @@ interface AppState {
   hydrateAuthFromSupabase: () => Promise<void>;
   /** Password reset email (Supabase + Resend SMTP in project settings). */
   sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
+  /** Clear all auth-owned workspace state after sign-out or expired session recovery. */
+  clearSignedOutWorkspace: () => void;
 
   // ── Backend session ──────────────────────────────────────────────────────────
   sessionId: string | null;
@@ -477,12 +479,20 @@ async function loadCategoriesOnce(
   const request = categoriesApi
     .list(sessionId)
     .then(async (categories) => {
+      if (get().sessionId !== sessionId) {
+        return;
+      }
       const reconciledCategories = await reconcileOnboardingCategories(sessionId, categories, set, get);
+      if (get().sessionId !== sessionId) {
+        return;
+      }
       applyServerCategories(reconciledCategories, set, get);
       loadedCategoriesForSession.add(sessionId);
     })
     .catch((e) => {
-      set({ syncError: formatApiError("Load categories", e) });
+      if (get().sessionId === sessionId) {
+        set({ syncError: formatApiError("Load categories", e) });
+      }
     })
     .finally(() => {
       if (pendingCategoryLoads.get(sessionId) === request) {
@@ -498,6 +508,7 @@ async function loadDashboardIntoStore(
   sessionId: string,
   requestedDate: string | undefined,
   set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+  get: () => AppState,
 ): Promise<void> {
   const requestKey = `${sessionId}:${requestedDate ?? "__current__"}`;
   const existing = pendingDashboardLoads.get(requestKey);
@@ -509,6 +520,9 @@ async function loadDashboardIntoStore(
   const request = dashboardApi
     .get(sessionId, requestedDate)
     .then((data) => {
+      if (get().sessionId !== sessionId) {
+        return;
+      }
       set((s) => ({
         ...s,
         ...mapDashboardToStore(data, {
@@ -521,7 +535,9 @@ async function loadDashboardIntoStore(
       }));
     })
     .catch((e) => {
-      set({ syncError: formatApiError("Load dashboard from server", e) });
+      if (get().sessionId === sessionId) {
+        set({ syncError: formatApiError("Load dashboard from server", e) });
+      }
     })
     .finally(() => {
       if (pendingDashboardLoads.get(requestKey) === request) {
@@ -575,6 +591,47 @@ function mergeSeededRegistryUsers(set: (partial: Partial<AppState>) => void, get
   if (changed) set({ registeredUsers: next });
 }
 
+function resetAuthScopedCaches() {
+  pendingDashboardLoads.clear();
+  pendingCategoryLoads.clear();
+  pendingReportsLoads.clear();
+  loadedCategoriesForSession.clear();
+}
+
+function buildSignedOutWorkspaceState(): Partial<AppState> {
+  return {
+    currentUser: null,
+    authReady: true,
+    sessionId: null,
+    sessionTimezone: "UTC",
+    sessionWeekStartsOn: "monday",
+    backendReady: false,
+    workspaceHydrating: false,
+    dashboardLoading: false,
+    reportsLoading: false,
+    reportsHydrated: false,
+    workspaceOwnerId: null,
+    syncError: null,
+    syncStatus: "idle",
+    activeDashboardDate: getToday(),
+    onboardingStep: 1,
+    onboardingComplete: false,
+    kickoffPending: false,
+    categories: DEFAULT_CATEGORIES,
+    yearlyGoals: [],
+    monthlyGoals: [],
+    weeklyGoals: [],
+    dailyPriorities: [],
+    secondaryTasks: [],
+    habits: [],
+    metrics: EMPTY_DASHBOARD_METRICS,
+    reports: [],
+    pendingRecaps: [],
+    activeModal: null,
+    modalData: null,
+  };
+}
+
 /**
  * After login: bind workspace to this user, ensure backend session, then pull
  * onboarding metadata + dashboard data in parallel.
@@ -609,7 +666,13 @@ async function attachBackendAfterAuth(
 
   if (switchingAccount) {
     set({
+      sessionId: null,
+      sessionTimezone: "UTC",
+      sessionWeekStartsOn: "monday",
+      activeDashboardDate: getToday(),
+      backendReady: false,
       workspaceOwnerId: userId,
+      dashboardLoading: false,
       onboardingComplete: false,
       onboardingStep: 1,
       kickoffPending: false,
@@ -624,7 +687,8 @@ async function attachBackendAfterAuth(
       reports: [],
       reportsLoading: false,
       reportsHydrated: false,
-      sessionWeekStartsOn: "monday",
+      pendingRecaps: [],
+      syncError: null,
     });
   } else if (prevOwner === null) {
     set({ workspaceOwnerId: userId });
@@ -654,9 +718,11 @@ async function attachBackendAfterAuth(
     set({ sessionId: sid, backendReady: true });
   } catch (e) {
     set({
+      sessionId: null,
       backendReady: false,
       dashboardLoading: false,
       reportsLoading: false,
+      reportsHydrated: false,
       syncError: formatApiError("Start backend session", e),
       workspaceHydrating: false,
     });
@@ -1021,6 +1087,10 @@ export const useAppStore = create<AppState>()(
       currentUser: null,
       authReady: false,
       registeredUsers: INITIAL_REGISTERED,
+      clearSignedOutWorkspace: () => {
+        resetAuthScopedCaches();
+        set(buildSignedOutWorkspaceState());
+      },
 
       signIn: async (email, password) => {
         mergeSeededRegistryUsers(set, get);
@@ -1196,7 +1266,7 @@ export const useAppStore = create<AppState>()(
         const em = email.toLowerCase().trim();
         const clean = token.replace(/\D/g, "");
         if (clean.length !== 6) {
-          return { success: false, error: "Enter the 8-digit code from your email." };
+          return { success: false, error: "Enter the 6-digit code from your email." };
         }
 
         const tryTypes =
@@ -1266,20 +1336,7 @@ export const useAppStore = create<AppState>()(
           await getSupabaseBrowser()?.auth.signOut();
         }
         if (user) clearSessionId(user.id);
-        set({
-          currentUser: null,
-          sessionId: null,
-          sessionWeekStartsOn: "monday",
-          activeDashboardDate: getToday(),
-          backendReady: false,
-          dashboardLoading: false,
-          reportsLoading: false,
-          reportsHydrated: false,
-          workspaceHydrating: false,
-          syncError: null,
-          pendingRecaps: [],
-          authReady: true,
-        });
+        get().clearSignedOutWorkspace();
       },
 
       hydrateAuthFromSupabase: async () => {
@@ -1298,19 +1355,9 @@ export const useAppStore = create<AppState>()(
           data: { session },
         } = await sb.auth.getSession();
         if (!session?.user?.email) {
-          set({
-            currentUser: null,
-            sessionId: null,
-            sessionWeekStartsOn: "monday",
-            activeDashboardDate: getToday(),
-            backendReady: false,
-            dashboardLoading: false,
-            reportsLoading: false,
-            reportsHydrated: false,
-            workspaceHydrating: false,
-            syncError: null,
-            authReady: true,
-          });
+          const cachedUserId = get().currentUser?.id ?? get().workspaceOwnerId ?? null;
+          if (cachedUserId) clearSessionId(cachedUserId);
+          get().clearSignedOutWorkspace();
           return;
         }
         const u = session.user;
@@ -1445,13 +1492,13 @@ export const useAppStore = create<AppState>()(
       loadDashboard: async (planDate) => {
         const { sessionId, activeDashboardDate } = get();
         if (!sessionId) return;
-        return loadDashboardIntoStore(sessionId, planDate ?? activeDashboardDate, set);
+        return loadDashboardIntoStore(sessionId, planDate ?? activeDashboardDate, set, get);
       },
 
       loadCurrentDashboard: async () => {
         const { sessionId } = get();
         if (!sessionId) return;
-        return loadDashboardIntoStore(sessionId, undefined, set);
+        return loadDashboardIntoStore(sessionId, undefined, set, get);
       },
 
       syncReports: async (force = false) => {
@@ -1469,11 +1516,15 @@ export const useAppStore = create<AppState>()(
         const request = reportsApi
           .list(sessionId)
           .then((serverReports) => {
-            set({ reports: serverReports, reportsHydrated: true, syncError: null });
+            if (get().sessionId === sessionId) {
+              set({ reports: serverReports, reportsHydrated: true, syncError: null });
+            }
             return serverReports;
           })
           .catch((e) => {
-            set({ syncError: formatApiError("Load reports list", e) });
+            if (get().sessionId === sessionId) {
+              set({ syncError: formatApiError("Load reports list", e) });
+            }
             return null;
           })
           .finally(() => {

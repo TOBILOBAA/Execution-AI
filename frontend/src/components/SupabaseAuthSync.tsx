@@ -32,18 +32,12 @@ export function SupabaseAuthSync() {
           if (liveSession?.user?.email) {
             return;
           }
-          const cur = useAppStore.getState().currentUser;
-          if (cur && cur.id !== DEMO_ID) {
-            clearSessionId(cur.id);
-            useAppStore.setState({
-              currentUser: null,
-              sessionId: null,
-              backendReady: false,
-              workspaceHydrating: false,
-              syncError: null,
-            });
+          const state = useAppStore.getState();
+          const cachedUserId = state.currentUser?.id ?? state.workspaceOwnerId ?? null;
+          if (cachedUserId && cachedUserId !== DEMO_ID) {
+            clearSessionId(cachedUserId);
           }
-          useAppStore.setState({ authReady: true });
+          state.clearSignedOutWorkspace();
         })();
         return;
       }

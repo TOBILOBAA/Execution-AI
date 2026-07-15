@@ -195,10 +195,12 @@ export default function AuthPage() {
       setError("Enter your name before continuing.");
       return;
     }
-    const passwordCheck = validateStrongPassword(password);
-    if (!passwordCheck.valid) {
-      setError(passwordCheck.message);
-      return;
+    if (mode === "signup") {
+      const passwordCheck = validateStrongPassword(password);
+      if (!passwordCheck.valid) {
+        setError(passwordCheck.message);
+        return;
+      }
     }
 
     setLoading(true);

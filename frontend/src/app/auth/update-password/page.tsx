@@ -84,9 +84,9 @@ export default function UpdatePasswordPage() {
       return;
     }
     await useAppStore.getState().hydrateAuthFromSupabase();
-    const done = useAppStore.getState().onboardingComplete;
+    const { onboardingComplete, backendReady } = useAppStore.getState();
     setStatus("Redirecting…");
-    router.replace(done ? "/dashboard" : "/onboarding");
+    router.replace(backendReady ? (onboardingComplete ? "/dashboard" : "/onboarding") : "/auth");
   };
 
   if (!getSupabaseBrowser()) {
