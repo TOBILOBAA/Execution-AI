@@ -30,6 +30,7 @@ from app.api.routes import execution as execution_routes
 from app.db import habits as habits_db
 from app.db import reports as reports_db
 from app.db import sessions as sessions_db
+from app.services import activity_service
 from app.services import report_service
 from app.main import (
     LOCAL_DEVELOPMENT_CORS_ORIGINS,
@@ -184,6 +185,34 @@ class BackendStabilityTests(unittest.TestCase):
         self.assertEqual(len(db.tables["sessions"].update_calls), 2)
         self.assertNotIn("pending_recaps", db.tables["sessions"].update_calls[-1])
         self.assertNotIn("handled_recaps", db.tables["sessions"].update_calls[-1])
+
+    def test_session_update_falls_back_to_fetch_when_update_returns_no_rows(self):
+        session_id = uuid4()
+        db = FakeDB(result_rows_by_table={"sessions": []})
+        fetched = {
+            "id": str(session_id),
+            "timezone": "UTC",
+            "week_starts_on": "monday",
+            "onboarding_step": 4,
+            "onboarding_done": True,
+            "auth_user_id": "user-789",
+            "created_at": "2026-07-20T00:00:00Z",
+        }
+
+        with patch.object(sessions_db, "get_session", return_value=fetched):
+            updated = sessions_db.update_session(
+                db,
+                session_id,
+                {"last_seen_at": "2026-07-20T10:08:01.912543+00:00"},
+            )
+
+        self.assertEqual(updated["id"], fetched["id"])
+        self.assertEqual(updated["timezone"], "UTC")
+        self.assertEqual(updated["week_starts_on"], "monday")
+
+    def test_session_touch_skips_index_error(self):
+        with patch.object(sessions_db, "update_session", side_effect=IndexError("Session update returned no rows")):
+            activity_service._safe_update_session_touch(FakeDB(), uuid4(), {"last_seen_at": "2026-07-20T10:17:27.774611+00:00"})
 
     def test_session_start_reuses_existing_auth_user_workspace(self):
         auth_user_id = "user-123"

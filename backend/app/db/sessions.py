@@ -159,6 +159,11 @@ def update_session(db: Client, session_id: UUID, updates: dict) -> dict:
             .eq("id", str(session_id))
             .execute()
         )
+    if not getattr(updated, "data", None):
+        refreshed = get_session(db, session_id)
+        if refreshed is not None:
+            return refreshed
+        raise IndexError(f"Session update returned no rows for session_id={session_id}")
     return _hydrate_session_defaults(updated.data[0])
 
 

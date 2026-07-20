@@ -9,8 +9,11 @@ import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
 import {
   averageProgress,
+  classifyGoalState,
   countGoalStates,
+  getGoalDisplayStatusLabel,
   getGoalDisplayProgress,
+  getGoalStateMeta,
   getProgressTone,
   isGoalComplete,
   GOALS_MONTH_NAMES,
@@ -31,8 +34,10 @@ const STATUS_GUIDE_DETAIL = [
   `Not Started: ${STATUS_HELP.notStarted}`,
 ].join(" ");
 
-function formatHeaderDate() {
-  return new Date().toLocaleDateString("en-US", {
+function formatHeaderDate(todayIso: string) {
+  const date = new Date(`${todayIso}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return todayIso;
+  return date.toLocaleDateString("en-US", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -56,6 +61,8 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
     today,
     currentMonth,
     monthlyGoals,
+    yearlyGoals,
+    categories,
   } = useGoalsHierarchy(year);
 
   const monthQuery = searchParams?.get("month");
@@ -68,12 +75,21 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
     setPage(1);
   }, [selectedMonth]);
 
+  const yearlyGoalById = useMemo(
+    () => new Map(yearlyGoals.map((goal) => [goal.id, goal])),
+    [yearlyGoals],
+  );
+  const categoryById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories],
+  );
+
   const rows = useMemo(
     () =>
       GOALS_MONTH_NAMES.map((label, index) => {
         const month = index + 1;
         const goals = monthlyGoals.filter((goal) => goal.month === month);
-        const stateCounts = countGoalStates(goals);
+        const stateCounts = countGoalStates(goals, today);
         return {
           month,
           label,
@@ -85,7 +101,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
           progress: averageProgress(goals),
         };
       }),
-    [monthlyGoals],
+    [monthlyGoals, today],
   );
 
   if (Number.isNaN(year)) {
@@ -168,7 +184,7 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
             style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)", color: "#1a1f1e" }}
           >
             <span className="material-symbols-outlined text-[17px]">calendar_month</span>
-            <span>{formatHeaderDate()}</span>
+            <span>{formatHeaderDate(today)}</span>
           </div>
         </div>
 
@@ -499,65 +515,102 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
                   ) : (
                     <div className="space-y-3">
                       {selectedMonthMainGoals.map((goal) => (
-                        <div
-                          key={goal.id}
-                          className="rounded-[22px] p-4"
-                          style={{ background: "#fff", border: "1.5px solid rgba(0,108,74,0.12)" }}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span
-                                  className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
-                                  style={{ background: "#006c4a", color: "#fff" }}
-                                >
-                                  Main goal
-                                </span>
-                                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                                  {getGoalDisplayProgress(goal)}% complete
-                                </span>
+                        (() => {
+                          const state = classifyGoalState(goal, today);
+                          const stateMeta = getGoalStateMeta(state);
+                          const linkedYearlyGoal = goal.yearlyGoalId ? yearlyGoalById.get(goal.yearlyGoalId) : null;
+                          const linkedCategory = goal.categoryId
+                            ? categoryById.get(goal.categoryId)
+                            : linkedYearlyGoal?.categoryId
+                              ? categoryById.get(linkedYearlyGoal.categoryId)
+                              : null;
+                          return (
+                            <div
+                              key={goal.id}
+                              className="rounded-[22px] p-4"
+                              style={{ background: "#fff", border: "1.5px solid rgba(0,108,74,0.12)" }}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span
+                                      className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
+                                      style={{ background: "#006c4a", color: "#fff" }}
+                                    >
+                                      Main goal
+                                    </span>
+                                    <span
+                                      className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
+                                      style={{
+                                        background: stateMeta.background,
+                                        border: `1px solid ${stateMeta.border}`,
+                                        color: stateMeta.text,
+                                      }}
+                                    >
+                                      {getGoalDisplayStatusLabel(goal)}
+                                    </span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                                      {getGoalDisplayProgress(goal)}% complete
+                                    </span>
+                                  </div>
+                                  <h3 className="font-semibold text-base mt-3" style={{ color: "#1a1f1e" }}>
+                                    {goal.title}
+                                  </h3>
+                                  <p className="text-sm mt-2 leading-relaxed" style={{ color: goal.description ? "#5d6d67" : "#8a9e97" }}>
+                                    {goal.description || "No description saved yet."}
+                                  </p>
+                                  <div className="mt-3 space-y-1">
+                                    <p className="text-xs font-semibold" style={{ color: linkedYearlyGoal ? "#1f6f5a" : "#8a9e97" }}>
+                                      {linkedYearlyGoal ? `Linked yearly goal: ${linkedYearlyGoal.title}` : "Unlinked: no yearly goal connected yet."}
+                                    </p>
+                                    {linkedCategory ? (
+                                      <p className="text-xs" style={{ color: "#6b7c75" }}>
+                                        Area: {linkedCategory.name}
+                                      </p>
+                                    ) : null}
+                                    {goal.truthReason ? (
+                                      <p className="text-xs leading-relaxed" style={{ color: "#6b7c75" }}>
+                                        {goal.truthReason}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {goal.editable ? (
+                                    <>
+                                      <GoalCompletionButton
+                                        completed={isGoalComplete(goal)}
+                                        onClick={() =>
+                                          updateMonthlyGoal(goal.id, {
+                                            status: isGoalComplete(goal) ? "active" : "completed",
+                                            progress: isGoalComplete(goal) ? Math.min(getGoalDisplayProgress(goal), 99) : 100,
+                                          })
+                                        }
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => openModal("edit-monthly-goal", goal)}
+                                        className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold flex-shrink-0"
+                                        style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
+                                      >
+                                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                                        Edit
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                                      style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
+                                    >
+                                      <span className="material-symbols-outlined text-[14px]">lock</span>
+                                      Locked
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <h3 className="font-semibold text-base mt-3" style={{ color: "#1a1f1e" }}>
-                                {goal.title}
-                              </h3>
-                              <p className="text-sm mt-2 leading-relaxed" style={{ color: goal.description ? "#5d6d67" : "#8a9e97" }}>
-                                {goal.description || "No description saved yet."}
-                              </p>
                             </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {goal.editable ? (
-                                <>
-                                  <GoalCompletionButton
-                                    completed={isGoalComplete(goal)}
-                                    onClick={() =>
-                                      updateMonthlyGoal(goal.id, {
-                                        status: isGoalComplete(goal) ? "active" : "completed",
-                                        progress: isGoalComplete(goal) ? Math.min(getGoalDisplayProgress(goal), 99) : 100,
-                                      })
-                                    }
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => openModal("edit-monthly-goal", goal)}
-                                    className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold flex-shrink-0"
-                                    style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
-                                  >
-                                    <span className="material-symbols-outlined text-[16px]">edit</span>
-                                    Edit
-                                  </button>
-                                </>
-                              ) : (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
-                                >
-                                  <span className="material-symbols-outlined text-[14px]">lock</span>
-                                  Locked
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                          );
+                        })()
                       ))}
                     </div>
                   )}
@@ -579,53 +632,80 @@ export default function MonthlyGoalsPage({ params }: { params: Promise<{ year: s
                   ) : (
                     <div className="space-y-2">
                       {selectedMonthSecondaryGoals.map((goal) => (
-                        <div
-                          key={goal.id}
-                          className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
-                          style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)" }}
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>
-                              {goal.title}
-                            </p>
-                            <p className="text-xs mt-1" style={{ color: "#6b7c75" }}>
-                              {getGoalDisplayProgress(goal)}% complete
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {goal.editable ? (
-                              <>
-                                <GoalCompletionButton
-                                  completed={isGoalComplete(goal)}
-                                  compact
-                                  onClick={() =>
-                                    updateMonthlyGoal(goal.id, {
-                                      status: isGoalComplete(goal) ? "active" : "completed",
-                                      progress: isGoalComplete(goal) ? Math.min(getGoalDisplayProgress(goal), 99) : 100,
-                                    })
-                                  }
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => openModal("edit-monthly-goal", goal)}
-                                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold flex-shrink-0"
-                                  style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
-                                >
-                                  <span className="material-symbols-outlined text-[15px]">edit</span>
-                                  Edit
-                                </button>
-                              </>
-                            ) : (
-                              <span
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                                style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
-                              >
-                                <span className="material-symbols-outlined text-[14px]">lock</span>
-                                Locked
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                        (() => {
+                          const state = classifyGoalState(goal, today);
+                          const stateMeta = getGoalStateMeta(state);
+                          const linkedYearlyGoal = goal.yearlyGoalId ? yearlyGoalById.get(goal.yearlyGoalId) : null;
+                          return (
+                            <div
+                              key={goal.id}
+                              className="rounded-2xl px-4 py-3 flex items-start justify-between gap-3"
+                              style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)" }}
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                                    {goal.title}
+                                  </p>
+                                  <span
+                                    className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full"
+                                    style={{
+                                      background: stateMeta.background,
+                                      border: `1px solid ${stateMeta.border}`,
+                                      color: stateMeta.text,
+                                    }}
+                                  >
+                                    {getGoalDisplayStatusLabel(goal)}
+                                  </span>
+                                </div>
+                                <p className="text-xs mt-1" style={{ color: "#6b7c75" }}>
+                                  {linkedYearlyGoal ? `Linked yearly goal: ${linkedYearlyGoal.title}` : "Unlinked: no yearly goal connected yet."}
+                                </p>
+                                {goal.truthReason ? (
+                                  <p className="text-xs mt-2 leading-relaxed" style={{ color: "#6b7c75" }}>
+                                    {goal.truthReason}
+                                  </p>
+                                ) : null}
+                                <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
+                                  {getGoalDisplayProgress(goal)}% complete
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {goal.editable ? (
+                                  <>
+                                    <GoalCompletionButton
+                                      completed={isGoalComplete(goal)}
+                                      compact
+                                      onClick={() =>
+                                        updateMonthlyGoal(goal.id, {
+                                          status: isGoalComplete(goal) ? "active" : "completed",
+                                          progress: isGoalComplete(goal) ? Math.min(getGoalDisplayProgress(goal), 99) : 100,
+                                        })
+                                      }
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => openModal("edit-monthly-goal", goal)}
+                                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold flex-shrink-0"
+                                      style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#4b635b" }}
+                                    >
+                                      <span className="material-symbols-outlined text-[15px]">edit</span>
+                                      Edit
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                                    style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", color: "#6b7c75" }}
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">lock</span>
+                                    Locked
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()
                       ))}
                     </div>
                   )}

@@ -405,6 +405,7 @@ export interface ApiReport {
   period_year: number;
   metrics: Record<string, unknown>;
   ai_narrative?: Record<string, unknown>;
+  user_note?: string | null;
   tailored_pattern?: string | null;
   tailored_action?: string | null;
   has_execution_data?: boolean;
@@ -701,22 +702,38 @@ export const reportsApi = {
   list: (sessionId: string) =>
     get<ApiReport[]>(`/reports/${sessionId}`),
 
-  generateDaily: (sessionId: string, date: string) =>
-    post<ApiReport>("/reports/daily/generate", { session_id: sessionId, date }, AI_GENERATE_TIMEOUT_MS),
-
-  generateWeekly: (sessionId: string, year: number, weekNumber: number) =>
+  generateDaily: (sessionId: string, date: string, userNote?: string) =>
     post<ApiReport>(
-      "/reports/weekly/generate",
-      { session_id: sessionId, year, week_number: weekNumber },
+      "/reports/daily/generate",
+      { session_id: sessionId, date, ...(userNote !== undefined ? { user_note: userNote } : {}) },
       AI_GENERATE_TIMEOUT_MS,
     ),
 
-  generateMonthly: (sessionId: string, year: number, month: number) =>
-    post<ApiReport>("/reports/monthly/generate", { session_id: sessionId, year, month }, AI_GENERATE_TIMEOUT_MS),
+  generateWeekly: (sessionId: string, year: number, weekNumber: number, userNote?: string) =>
+    post<ApiReport>(
+      "/reports/weekly/generate",
+      { session_id: sessionId, year, week_number: weekNumber, ...(userNote !== undefined ? { user_note: userNote } : {}) },
+      AI_GENERATE_TIMEOUT_MS,
+    ),
 
-  generateQuarterly: (sessionId: string, year: number, quarter: number) =>
-    post<ApiReport>("/reports/quarterly/generate", { session_id: sessionId, year, quarter }, AI_GENERATE_TIMEOUT_MS),
+  generateMonthly: (sessionId: string, year: number, month: number, userNote?: string) =>
+    post<ApiReport>(
+      "/reports/monthly/generate",
+      { session_id: sessionId, year, month, ...(userNote !== undefined ? { user_note: userNote } : {}) },
+      AI_GENERATE_TIMEOUT_MS,
+    ),
 
-  generateYearly: (sessionId: string, year: number) =>
-    post<ApiReport>("/reports/yearly/generate", { session_id: sessionId, year }, AI_GENERATE_TIMEOUT_MS),
+  generateQuarterly: (sessionId: string, year: number, quarter: number, userNote?: string) =>
+    post<ApiReport>(
+      "/reports/quarterly/generate",
+      { session_id: sessionId, year, quarter, ...(userNote !== undefined ? { user_note: userNote } : {}) },
+      AI_GENERATE_TIMEOUT_MS,
+    ),
+
+  generateYearly: (sessionId: string, year: number, userNote?: string) =>
+    post<ApiReport>(
+      "/reports/yearly/generate",
+      { session_id: sessionId, year, ...(userNote !== undefined ? { user_note: userNote } : {}) },
+      AI_GENERATE_TIMEOUT_MS,
+    ),
 };

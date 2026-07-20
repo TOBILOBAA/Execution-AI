@@ -103,9 +103,11 @@ function CompletionModalInner() {
   const [trigger, setTrigger] = useState<CompletionTrigger | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [report, setReport] = useState<ApiReport | null>(null);
   const [loadedReportDate, setLoadedReportDate] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
 
   const todayPriorities = useMemo(
     () => dailyPriorities.filter((item) => item.date === activeDashboardDate),
@@ -196,9 +198,37 @@ function CompletionModalInner() {
     setReport(null);
     setLoadedReportDate(null);
     setReportError(null);
+    setNoteDraft("");
   }, [activeDashboardDate]);
 
-  function closeCompletion() {
+  useEffect(() => {
+    setNoteDraft(report?.user_note ?? "");
+  }, [report?.id, report?.user_note]);
+
+  async function persistDailyNoteIfNeeded() {
+    const currentNote = noteDraft.trim();
+    const savedNote = (report?.user_note ?? "").trim();
+    if (currentNote === savedNote) return true;
+
+    setSavingNote(true);
+    setReportError(null);
+    try {
+      const saved = await generateDailyReport(activeDashboardDate, noteDraft);
+      if (!saved) {
+        setReportError("Could not save your note yet. Try again in a moment.");
+        return false;
+      }
+      setReport(saved);
+      setLoadedReportDate(activeDashboardDate);
+      return true;
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  async function closeCompletion() {
+    const noteSaved = await persistDailyNoteIfNeeded();
+    if (!noteSaved) return;
     if (trigger === "complete") {
       writeSessionKey(COMPLETE_DISMISS_KEY, activeDashboardDate);
     }
@@ -208,7 +238,9 @@ function CompletionModalInner() {
     setTrigger(null);
   }
 
-  function continueToPlanner() {
+  async function continueToPlanner() {
+    const noteSaved = await persistDailyNoteIfNeeded();
+    if (!noteSaved) return;
     if (trigger === "complete") {
       writeSessionKey(COMPLETE_DISMISS_KEY, activeDashboardDate);
     }
@@ -312,6 +344,35 @@ function CompletionModalInner() {
             )}
           </div>
 
+          <div
+            className="rounded-[26px] p-5 mb-5"
+            style={{ background: "#f8fbf9", border: "1px solid rgba(0,0,0,0.06)" }}
+          >
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                  Your context
+                </p>
+                <p className="mt-1 text-sm leading-relaxed" style={{ color: "#5a6b65" }}>
+                  Add anything the system should remember about why the day went this way. This note stays attached to today&apos;s review and can inform later summaries.
+                </p>
+              </div>
+              {savingNote ? (
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#006c4a" }}>
+                  Saving
+                </span>
+              ) : null}
+            </div>
+            <textarea
+              value={noteDraft}
+              onChange={(event) => setNoteDraft(event.target.value)}
+              placeholder="Example: I lost the afternoon because the client call overran, so the unfinished work was not procrastination, it was a timing problem."
+              rows={4}
+              className="mt-4 w-full resize-none rounded-2xl px-4 py-3 text-sm outline-none"
+              style={{ border: "1px solid rgba(0,0,0,0.08)", background: "#fff", color: "#1a1f1e" }}
+            />
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <div className="rounded-2xl px-4 py-3.5" style={{ background: "#f8fbf9", border: "1px solid rgba(0,0,0,0.06)" }}>
               <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
@@ -355,16 +416,22 @@ function CompletionModalInner() {
         >
           <button
             type="button"
-            onClick={closeCompletion}
-            className="px-5 py-3 rounded-xl text-sm font-semibold transition-colors"
+            onClick={() => {
+              void closeCompletion();
+            }}
+            disabled={savingNote}
+            className="px-5 py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
             style={{ border: "1.5px solid #e2e8e4", color: "#5a6b65", background: "white" }}
           >
             {trigger === "evening" ? "Remind me tomorrow" : "Close for now"}
           </button>
           <button
             type="button"
-            onClick={continueToPlanner}
-            className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-bold text-white transition-all"
+            onClick={() => {
+              void continueToPlanner();
+            }}
+            disabled={savingNote}
+            className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-60"
             style={{ background: "#003d2b", boxShadow: "0 2px 12px rgba(0,108,74,0.25)" }}
           >
             {trigger === "evening" ? "Done for today" : "Plan tomorrow"}

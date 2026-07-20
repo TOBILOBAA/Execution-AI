@@ -6,6 +6,7 @@ import { formatWeekPreference, getTodayLabel, getGreeting } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { SyncStatusPill } from "@/components/layout/SyncStatusPill";
+import { NotificationCenter } from "@/components/layout/NotificationCenter";
 import { BetaBadge } from "@/components/ui/BetaBadge";
 
 const PAGE_TITLES: Record<string, { title: string; label: string }> = {
@@ -87,18 +88,7 @@ export function TopBar() {
 
       <div className="flex items-center gap-2">
         <SyncStatusPill />
-        <button
-          type="button"
-          className="interactive-icon-button relative flex h-9 w-9 items-center justify-center rounded-full"
-          style={{ color: "#8a9e97" }}
-          aria-label="Notifications"
-        >
-          <span className="material-symbols-outlined text-[22px]">notifications</span>
-          <span
-            className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full border-2 border-white"
-            style={{ background: "#006c4a" }}
-          />
-        </button>
+        <NotificationCenter />
 
         <div className="relative" ref={menuRef}>
           <button

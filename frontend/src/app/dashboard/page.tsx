@@ -8,6 +8,7 @@ import { getToday } from "@/lib/mockData";
 import { SecondaryTaskRow } from "@/components/dashboard/SecondaryTaskRow";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
 import { HabitsSection } from "@/components/dashboard/HabitsSection";
+import { DAILY_MAIN_GOAL_CAP, DAILY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 
 function formatPlanDateLabel(isoDate: string) {
   try {
@@ -65,7 +66,8 @@ export default function DashboardHome() {
     todayRows.filter((priority) => priority.completed).length + todayTasks.filter((task) => task.completed).length;
   const totalGoalsToday = todayRows.length + todayTasks.length;
   const todaysProgress = totalGoalsToday > 0 ? Math.round((completedGoalsToday / totalGoalsToday) * 100) : 0;
-  const mainPriorityCapReached = todayRows.length >= 3;
+  const mainPriorityCapReached = todayRows.length >= DAILY_MAIN_GOAL_CAP;
+  const secondaryGoalCapReached = todayTasks.length >= DAILY_SECONDARY_GOAL_CAP;
   const isPreviewingAnotherDay = activeDashboardDate !== getToday();
   const displayDateLabel = useMemo(() => formatPlanDateLabel(activeDashboardDate), [activeDashboardDate]);
   const showDashboardHydratingState = dashboardLoading && todayRows.length === 0 && todayTasks.length === 0;
@@ -103,7 +105,7 @@ export default function DashboardHome() {
                       style={{ background: "rgba(0,108,74,0.10)", color: "#006c4a" }}
                     >
                       <span className="material-symbols-outlined text-[14px]">calendar_clock</span>
-                      Tomorrow preview · {displayDateLabel}
+                      Planned day · {displayDateLabel}
                     </span>
                   )}
                   <div className="flex items-center gap-3 flex-wrap">
@@ -181,10 +183,10 @@ export default function DashboardHome() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                      Main Goals
+                      Main Goal
                     </p>
                     <p className="mt-1 text-sm leading-6" style={{ color: "#8a9e97" }}>
-                      The primary goals shaping today&apos;s execution.
+                      The single priority that should define a successful day.
                     </p>
                   </div>
                   <button
@@ -198,14 +200,14 @@ export default function DashboardHome() {
                     }}
                   >
                     <span className="material-symbols-outlined text-[15px]">add</span>
-                    {mainPriorityCapReached ? "Main goal cap reached" : "Add goal"}
+                    {mainPriorityCapReached ? "Main goal saved" : "Set main goal"}
                   </button>
                 </div>
 
                 {featuredMainGoal === null ? (
                   showDashboardHydratingState ? (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      {Array.from({ length: 3 }).map((_, index) => (
+                    <div className="grid grid-cols-1 gap-4">
+                      {Array.from({ length: 1 }).map((_, index) => (
                         <div
                           key={index}
                           className="rounded-[24px] p-5 animate-pulse"
@@ -231,12 +233,12 @@ export default function DashboardHome() {
                         <span className="material-symbols-outlined text-[24px]">target</span>
                       </div>
                       <p className="font-headline font-bold text-lg mb-1" style={{ color: "#1a1f1e" }}>
-                        No main goals saved yet
+                        No main goal saved yet
                       </p>
                       <p className="text-sm mb-5 max-w-md mx-auto" style={{ color: "#8a9e97" }}>
                         {isPreviewingAnotherDay
-                          ? `Nothing is planned for ${displayDateLabel} yet. Add the main goals that should lead that day.`
-                          : "Start with the one to three goals that matter most today and let everything else support them."}
+                          ? `Nothing is planned for ${displayDateLabel} yet. Add the main goal that should lead that day.`
+                          : "Start with the one goal that matters most today and let everything else support it."}
                       </p>
                       <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                         <button
@@ -245,7 +247,7 @@ export default function DashboardHome() {
                           className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white ${interactiveButtonClass}`}
                           style={{ background: "#006c4a" }}
                         >
-                          Add first main goal
+                          Add main goal
                         </button>
                         <button
                           type="button"
@@ -366,11 +368,16 @@ export default function DashboardHome() {
                   </div>
                   <button
                     onClick={() => openModal("add-secondary-task")}
-                    className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold sm:w-auto ${interactiveButtonClass}`}
-                    style={softActionStyle}
+                    disabled={secondaryGoalCapReached}
+                    className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold sm:w-auto ${secondaryGoalCapReached ? "" : interactiveButtonClass}`}
+                    style={
+                      secondaryGoalCapReached
+                        ? { background: "rgba(0,0,0,0.06)", color: "#8a9e97", border: "1px solid rgba(0,0,0,0.03)" }
+                        : softActionStyle
+                    }
                   >
                     <span className="material-symbols-outlined text-[15px]">add</span>
-                    Add goal
+                    {secondaryGoalCapReached ? "3 secondary goals saved" : "Add goal"}
                   </button>
               </div>
 

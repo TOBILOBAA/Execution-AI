@@ -60,42 +60,13 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
   );
 
   const categoryById = new Map(categories.map((category) => [category.id, category]));
-  const monthlyGoalsByYearlyGoal = useMemo(() => {
-    const grouped = new Map<string, typeof monthlyGoals>();
-    monthlyGoals.forEach((goal) => {
-      if (!goal.yearlyGoalId) return;
-      const existing = grouped.get(goal.yearlyGoalId) ?? [];
-      existing.push(goal);
-      grouped.set(goal.yearlyGoalId, existing);
-    });
-    return grouped;
-  }, [monthlyGoals]);
-
-  const weeklyGoalsByMonthlyGoal = useMemo(() => {
-    const grouped = new Map<string, typeof weeklyGoals>();
-    weeklyGoals.forEach((goal) => {
-      if (!goal.monthlyGoalId) return;
-      const existing = grouped.get(goal.monthlyGoalId) ?? [];
-      existing.push(goal);
-      grouped.set(goal.monthlyGoalId, existing);
-    });
-    return grouped;
-  }, [weeklyGoals]);
-
   const yearlyProgressByGoalId = useMemo(() => {
-    const derived = new Map<string, number>();
+    const direct = new Map<string, number>();
     currentYearGoals.forEach((goal) => {
-      const linkedMonthlyGoals = monthlyGoalsByYearlyGoal.get(goal.id) ?? [];
-      const progress = linkedMonthlyGoals.length
-        ? Math.round(
-            linkedMonthlyGoals.reduce((sum, monthlyGoal) => sum + getGoalDisplayProgress(monthlyGoal), 0) /
-              linkedMonthlyGoals.length,
-          )
-        : getGoalDisplayProgress(goal);
-      derived.set(goal.id, progress);
+      direct.set(goal.id, getGoalDisplayProgress(goal));
     });
-    return derived;
-  }, [currentYearGoals, monthlyGoalsByYearlyGoal]);
+    return direct;
+  }, [currentYearGoals]);
 
   const averageProgress = currentYearGoals.length
     ? Math.round(
@@ -103,6 +74,7 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
           currentYearGoals.length,
       )
     : 0;
+  const completedYearlyGoals = currentYearGoals.filter((goal) => getGoalDisplayProgress(goal) >= 100).length;
 
   const highlightedYearlyGoals = useMemo(
     () =>
@@ -134,16 +106,19 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
     ? getGoalDisplayProgress(currentWeeklyObjective)
     : clampProgress(metrics.weeklyCompletionRate);
   const monthlyObjectiveProgress = currentMonthlyObjective
-    ? (() => {
-        const linkedWeeklyGoals = weeklyGoalsByMonthlyGoal.get(currentMonthlyObjective.id) ?? [];
-        return linkedWeeklyGoals.length
-          ? Math.round(
-              linkedWeeklyGoals.reduce((sum, weeklyGoal) => sum + getGoalDisplayProgress(weeklyGoal), 0) /
-                linkedWeeklyGoals.length,
-            )
-          : getGoalDisplayProgress(currentMonthlyObjective);
-      })()
+    ? getGoalDisplayProgress(currentMonthlyObjective)
     : clampProgress(metrics.monthlyCompletionRate);
+  const contextualRailCopy = currentWeeklyObjective
+    ? `This week is anchored by "${currentWeeklyObjective.title}". Keep today connected to that outcome.`
+    : currentMonthlyObjective
+      ? `This month still needs a clear weekly push. Keep "${currentMonthlyObjective.title}" moving with the next concrete step.`
+      : currentYearGoals.length > 0
+        ? "Your yearly progress moves when monthly and weekly goals stay connected to what you actually complete."
+        : "Start by saving the outcomes you want this year, then connect this month and week to them.";
+  const contextualRailHref = currentWeeklyObjective
+    ? `/dashboard/goals/${currentYear}/weekly`
+    : `/dashboard/goals/${currentYear}`;
+  const contextualRailCta = currentWeeklyObjective ? "Open weekly goals" : "Open goals";
 
   return (
     <div
@@ -172,7 +147,12 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
             </span>
           </div>
           <p className="mt-2 max-w-[320px] text-[15px] leading-7" style={{ color: "rgba(255,255,255,0.62)" }}>
-            of your yearly goals completed
+            average progress across your yearly goals
+          </p>
+          <p className="mt-2 text-sm leading-6" style={{ color: "rgba(255,255,255,0.48)" }}>
+            {currentYearGoals.length > 0
+              ? `${completedYearlyGoals} of ${currentYearGoals.length} yearly goals completed`
+              : "No yearly goals saved for this year yet."}
           </p>
         </div>
       </div>
@@ -272,12 +252,16 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
 
       <div className="mt-6 space-y-4">
         <p className="text-[14px] leading-7" style={{ color: "rgba(255,255,255,0.58)" }}>
-          Stay consistent. Small daily actions = big yearly results.
+          {contextualRailCopy}
         </p>
-        <div className="inline-flex items-center gap-2 text-[15px] font-semibold" style={{ color: "#85f8c4" }}>
+        <Link
+          href={contextualRailHref}
+          className="inline-flex items-center gap-2 text-[15px] font-semibold transition-opacity hover:opacity-85"
+          style={{ color: "#85f8c4" }}
+        >
           <span className="material-symbols-outlined text-[18px]">north_east</span>
-          Keep going
-        </div>
+          {contextualRailCta}
+        </Link>
       </div>
     </div>
   );

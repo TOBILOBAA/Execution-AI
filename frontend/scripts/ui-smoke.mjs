@@ -83,7 +83,10 @@ async function fillAuthAndSubmit(page, email, password, fullName) {
 }
 
 async function completeSignupVerificationIfNeeded(page, admin, email, password, baseUrl) {
-  await page.getByText("Check your email.").waitFor({ timeout: 15000 });
+  const bodyText = await page.locator("body").innerText().catch(() => "");
+  if (!bodyText.includes("Check your email.") && !bodyText.includes("Supabase could not send the confirmation email.")) {
+    await page.getByText("Check your email.").waitFor({ timeout: 15000 });
+  }
 
   const { data, error } = await admin.auth.admin.generateLink({
     type: "signup",
@@ -160,27 +163,33 @@ async function runMonthlyAiGenerateSmokeAssert(page) {
 
 async function completeOnboarding(page, admin, email, password, uniqueSuffix, options = {}) {
   const { testMonthlyAI = false } = options;
-  try {
-    let flowState = "unknown";
     try {
-      await Promise.race([
-        waitForUrl(page, "/onboarding", 15000).then(() => {
-          flowState = "onboarding";
-        }),
-        page.getByText("Check your email.").waitFor({ timeout: 15000 }).then(() => {
-          flowState = "verify-email";
-        }),
-      ]);
-    } catch {
-      flowState = "unknown";
-    }
+      let flowState = "unknown";
+      try {
+        await Promise.race([
+          waitForUrl(page, "/onboarding", 15000).then(() => {
+            flowState = "onboarding";
+          }),
+          page.getByText("Check your email.").waitFor({ timeout: 15000 }).then(() => {
+            flowState = "verify-email";
+          }),
+          page
+            .getByText("Supabase could not send the confirmation email.", { exact: false })
+            .waitFor({ timeout: 15000 })
+            .then(() => {
+              flowState = "verify-email-delivery-error";
+            }),
+        ]);
+      } catch {
+        flowState = "unknown";
+      }
 
-    if (flowState === "verify-email") {
-      await completeSignupVerificationIfNeeded(page, admin, email, password, "http://127.0.0.1:3000");
-      await waitForUrl(page, "/onboarding", 45000);
-    } else if (flowState !== "onboarding") {
-      await waitForUrl(page, "/onboarding", 45000);
-    }
+      if (flowState === "verify-email" || flowState === "verify-email-delivery-error") {
+        await completeSignupVerificationIfNeeded(page, admin, email, password, "http://127.0.0.1:3000");
+        await waitForUrl(page, "/onboarding", 45000);
+      } else if (flowState !== "onboarding") {
+        await waitForUrl(page, "/onboarding", 45000);
+      }
 
     const categoryButtons = page.getByRole("button", { name: /Spiritual|Career|Academic|Personal Growth/ });
     if ((await categoryButtons.count()) === 0) {
@@ -286,7 +295,7 @@ async function verifyGoalsSurfaces(page, uniqueSuffix) {
   try {
     await page.goto(`http://127.0.0.1:3000/dashboard/goals/${year}`, { waitUntil: "domcontentloaded" });
     await dismissBlockingDashboardOverlays(page);
-    await page.getByRole("heading", { name: `UI Smoke Yearly ${uniqueSuffix}` }).first().waitFor({ timeout: 30000 });
+    await page.getByText(`UI Smoke Yearly ${uniqueSuffix}`).first().waitFor({ timeout: 30000 });
     await page.getByText("Planning depth warnings").waitFor({ timeout: 30000 }).catch(() => {});
     checks.yearPageLoaded = true;
   } catch (error) {

@@ -4,10 +4,11 @@ import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { getCurrentYear } from "@/lib/mockData";
 import { ReportMetricCard } from "@/components/reports/ReportMetricCard";
 import { averageProgress } from "@/lib/goalsView";
 import {
+  getDailyReportsForYear,
+  getWeeklyReportsForYear,
   listYearSnapshots,
   monthlyCompletionRate,
   yearlyCompletionRate,
@@ -21,11 +22,29 @@ import {
   average,
 } from "@/lib/reportMetrics";
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function daysInYearScope(year: number, referenceDateIso: string): number {
+  const referenceDate = new Date(`${referenceDateIso}T12:00:00`);
+  if (!Number.isNaN(referenceDate.getTime()) && year === referenceDate.getFullYear()) {
+    const start = new Date(year, 0, 1);
+    return Math.max(1, Math.floor((referenceDate.getTime() - start.getTime()) / 86_400_000) + 1);
+  }
+  return new Date(year, 1, 29).getMonth() === 1 ? 366 : 365;
+}
+
 export default function ReportsPage() {
   const router = useRouter();
-  const { sessionId, yearlyGoals, monthlyGoals, metrics, reports, reportsLoading, reportsHydrated, syncReports, syncError } = useAppStore(
+  const { sessionId, activeDashboardDate, yearlyGoals, monthlyGoals, metrics, reports, reportsLoading, reportsHydrated, syncReports, syncError } = useAppStore(
     useShallow((state) => ({
       sessionId: state.sessionId,
+      activeDashboardDate: state.activeDashboardDate,
       yearlyGoals: state.yearlyGoals,
       monthlyGoals: state.monthlyGoals,
       metrics: state.metrics,
@@ -45,7 +64,7 @@ export default function ReportsPage() {
   const error = syncError?.includes("Load reports list") ? syncError : null;
   const showInitialLoading = Boolean(sessionId && !reportsHydrated && reportsLoading && reports.length === 0);
 
-  const currentYear = getCurrentYear();
+  const currentYear = Number(activeDashboardDate.slice(0, 4)) || new Date().getFullYear();
   const currentYearGoals = yearlyGoals.filter((goal) => goal.year === currentYear);
   const currentYearMonthlyGoals = monthlyGoals.filter((goal) => goal.year === currentYear);
 
@@ -55,11 +74,21 @@ export default function ReportsPage() {
     .sort((a, b) => b.year - a.year);
   const pastYears = generatedYears.filter((item) => item.year !== currentYear);
   const activeYearSnapshot = generatedYears.find((item) => item.year === currentYear);
+  const currentYearWeeklyReports = useMemo(() => getWeeklyReportsForYear(reports, currentYear), [reports, currentYear]);
+  const currentYearDailyReports = useMemo(() => getDailyReportsForYear(reports, currentYear), [reports, currentYear]);
   const completionFromReports = yearlyCompletionRate(activeYearSnapshot?.yearly ?? null);
   const completionRate =
     completionFromReports ??
     (currentYearGoals.length ? averageProgress(currentYearGoals) : Math.min(100, metrics.monthlyCompletionRate ?? 0));
-  const consistencyScore = average(metrics.weeklyConsistency ?? []);
+  const consistencyScore = currentYearDailyReports.length
+    ? Math.round((currentYearDailyReports.length / daysInYearScope(currentYear, activeDashboardDate)) * 100)
+    : currentYearWeeklyReports.length
+      ? average(
+          currentYearWeeklyReports
+            .map((report) => asNumber(asRecord(report.metrics).habit_consistency))
+            .filter((value): value is number => value !== null),
+        )
+      : average(metrics.weeklyConsistency ?? []);
   const linkedMonthlyGoals = currentYearMonthlyGoals.filter((goal) => goal.yearlyGoalId).length;
   const alignmentScore = currentYearMonthlyGoals.length
     ? Math.round((linkedMonthlyGoals / currentYearMonthlyGoals.length) * 100)

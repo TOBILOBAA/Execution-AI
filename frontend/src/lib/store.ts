@@ -233,11 +233,11 @@ interface AppState {
   approveDailyPlan: (date: string, priorities?: unknown[]) => Promise<boolean>;
 
   // ── Report generation ────────────────────────────────────────────────────────
-  generateDailyReport: (date: string) => Promise<ApiReport | null>;
-  generateWeeklyReport: (year: number, weekNumber: number) => Promise<ApiReport | null>;
-  generateMonthlyReport: (year: number, month: number) => Promise<ApiReport | null>;
-  generateQuarterlyReport: (year: number, quarter: number) => Promise<ApiReport | null>;
-  generateYearlyReport: (year: number) => Promise<ApiReport | null>;
+  generateDailyReport: (date: string, userNote?: string) => Promise<ApiReport | null>;
+  generateWeeklyReport: (year: number, weekNumber: number, userNote?: string) => Promise<ApiReport | null>;
+  generateMonthlyReport: (year: number, month: number, userNote?: string) => Promise<ApiReport | null>;
+  generateQuarterlyReport: (year: number, quarter: number, userNote?: string) => Promise<ApiReport | null>;
+  generateYearlyReport: (year: number, userNote?: string) => Promise<ApiReport | null>;
 
   // ── Modal ───────────────────────────────────────────────────────────────────
   activeModal: ModalType | null;
@@ -289,6 +289,7 @@ const pendingCategoryCreates = new Map<string, Promise<void>>();
 const pendingDashboardLoads = new Map<string, Promise<void>>();
 const pendingCategoryLoads = new Map<string, Promise<void>>();
 const pendingReportsLoads = new Map<string, Promise<ApiReport[] | null>>();
+const pendingAuthHydrations = new Map<string, Promise<void>>();
 const loadedCategoriesForSession = new Set<string>();
 const localToServerCategoryIds = new Map<string, string>();
 const localToServerYearlyGoalIds = new Map<string, string>();
@@ -1494,6 +1495,15 @@ export const useAppStore = create<AppState>()(
         const state = get();
         const sameUser = state.currentUser?.id === authUser.id;
         if (sameUser && state.workspaceHydrating) {
+          const pending = pendingAuthHydrations.get(authUser.id);
+          if (pending) {
+            try {
+              await pending;
+            } finally {
+              set({ authReady: true });
+            }
+            return;
+          }
           set({ authReady: true });
           return;
         }
@@ -1502,9 +1512,14 @@ export const useAppStore = create<AppState>()(
           return;
         }
         set({ currentUser: authUser, syncError: null, workspaceHydrating: true });
+        const hydratePromise = attachBackendAfterAuth(u.id, get, set);
+        pendingAuthHydrations.set(authUser.id, hydratePromise);
         try {
-          await attachBackendAfterAuth(u.id, get, set);
+          await hydratePromise;
         } finally {
+          if (pendingAuthHydrations.get(authUser.id) === hydratePromise) {
+            pendingAuthHydrations.delete(authUser.id);
+          }
           set({ authReady: true });
         }
       },
@@ -3573,11 +3588,11 @@ export const useAppStore = create<AppState>()(
       },
 
       // ── Report generation ────────────────────────────────────────────────────
-      generateDailyReport: async (date) => {
+      generateDailyReport: async (date, userNote) => {
         const { sessionId } = get();
         if (!sessionId) return null;
         try {
-          const r = await reportsApi.generateDaily(sessionId, date);
+          const r = await reportsApi.generateDaily(sessionId, date, userNote);
           set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
@@ -3585,11 +3600,11 @@ export const useAppStore = create<AppState>()(
           return null;
         }
       },
-      generateWeeklyReport: async (year, weekNumber) => {
+      generateWeeklyReport: async (year, weekNumber, userNote) => {
         const { sessionId } = get();
         if (!sessionId) return null;
         try {
-          const r = await reportsApi.generateWeekly(sessionId, year, weekNumber);
+          const r = await reportsApi.generateWeekly(sessionId, year, weekNumber, userNote);
           set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
@@ -3597,11 +3612,11 @@ export const useAppStore = create<AppState>()(
           return null;
         }
       },
-      generateMonthlyReport: async (year, month) => {
+      generateMonthlyReport: async (year, month, userNote) => {
         const { sessionId } = get();
         if (!sessionId) return null;
         try {
-          const r = await reportsApi.generateMonthly(sessionId, year, month);
+          const r = await reportsApi.generateMonthly(sessionId, year, month, userNote);
           set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
@@ -3609,11 +3624,11 @@ export const useAppStore = create<AppState>()(
           return null;
         }
       },
-      generateQuarterlyReport: async (year, quarter) => {
+      generateQuarterlyReport: async (year, quarter, userNote) => {
         const { sessionId } = get();
         if (!sessionId) return null;
         try {
-          const r = await reportsApi.generateQuarterly(sessionId, year, quarter);
+          const r = await reportsApi.generateQuarterly(sessionId, year, quarter, userNote);
           set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
@@ -3621,11 +3636,11 @@ export const useAppStore = create<AppState>()(
           return null;
         }
       },
-      generateYearlyReport: async (year) => {
+      generateYearlyReport: async (year, userNote) => {
         const { sessionId } = get();
         if (!sessionId) return null;
         try {
-          const r = await reportsApi.generateYearly(sessionId, year);
+          const r = await reportsApi.generateYearly(sessionId, year, userNote);
           set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
