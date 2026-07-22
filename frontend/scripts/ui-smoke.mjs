@@ -295,7 +295,7 @@ async function verifyGoalsSurfaces(page, uniqueSuffix) {
   try {
     await page.goto(`http://127.0.0.1:3000/dashboard/goals/${year}`, { waitUntil: "domcontentloaded" });
     await dismissBlockingDashboardOverlays(page);
-    await page.getByText(`UI Smoke Yearly ${uniqueSuffix}`).first().waitFor({ timeout: 30000 });
+    await page.locator("tbody tr td p", { hasText: `UI Smoke Yearly ${uniqueSuffix}` }).first().waitFor({ timeout: 30000 });
     await page.getByText("Planning depth warnings").waitFor({ timeout: 30000 }).catch(() => {});
     checks.yearPageLoaded = true;
   } catch (error) {
