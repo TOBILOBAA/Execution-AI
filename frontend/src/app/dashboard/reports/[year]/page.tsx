@@ -30,6 +30,7 @@ import {
   yearlySummary,
   yearlyTopPillar,
 } from "@/lib/reportSnapshots";
+import { extractReportUserNote as reportUserNote } from "@/lib/reportNotes";
 
 type ArchiveTab = "overview" | "quarterly" | "monthly" | "weekly" | "daily";
 
@@ -440,6 +441,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
             ai.reflection ||
             fallback?.reflection ||
             "The quarter reflection is waiting on stronger monthly reporting depth.",
+          userNote: reportUserNote(persisted),
           nextFocus: ai.nextFocus ?? fallback?.nextFocus ?? null,
         });
       } finally {
@@ -475,6 +477,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
           ai.reflection ||
           fallback?.reflection ||
           "The quarter reflection is waiting on stronger monthly reporting depth.",
+        userNote: reportUserNote(persisted),
         nextFocus: ai.nextFocus ?? fallback?.nextFocus ?? null,
       });
     },
@@ -515,10 +518,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   const biggestWin = narrativeField(yearlyReport, "biggest_win");
   const keyPattern = narrativeField(yearlyReport, "key_pattern");
   const nextYearFocus = narrativeField(yearlyReport, "next_year_focus");
-  const yearlyUserNote =
-    typeof yearlyReport?.user_note === "string" && yearlyReport.user_note.trim().length > 0
-      ? yearlyReport.user_note.trim()
-      : null;
+  const yearlyUserNote = reportUserNote(yearlyReport);
   const monthsWithData = asNumber(yearlyMetrics.months_with_data) ?? monthlyReports.length;
   const tasksCompleted = asNumber(yearlyMetrics.tasks_completed);
   const tasksTotal = asNumber(yearlyMetrics.tasks_total);
@@ -1752,6 +1752,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 }
 
                   const weeklyRate = asNumber(asRecord(entry.report.metrics).avg_daily_completion);
+                  const weeklyUserNote = reportUserNote(entry.report);
                   const tone = archiveCardTone(weeklyRate);
                   return (
                     <div
@@ -1796,6 +1797,28 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                           </p>
                         </div>
                       </div>
+                      {weeklyUserNote && (
+                        <div
+                          className="mt-4 rounded-xl p-4"
+                          style={{ background: "rgba(0,108,74,0.04)", border: "1px solid rgba(0,108,74,0.10)" }}
+                        >
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
+                            Your Context
+                          </p>
+                          <p
+                            className="text-sm leading-relaxed whitespace-pre-wrap"
+                            style={{
+                              color: "#4a5c54",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {weeklyUserNote}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1950,6 +1973,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                           const tone = archiveCardTone(dailyCompletion(entry.report));
                           const mainGoalsLine = dailyMainGoalsLine(entry.report);
                           const allWorkLine = dailyWorkLine(entry.report);
+                          const dailyUserNote = reportUserNote(entry.report);
                           const reflectionLine =
                             firstSentence(narrativeField(entry.report, "reflection")) ??
                             firstSentence(narrativeField(entry.report, "summary")) ??
@@ -2023,6 +2047,29 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                                   </p>
                                 </div>
                               </div>
+
+                              {dailyUserNote && (
+                                <div
+                                  className="mt-4 rounded-2xl px-4 py-4"
+                                  style={{ background: "rgba(0,108,74,0.04)", border: "1px solid rgba(0,108,74,0.10)" }}
+                                >
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                                    Your Context
+                                  </p>
+                                  <p
+                                    className="text-sm mt-2 leading-relaxed whitespace-pre-wrap"
+                                    style={{
+                                      color: "#4a5c54",
+                                      display: "-webkit-box",
+                                      WebkitLineClamp: 4,
+                                      WebkitBoxOrient: "vertical",
+                                      overflow: "hidden",
+                                    }}
+                                  >
+                                    {dailyUserNote}
+                                  </p>
+                                </div>
+                              )}
 
                               <div className="mt-auto pt-4">
                                 <p className="text-[11px] leading-relaxed" style={{ color: "#8a9e97" }}>

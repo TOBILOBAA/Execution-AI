@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
 import { sessionsApi, type ApiReport } from "@/lib/api";
+import { extractReportUserNote } from "@/lib/reportNotes";
 import { AddYearlyGoalModal } from "@/components/modals/AddYearlyGoalModal";
 import { AddMonthlyGoalModal as PlanningMonthlyGoalModal } from "@/components/onboarding/AddMonthlyGoalModal";
 import { AddWeeklyGoalModal as PlanningWeeklyGoalModal } from "@/components/onboarding/AddWeeklyGoalModal";
@@ -895,8 +896,8 @@ export function DashboardPeriodReviewPrompts() {
   );
 
   useEffect(() => {
-    setNoteDraft(report?.user_note ?? "");
-  }, [report?.id, report?.user_note]);
+    setNoteDraft(extractReportUserNote(report) ?? "");
+  }, [report]);
 
   useEffect(() => {
     if (!sessionId || !onboardingComplete || kickoffPending || candidate) return;
@@ -1129,7 +1130,7 @@ export function DashboardPeriodReviewPrompts() {
   async function persistReviewNoteIfNeeded() {
     if (!candidate || screen !== "review") return true;
     const currentNote = noteDraft.trim();
-    const savedNote = (report?.user_note ?? "").trim();
+    const savedNote = extractReportUserNote(report) ?? "";
     if (currentNote === savedNote) return true;
 
     setNoteSaving(true);

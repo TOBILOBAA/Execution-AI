@@ -158,7 +158,7 @@ def _normalize_report_user_note(user_note: str | None) -> str | None:
 
 def _resolve_report_user_note(existing_report: dict | None, incoming_note: str | None) -> str | None:
     if incoming_note is None:
-        return _normalize_report_user_note((existing_report or {}).get("user_note"))
+        return _normalize_report_user_note(reports_db.extract_report_user_note(existing_report))
     return _normalize_report_user_note(incoming_note)
 
 

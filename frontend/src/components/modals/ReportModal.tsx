@@ -18,6 +18,7 @@ interface QuarterReportModalData {
   topPillar: string | null;
   summary: string;
   reflection: string;
+  userNote?: string | null;
   nextFocus: string | null;
 }
 
@@ -277,6 +278,15 @@ function QuarterlyReportModal({ onClose, data }: { onClose: () => void; data: un
               {details.reflection || "The quarter reflection is waiting on stronger monthly reporting depth."}
             </p>
           </div>
+
+          {details.userNote ? (
+            <div className="rounded-2xl p-4 mb-5" style={{ background: "rgba(0,108,74,0.04)", border: "1.5px solid rgba(0,108,74,0.10)" }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>Your Context</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "#4a5c54" }}>
+                {details.userNote}
+              </p>
+            </div>
+          ) : null}
 
           {details.nextFocus ? (
             <div className="rounded-2xl p-4" style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.12)" }}>

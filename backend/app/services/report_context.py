@@ -170,7 +170,7 @@ def _list_saved_period_notes(
 
     saved_period_notes: list[dict] = []
     for report in reports_db.list_reports(db, session_id):
-        note = (report.get("user_note") or "").strip()
+        note = (reports_db.extract_report_user_note(report) or "").strip()
         if not note:
             continue
         window = _report_window(report, week_starts_on)

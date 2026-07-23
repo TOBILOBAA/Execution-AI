@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import type { ApiReport } from "@/lib/api";
+import { extractReportUserNote } from "@/lib/reportNotes";
 import {
   EVENING_REMINDER_DISMISS_STORAGE_KEY,
   useEveningReviewReminder,
@@ -202,12 +203,12 @@ function CompletionModalInner() {
   }, [activeDashboardDate]);
 
   useEffect(() => {
-    setNoteDraft(report?.user_note ?? "");
-  }, [report?.id, report?.user_note]);
+    setNoteDraft(extractReportUserNote(report) ?? "");
+  }, [report]);
 
   async function persistDailyNoteIfNeeded() {
     const currentNote = noteDraft.trim();
-    const savedNote = (report?.user_note ?? "").trim();
+    const savedNote = extractReportUserNote(report) ?? "";
     if (currentNote === savedNote) return true;
 
     setSavingNote(true);

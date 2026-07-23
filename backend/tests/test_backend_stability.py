@@ -372,6 +372,74 @@ class BackendStabilityTests(unittest.TestCase):
         )
         self.assertEqual(report["id"], "report-q1")
 
+    def test_report_get_and_list_hydrate_user_note_from_fallback_narrative(self):
+        session_id = uuid4()
+        db = FakeDB(
+            result_rows_by_table={
+                "report_snapshots": [
+                    {
+                        "id": "report-fallback",
+                        "report_type": "weekly",
+                        "period_year": 2026,
+                        "period_week": 28,
+                        "ai_narrative": {"_user_note_fallback": "Capacity was tighter than expected."},
+                    }
+                ]
+            }
+        )
+
+        report = reports_db.get_report(
+            db,
+            session_id,
+            report_type="weekly",
+            period_year=2026,
+            period_week=28,
+        )
+        listed = reports_db.list_reports(db, session_id)
+
+        self.assertEqual(report["user_note"], "Capacity was tighter than expected.")
+        self.assertEqual(listed[0]["user_note"], "Capacity was tighter than expected.")
+
+    def test_report_upsert_drops_user_note_column_when_schema_is_behind(self):
+        session_id = uuid4()
+        missing_user_note = APIError(
+            {
+                "message": "Could not find the 'user_note' column of 'report_snapshots' in the schema cache",
+                "code": "PGRST204",
+                "hint": None,
+                "details": None,
+            }
+        )
+        db = FakeDB(update_error_by_table={"report_snapshots": missing_user_note})
+
+        with patch.object(
+            reports_db,
+            "get_report",
+            return_value={"id": "report-quarterly", "report_type": "quarterly", "period_year": 2026, "period_quarter": 2},
+        ):
+            updated = reports_db.upsert_report(
+                db,
+                session_id,
+                {
+                    "report_type": "quarterly",
+                    "period_year": 2026,
+                    "period_quarter": 2,
+                    "metrics": {},
+                    "ai_narrative": {"summary": "Quarterly summary"},
+                    "user_note": "This quarter was disrupted by travel.",
+                    "status": "ready",
+                },
+            )
+
+        update_calls = db.tables["report_snapshots"].update_calls
+        self.assertEqual(update_calls[0]["user_note"], "This quarter was disrupted by travel.")
+        self.assertNotIn("user_note", update_calls[1])
+        self.assertEqual(
+            update_calls[1]["ai_narrative"]["_user_note_fallback"],
+            "This quarter was disrupted by travel.",
+        )
+        self.assertEqual(updated["user_note"], "This quarter was disrupted by travel.")
+
     def test_report_list_skips_stale_today_refresh_before_cutoff(self):
         session_id = uuid4()
         today = date(2026, 5, 7)

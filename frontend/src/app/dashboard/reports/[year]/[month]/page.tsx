@@ -4,6 +4,7 @@ import { use, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
+import { extractReportUserNote } from "@/lib/reportNotes";
 import {
   getMonthlyReport,
   getWeeklyReportsForMonth,
@@ -74,8 +75,7 @@ export default function MonthlyReportPage({
   const tasksCompleted = typeof metrics.tasks_completed === "number" ? metrics.tasks_completed : null;
   const tasksTotal = typeof metrics.tasks_total === "number" ? metrics.tasks_total : null;
   const bestWeek = typeof metrics.best_week === "number" ? metrics.best_week : null;
-  const savedUserNote =
-    typeof report?.user_note === "string" && report.user_note.trim().length > 0 ? report.user_note.trim() : null;
+  const savedUserNote = extractReportUserNote(report);
   const periodKey = year * 12 + month;
   const referenceYear = Number(activeDashboardDate.slice(0, 4)) || new Date().getFullYear();
   const referenceMonth = Number(activeDashboardDate.slice(5, 7)) || 1;
