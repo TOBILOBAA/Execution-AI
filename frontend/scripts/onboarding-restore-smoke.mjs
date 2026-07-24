@@ -30,6 +30,10 @@ async function waitForUrl(page, pattern, timeout = 45000) {
   }, { timeout });
 }
 
+function onboardingNextButton(page) {
+  return page.getByRole("button", { name: /^Next(\s+arrow_forward)?$/ });
+}
+
 async function cleanup(admin, authUserId) {
   await admin.from("sessions").delete().eq("auth_user_id", authUserId);
   await admin.auth.admin.deleteUser(authUserId);
@@ -86,7 +90,7 @@ async function main() {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
-    await page.goto(`${baseUrl}/auth`, { waitUntil: "networkidle" });
+    await page.goto(`${baseUrl}/auth`, { waitUntil: "domcontentloaded" });
     await fillAuthAndSubmit(page, email, password);
     await waitForUrl(page, "/onboarding");
 
@@ -100,9 +104,9 @@ async function main() {
       await page.getByText(title).first().waitFor({ timeout: 30000 });
     }
 
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByText(`Restore Yearly Spiritual ${stamp}`).first().waitFor({ timeout: 30000 });
-    await page.getByRole("button", { name: "Next" }).click();
+    await onboardingNextButton(page).click();
 
     await page.getByRole("button", { name: /ADD GOAL/i }).first().click();
     await page.getByPlaceholder("e.g. Launch the Q1 Marketing Campaign").fill(`Restore Monthly ${stamp}`);
@@ -110,9 +114,9 @@ async function main() {
     await page.getByRole("button", { name: "Add to Plan" }).click();
     await page.getByText(`Restore Monthly ${stamp}`).first().waitFor({ timeout: 30000 });
 
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByText(`Restore Monthly ${stamp}`).first().waitFor({ timeout: 30000 });
-    await page.getByRole("button", { name: "Next" }).click();
+    await onboardingNextButton(page).click();
 
     await page.getByText("Main Weekly Goals", { exact: true }).waitFor({ timeout: 30000 });
     await page.getByRole("button", { name: /ADD GOAL/i }).first().click();
@@ -121,9 +125,9 @@ async function main() {
     await page.getByRole("button", { name: "Add to Week" }).click();
     await page.getByText(`Restore Weekly ${stamp}`).first().waitFor({ timeout: 30000 });
 
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByText(`Restore Weekly ${stamp}`).first().waitFor({ timeout: 30000 });
-    await page.getByRole("button", { name: "Next" }).click();
+    await onboardingNextButton(page).click();
 
     await page.getByText("Daily Focus", { exact: true }).waitFor({ timeout: 30000 });
     await page.getByRole("button", { name: /ADD PRIORITY/i }).first().click();
@@ -131,7 +135,7 @@ async function main() {
     await page.getByRole("button", { name: "Add Main Goal" }).click();
     await page.getByText(`Restore Daily ${stamp}`).first().waitFor({ timeout: 30000 });
 
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByText(`Restore Daily ${stamp}`).first().waitFor({ timeout: 30000 });
     await page.getByRole("button", { name: "Begin" }).click();
     await waitForUrl(page, "/dashboard");

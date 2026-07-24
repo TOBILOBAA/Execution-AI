@@ -30,6 +30,40 @@ async function waitForUrl(page, pattern, timeout = 45000) {
   }, { timeout });
 }
 
+async function generateAdminLink(supabaseUrl, serviceRoleKey, payload) {
+  const response = await fetch(`${supabaseUrl}/auth/v1/admin/generate_link`, {
+    method: "POST",
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const bodyText = await response.text();
+  if (!response.ok) {
+    throw new Error(`Supabase admin generate_link failed (${response.status}): ${bodyText}`);
+  }
+
+  return JSON.parse(bodyText);
+}
+
+async function waitForResetRequestOutcome(page) {
+  const success = page.getByText("Check your inbox. The reset link is good for 1 hour.");
+  const deliveryError = page.getByText(/Check Supabase .* SMTP/i);
+
+  await Promise.race([
+    success.waitFor({ timeout: 30000 }),
+    deliveryError.waitFor({ timeout: 30000 }),
+  ]);
+
+  if (await deliveryError.isVisible().catch(() => false)) {
+    const body = await page.locator("body").innerText().catch(() => "");
+    throw new Error(`Forgot password request failed in UI: ${body.slice(0, 1200)}`);
+  }
+}
+
 async function cleanup(admin, authUserId) {
   await admin.from("sessions").delete().eq("auth_user_id", authUserId);
   await admin.auth.admin.deleteUser(authUserId);
@@ -71,22 +105,22 @@ async function main() {
     browser = await chromium.launch({ headless: true });
 
     const page = await browser.newPage();
-    await page.goto(`${baseUrl}/auth`, { waitUntil: "networkidle" });
+    await page.goto(`${baseUrl}/auth`, { waitUntil: "domcontentloaded" });
     await page.getByText("Forgot password?").click();
     await page.getByPlaceholder("you@example.com").fill(email);
     await page.getByRole("button", { name: "Send reset link" }).click();
-    await page.getByText("Check your inbox. The reset link is good for 1 hour.").waitFor({ timeout: 30000 });
+    await waitForResetRequestOutcome(page);
 
-    const { data: recoveryData, error: recoveryError } = await admin.auth.admin.generateLink({
+    const recoveryData = await generateAdminLink(supabaseUrl, serviceRoleKey, {
       type: "recovery",
       email,
-      options: { redirectTo: `${baseUrl}/auth/update-password` },
+      redirect_to: `${baseUrl}/auth/update-password`,
     });
-    if (recoveryError || !recoveryData?.properties?.action_link) {
-      throw recoveryError ?? new Error("Could not generate recovery link.");
+    if (!recoveryData?.action_link) {
+      throw new Error("Could not generate recovery link.");
     }
 
-    await page.goto(recoveryData.properties.action_link, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.goto(recoveryData.action_link, { waitUntil: "domcontentloaded", timeout: 45000 });
     await page.getByText("Set a new password.").waitFor({ timeout: 30000 });
     await page.locator("input[type='password']").nth(0).fill(newPassword);
     await page.locator("input[type='password']").nth(1).fill(newPassword);
@@ -95,7 +129,7 @@ async function main() {
 
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
-    await page2.goto(`${baseUrl}/auth`, { waitUntil: "networkidle" });
+    await page2.goto(`${baseUrl}/auth`, { waitUntil: "domcontentloaded" });
     await page2.getByPlaceholder("you@example.com").fill(email);
     await page2.getByPlaceholder(/Your password|At least 8 characters/).fill(newPassword);
     await page2.locator("form button[type='submit']").click();

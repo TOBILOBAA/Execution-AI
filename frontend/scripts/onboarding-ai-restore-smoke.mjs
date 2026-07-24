@@ -30,6 +30,10 @@ async function waitForUrl(page, pattern, timeout = 45000) {
   }, { timeout });
 }
 
+function onboardingNextButton(page) {
+  return page.getByRole("button", { name: /^Next(\s+arrow_forward)?$/ });
+}
+
 async function waitForAiDraft(page, timeout = 180000) {
   await page.getByText("AI Suggestions Ready").waitFor({ timeout });
   await page.getByRole("button", { name: /Save selected/i }).waitFor({ timeout: 15000 });
@@ -38,7 +42,7 @@ async function waitForAiDraft(page, timeout = 180000) {
 async function generateRefreshRestoreApprove(page) {
   await page.getByRole("button", { name: /Generate with AI/i }).click();
   await waitForAiDraft(page);
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByText("AI Suggestions Ready").waitFor({ timeout: 45000 });
   await page.getByRole("button", { name: /Save selected/i }).click();
   await page.getByText("AI Suggestions Ready").waitFor({ state: "hidden", timeout: 30000 }).catch(() => {});
@@ -110,7 +114,7 @@ async function main() {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
-    await page.goto(`${baseUrl}/auth`, { waitUntil: "networkidle" });
+    await page.goto(`${baseUrl}/auth`, { waitUntil: "domcontentloaded" });
     await fillAuthAndSubmit(page, email, password);
     await waitForUrl(page, "/onboarding");
     await waitForYearlyStep(page);
@@ -127,16 +131,16 @@ async function main() {
     }
     console.log("[smoke] yearly goals created");
 
-    await page.getByRole("button", { name: "Next" }).click();
+    await onboardingNextButton(page).click();
 
     await generateRefreshRestoreApprove(page);
     console.log("[smoke] monthly AI draft restored and approved");
-    await page.getByRole("button", { name: "Next" }).click();
+    await onboardingNextButton(page).click();
     await page.getByText("Main Weekly Goals", { exact: true }).waitFor({ timeout: 30000 });
 
     await generateRefreshRestoreApprove(page);
     console.log("[smoke] weekly AI draft restored and approved");
-    await page.getByRole("button", { name: "Next" }).click();
+    await onboardingNextButton(page).click();
     await page.getByText("Daily Focus", { exact: true }).waitFor({ timeout: 30000 });
 
     await generateRefreshRestoreApprove(page);

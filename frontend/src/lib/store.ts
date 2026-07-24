@@ -279,6 +279,13 @@ function requiresServerPersistence(): boolean {
   return isCloudSupabaseConfigured() && !isAuthLocalOnly();
 }
 
+function isAuthDeliveryFailureMessage(message: string, status?: number): boolean {
+  return (
+    /confirmation email|recovery email|error sending|smtp|mailer|email.*fail/i.test(message) ||
+    status === 500
+  );
+}
+
 const pendingYearlyGoalCreates = new Map<string, Promise<void>>();
 const pendingMonthlyGoalCreates = new Map<string, Promise<void>>();
 const pendingWeeklyGoalCreates = new Map<string, Promise<void>>();
@@ -1373,9 +1380,7 @@ export const useAppStore = create<AppState>()(
         });
         if (error) {
           const msg = describeSupabaseAuthError(error.message);
-          const mailDown =
-            /confirmation email|error sending|smtp|mailer|email.*fail/i.test(msg) ||
-            error.status === 500;
+          const mailDown = isAuthDeliveryFailureMessage(msg, error.status);
           return {
             success: false,
             error: mailDown
@@ -1535,7 +1540,15 @@ export const useAppStore = create<AppState>()(
         const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
           redirectTo: buildPublicUrl("/auth/update-password"),
         });
-        if (error) return { success: false, error: describeSupabaseAuthError(error.message) };
+        if (error) {
+          const message = describeSupabaseAuthError(error.message);
+          return {
+            success: false,
+            error: isAuthDeliveryFailureMessage(message, error.status)
+              ? `${message} Check Supabase → Authentication → SMTP (Resend API key, sender domain DNS) and the Resend dashboard for errors.`
+              : message,
+          };
+        }
         return { success: true };
       },
 

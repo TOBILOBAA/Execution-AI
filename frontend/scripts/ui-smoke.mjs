@@ -50,6 +50,29 @@ async function waitForUrl(page, pattern, timeout = 45000) {
   }, { timeout });
 }
 
+function onboardingNextButton(page) {
+  return page.getByRole("button", { name: /^Next(\s+arrow_forward)?$/ });
+}
+
+async function generateAdminLink(supabaseUrl, serviceRoleKey, payload) {
+  const response = await fetch(`${supabaseUrl}/auth/v1/admin/generate_link`, {
+    method: "POST",
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const bodyText = await response.text();
+  if (!response.ok) {
+    throw new Error(`Supabase admin generate_link failed (${response.status}): ${bodyText}`);
+  }
+
+  return JSON.parse(bodyText);
+}
+
 async function snapshotPageState(page, label) {
   const safeLabel = label.replace(/[^a-z0-9-]+/gi, "-").toLowerCase();
   const screenshotPath = `/tmp/${safeLabel}.png`;
@@ -82,23 +105,23 @@ async function fillAuthAndSubmit(page, email, password, fullName) {
   await page.locator("form button[type='submit']").click();
 }
 
-async function completeSignupVerificationIfNeeded(page, admin, email, password, baseUrl) {
+async function completeSignupVerificationIfNeeded(page, supabaseUrl, serviceRoleKey, email, password, baseUrl) {
   const bodyText = await page.locator("body").innerText().catch(() => "");
   if (!bodyText.includes("Check your email.") && !bodyText.includes("Supabase could not send the confirmation email.")) {
     await page.getByText("Check your email.").waitFor({ timeout: 15000 });
   }
 
-  const { data, error } = await admin.auth.admin.generateLink({
+  const data = await generateAdminLink(supabaseUrl, serviceRoleKey, {
     type: "signup",
     email,
     password,
-    options: { redirectTo: `${baseUrl}/auth/callback` },
+    redirect_to: `${baseUrl}/auth/callback`,
   });
-  if (error || !data?.properties?.action_link) {
-    throw error ?? new Error("Could not generate sign-up verification link for smoke test.");
+  if (!data?.action_link) {
+    throw new Error("Could not generate sign-up verification link for smoke test.");
   }
 
-  await page.goto(data.properties.action_link, { waitUntil: "domcontentloaded", timeout: 45000 });
+  await page.goto(data.action_link, { waitUntil: "domcontentloaded", timeout: 45000 });
   return true;
 }
 
@@ -161,7 +184,7 @@ async function runMonthlyAiGenerateSmokeAssert(page) {
   );
 }
 
-async function completeOnboarding(page, admin, email, password, uniqueSuffix, options = {}) {
+async function completeOnboarding(page, admin, supabaseUrl, serviceRoleKey, email, password, uniqueSuffix, options = {}) {
   const { testMonthlyAI = false } = options;
     try {
       let flowState = "unknown";
@@ -185,7 +208,7 @@ async function completeOnboarding(page, admin, email, password, uniqueSuffix, op
       }
 
       if (flowState === "verify-email" || flowState === "verify-email-delivery-error") {
-        await completeSignupVerificationIfNeeded(page, admin, email, password, "http://127.0.0.1:3000");
+        await completeSignupVerificationIfNeeded(page, supabaseUrl, serviceRoleKey, email, password, "http://127.0.0.1:3000");
         await waitForUrl(page, "/onboarding", 45000);
       } else if (flowState !== "onboarding") {
         await waitForUrl(page, "/onboarding", 45000);
@@ -220,7 +243,7 @@ async function completeOnboarding(page, admin, email, password, uniqueSuffix, op
       await page.getByText(yearlyTitle).first().waitFor({ timeout: 30000 });
     }
 
-    await page.getByRole("button", { name: "Next" }).click();
+    await onboardingNextButton(page).click();
 
     if (testMonthlyAI) {
       await runMonthlyAiGenerateSmokeAssert(page);
@@ -232,7 +255,7 @@ async function completeOnboarding(page, admin, email, password, uniqueSuffix, op
     await page.getByRole("textbox").nth(1).fill(`Monthly description ${uniqueSuffix}`);
     await page.getByRole("button", { name: "Add to Plan" }).click();
     await page.getByText(`UI Smoke Monthly ${uniqueSuffix}`).first().waitFor({ timeout: 30000 });
-    await page.getByRole("button", { name: "Next" }).click();
+    await onboardingNextButton(page).click();
     await page.getByText("Main Weekly Goals", { exact: true }).waitFor({ timeout: 30000 });
 
     await page.getByRole("button", { name: /ADD GOAL/i }).first().click();
@@ -241,7 +264,7 @@ async function completeOnboarding(page, admin, email, password, uniqueSuffix, op
     await page.getByRole("textbox").nth(1).fill(`Weekly description ${uniqueSuffix}`);
     await page.getByRole("button", { name: "Add to Week" }).click();
     await page.getByText(`UI Smoke Weekly ${uniqueSuffix}`).first().waitFor({ timeout: 30000 });
-    await page.getByRole("button", { name: "Next" }).click();
+    await onboardingNextButton(page).click();
     await page.getByText("Daily Focus", { exact: true }).waitFor({ timeout: 30000 });
 
     await page.getByRole("button", { name: /ADD PRIORITY/i }).first().click();
@@ -263,7 +286,7 @@ async function completeOnboarding(page, admin, email, password, uniqueSuffix, op
 
 async function verifyDashboardPersistence(page, uniqueSuffix) {
   await page.getByText(`UI Smoke Daily ${uniqueSuffix}`).first().waitFor({ timeout: 30000 });
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "domcontentloaded" });
   await waitForUrl(page, "/dashboard");
   await page.getByText(`UI Smoke Daily ${uniqueSuffix}`).first().waitFor({ timeout: 30000 });
 }
@@ -439,9 +462,9 @@ async function main() {
 
     const context1 = await browser.newContext();
     const page1 = await context1.newPage();
-    await page1.goto(`${baseUrl}/auth`, { waitUntil: "networkidle" });
+    await page1.goto(`${baseUrl}/auth`, { waitUntil: "domcontentloaded" });
     await fillAuthAndSubmit(page1, email, password, fullName);
-    await completeOnboarding(page1, admin, email, password, String(stamp), { testMonthlyAI });
+    await completeOnboarding(page1, admin, supabaseUrl, serviceRoleKey, email, password, String(stamp), { testMonthlyAI });
     console.log(JSON.stringify({ checkpoint: "signup-onboarding-complete" }));
     checks.onboardingCompletedInUi = true;
     await verifyDashboardPersistence(page1, String(stamp));
@@ -467,7 +490,7 @@ async function main() {
 
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
-    await page2.goto(`${baseUrl}/auth`, { waitUntil: "networkidle" });
+    await page2.goto(`${baseUrl}/auth`, { waitUntil: "domcontentloaded" });
     await fillAuthAndSubmit(page2, email, password);
     await waitForUrl(page2, "/dashboard");
     await page2.getByText(`UI Smoke Daily ${stamp}`).first().waitFor({ timeout: 30000 });
@@ -483,7 +506,7 @@ async function main() {
 
     const context3 = await browser.newContext();
     const page3 = await context3.newPage();
-    await page3.goto(`${baseUrl}/auth`, { waitUntil: "networkidle" });
+    await page3.goto(`${baseUrl}/auth`, { waitUntil: "domcontentloaded" });
     await fillAuthAndSubmit(page3, email, password);
     await waitForUrl(page3, "/dashboard");
     await page3.getByText(`UI Smoke Daily ${stamp}`).first().waitFor({ timeout: 30000 });

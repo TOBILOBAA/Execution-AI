@@ -27,6 +27,7 @@ for key, value in {
 
 from app.api.deps import get_db
 from app.api.routes import execution as execution_routes
+from app.db import activity as activity_db
 from app.db import habits as habits_db
 from app.db import reports as reports_db
 from app.db import sessions as sessions_db
@@ -104,7 +105,7 @@ class RecordingTable:
             if self._maybe_single and not self.result_rows:
                 return FakeResult(None)
             return FakeResult(self.result_rows)
-        if self.update_error is not None and self.update_payload is not None:
+        if self.update_error is not None and (self.update_payload is not None or self.upsert_payload is not None):
             error = self.update_error
             self.update_error = None
             raise error
@@ -213,6 +214,27 @@ class BackendStabilityTests(unittest.TestCase):
     def test_session_touch_skips_index_error(self):
         with patch.object(sessions_db, "update_session", side_effect=IndexError("Session update returned no rows")):
             activity_service._safe_update_session_touch(FakeDB(), uuid4(), {"last_seen_at": "2026-07-20T10:17:27.774611+00:00"})
+
+    def test_daily_activity_upsert_ignores_missing_session_fk(self):
+        missing_session = APIError(
+            {
+                "message": 'insert or update on table "daily_user_activity" violates foreign key constraint "daily_user_activity_session_id_fkey"',
+                "code": "23503",
+                "hint": None,
+                "details": 'Key (session_id)=(session-1) is not present in table "sessions".',
+            }
+        )
+        db = FakeDB(update_error_by_table={"daily_user_activity": missing_session})
+
+        result = activity_db.upsert_daily_activity(
+            db,
+            {
+                "session_id": "session-1",
+                "activity_date": "2026-07-23",
+            },
+        )
+
+        self.assertIsNone(result)
 
     def test_session_start_reuses_existing_auth_user_workspace(self):
         auth_user_id = "user-123"
