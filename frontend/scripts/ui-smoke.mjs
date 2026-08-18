@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import { chromium } from "playwright";
 import { createClient } from "@supabase/supabase-js";
+import { buildResendTestEmail } from "./test-email.mjs";
 
 function readEnvFile(filePath) {
   const out = {};
@@ -439,7 +440,7 @@ async function main() {
   });
 
   const stamp = Date.now();
-  const email = `ui-smoke-${stamp}@example.com`;
+  const email = buildResendTestEmail("ui-smoke", stamp);
   const password = `UiSmoke!${stamp}`;
   const fullName = "UI Smoke User";
   let authUserId = null;
