@@ -142,13 +142,13 @@ export default function RootPage() {
         </nav>
       </div>
 
-      <section className="mx-auto grid max-w-7xl items-center gap-16 px-6 py-14 lg:grid-cols-[0.92fr_1.08fr] lg:py-18">
-        <div>
+      <section className="mx-auto max-w-7xl px-6 py-16 lg:py-24">
+        <div className="max-w-4xl">
           <span className="inline-flex animate-[pulse-dot_1.9s_ease-in-out_infinite] rounded-full border border-[#bfe7d4] bg-[#eef5f0] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.2em] text-[#006c4a] shadow-[0_12px_30px_rgba(0,108,74,0.08)]">
             Beta Access
           </span>
 
-          <h1 className="mt-8 max-w-2xl font-headline text-6xl font-extrabold leading-[0.97] tracking-[-0.05em] text-[#13241d] md:text-7xl">
+          <h1 className="mt-8 max-w-2xl font-headline text-5xl font-extrabold leading-[0.97] tracking-[-0.05em] text-[#13241d] sm:text-6xl md:text-7xl">
             Your goals.
             <br />
             Your behavior.
@@ -156,7 +156,7 @@ export default function RootPage() {
             <span className="text-[#006c4a]">Your growth.</span>
           </h1>
 
-          <p className="mt-7 max-w-[42rem] text-[20px] font-medium leading-[1.78] tracking-[-0.015em] text-[#4e5955]">
+          <p className="mt-7 max-w-[42rem] text-[18px] font-medium leading-[1.78] tracking-[-0.015em] text-[#4e5955] sm:text-[20px]">
             Execution AI helps ambitious builders turn long-range direction into structured daily execution with linked planning,
             AI support, and visibility into the patterns shaping progress.
           </p>
@@ -189,7 +189,7 @@ export default function RootPage() {
           <div className="mt-10 border-t border-[#eaeff1] pt-5">
             <p className="text-[13px] font-medium tracking-[-0.01em] text-[#52605b]">Be among the first to experience Execution AI.</p>
 
-            <div className="mt-3 inline-flex max-w-[41rem] rounded-[20px] border border-[#e5ece8] bg-white px-4 py-3 shadow-[0_6px_14px_rgba(23,41,32,0.045)]">
+            <div className="mt-3 w-full max-w-[41rem] rounded-[20px] border border-[#e5ece8] bg-white px-4 py-3 shadow-[0_6px_14px_rgba(23,41,32,0.045)]">
               <div className="grid gap-3 sm:grid-cols-3 sm:gap-6">
                 {EARLY_ACCESS_ITEMS.map((item) => (
                   <div
@@ -209,8 +209,6 @@ export default function RootPage() {
             </div>
           </div>
         </div>
-
-        <HeroProductVisual />
       </section>
 
       <section id="features" className="border-y border-[#eaeff1] bg-white py-20">
@@ -441,123 +439,6 @@ export default function RootPage() {
         </div>
       </footer>
     </main>
-  );
-}
-
-function HeroProductVisual() {
-  return (
-    <div className="relative">
-      <div className="absolute -left-8 top-10 hidden h-32 w-32 rounded-full bg-[#85f8c4]/24 blur-3xl lg:block" />
-      <div className="absolute -right-6 bottom-10 hidden h-36 w-36 rounded-full bg-[#006c4a]/20 blur-3xl lg:block" />
-
-      <div className="relative overflow-hidden rounded-[36px] border border-[#e6ece8] bg-white p-6 shadow-[0_34px_80px_rgba(22,39,31,0.15)]">
-        <div className="rounded-[30px] bg-[linear-gradient(180deg,#0c1e17_0%,#10231c_100%)] p-6 text-white lg:p-7">
-          <div className="grid gap-5 lg:grid-cols-2">
-            <HeroStatCard
-              title="Yearly alignment"
-              eyebrow="Career expansion"
-              value="72%"
-              copy="You are staying aligned with your highest priority goals this year."
-            />
-            <BehaviorReviewCard />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function HeroStatCard({
-  title,
-  eyebrow,
-  value,
-  copy,
-}: {
-  title: string;
-  eyebrow: string;
-  value: string;
-  copy: string;
-}) {
-  return (
-    <div className="rounded-[26px] border border-white/8 bg-white/[0.04] p-6 text-white">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/42">{title}</p>
-          <p className="mt-3 text-sm font-medium text-white/62">{eyebrow}</p>
-        </div>
-        <span className="rounded-full border border-[#67e2aa]/40 px-3 py-1 text-[11px] font-bold tracking-[0.14em] text-[#85f8c4]">
-          2025
-        </span>
-      </div>
-      <p className="mt-4 text-[56px] font-extrabold leading-none tracking-[-0.05em] text-white">{value}</p>
-      <div className="mt-4 h-2 rounded-full bg-white/10">
-        <div className="h-2 w-[72%] rounded-full bg-[linear-gradient(90deg,#67e2aa_0%,#8df7c7_100%)]" />
-      </div>
-      <p className="mt-4 text-[15px] leading-7 text-white/62">{copy}</p>
-      <div className="mt-6 space-y-4 border-t border-white/8 pt-5">
-        {[
-          ["Career", "72%", "work"],
-          ["Health", "60%", "favorite"],
-          ["Finance", "68%", "monetization_on"],
-          ["Growth", "85%", "menu_book"],
-        ].map(([label, progress, icon]) => (
-          <div key={label} className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-            <span className="material-symbols-outlined text-[18px] text-[#85f8c4]">{icon}</span>
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-white/82">{label}</p>
-              <div className="h-2 rounded-full bg-white/10">
-                <div
-                  className="h-2 rounded-full bg-[linear-gradient(90deg,#67e2aa_0%,#8df7c7_100%)]"
-                  style={{ width: progress }}
-                />
-              </div>
-            </div>
-            <span className="text-sm font-semibold text-[#85f8c4]">{progress}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function BehaviorReviewCard() {
-  return (
-    <div className="rounded-[26px] border border-white/8 bg-white/[0.04] p-6 text-white">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/42">Behavior review</p>
-          <p className="mt-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#85f8c4]">Observation</p>
-        </div>
-        <span className="flex h-16 w-16 items-center justify-center rounded-full border border-white/8 bg-white/[0.03] text-[#85f8c4]">
-          <span className="material-symbols-outlined text-[28px]">neurology</span>
-        </span>
-      </div>
-      <div className="mt-4 rounded-[20px] border border-white/8 bg-black/10 p-5">
-        <div className="flex items-center gap-2 text-[#8df7c7]">
-          <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-          <span className="text-[11px] font-extrabold uppercase tracking-[0.16em]">Behavior pattern</span>
-        </div>
-        <p className="mt-4 text-[15px] font-medium leading-7 text-white/82">
-          From recent weeks, we&apos;ve noticed you complete more of your day when you keep the plan to one main task and one secondary goal.
-        </p>
-        <ul className="mt-4 space-y-2 text-[15px] text-white/76">
-          <li className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[16px] text-[#85f8c4]">check_circle</span>
-            1 main goal
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[16px] text-[#85f8c4]">check_circle</span>
-            1–2 secondary goals
-          </li>
-        </ul>
-      </div>
-      <div className="mt-5 border-t border-white/8 pt-5">
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#85f8c4]">Recommendation</p>
-        <p className="mt-3 text-[15px] leading-7 text-white/68">
-          Keep tomorrow lighter and protect your first deep work block before adding extra tasks.
-        </p>
-      </div>
-    </div>
   );
 }
 
