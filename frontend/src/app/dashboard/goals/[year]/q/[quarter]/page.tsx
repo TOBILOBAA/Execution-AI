@@ -67,13 +67,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
   }
 
   if (!ready && !hasCachedData) {
-    return (
-      <GoalsLoadingShell
-        eyebrow={`Q${quarter} board`}
-        title="Loading the quarter planning board"
-        detail="We are pulling the saved monthly goals and their linked weekly goals so this quarter view only shows real planning depth."
-      />
-    );
+    return <GoalsLoadingShell title="Loading this quarter" />;
   }
 
   const startMonth = (quarter - 1) * 3 + 1;

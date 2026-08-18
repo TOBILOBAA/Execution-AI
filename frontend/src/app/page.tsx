@@ -3,112 +3,125 @@ import { LandingAuthGate } from "@/components/landing/LandingAuthGate";
 const APP_URL = "/auth";
 
 const FEATURE_PILLS = [
-  "Behavior Intelligence",
-  "Linked Goal System",
-  "Reflective Reporting",
+  "Year-to-day alignment",
+  "Behavior insights",
+  "Weekly course-correction",
 ];
 
 const FEATURE_CARDS = [
   {
-    icon: "target",
-    title: "Set goals that matter",
-    copy: "Define yearly, monthly, weekly, and daily goals with clarity so the work in front of you stays connected to the future you are building.",
-  },
-  {
-    icon: "schedule",
-    title: "Plan around real life",
-    copy: "Structure your day around priorities, capacity, and current momentum instead of forcing unrealistic plans that break by midday.",
-  },
-  {
     icon: "timeline",
-    title: "Behavioral insights",
-    copy: "Surface the habits, patterns, and execution signals shaping progress so your growth becomes understandable and improvable.",
+    title: "Detect behavior patterns",
+    copy: "See which routines, timing, and execution habits are helping progress or creating drift.",
   },
   {
     icon: "visibility",
-    title: "Track and reflect",
-    copy: "See what you planned, what you executed, and where your follow-through shifts across weeks and months.",
+    title: "Review with evidence",
+    copy: "Track what you planned, what you completed, and where consistency starts to break.",
   },
   {
     icon: "task_alt",
-    title: "Stay accountable",
-    copy: "Use AI guidance, reviews, and check-ins to stay consistent when motivation is low and priorities start to drift.",
+    title: "Course-correct quickly",
+    copy: "Get clear guidance on what to adjust this week before the year drifts further off track.",
+  },
+  {
+    icon: "target",
+    title: "Connect every level",
+    copy: "Map yearly goals into monthly, weekly, and daily execution so the work in front of you always has context.",
+  },
+  {
+    icon: "schedule",
+    title: "Plan for real capacity",
+    copy: "Build realistic plans you can actually complete, not ideal plans you abandon by midweek.",
   },
   {
     icon: "person_play",
-    title: "Built for real life",
-    copy: "For founders, creators, professionals, students, and ambitious builders who want a system that grows with them.",
+    title: "Built for intentional improvers",
+    copy: "For people serious about their growth who want a system, not random motivation.",
   },
 ];
 
 const HOW_STEPS = [
   {
     number: "01",
-    title: "Tell us what matters",
-    copy: "Set the direction with your goals, routines, priorities, and the areas where you want sharper follow-through.",
+    title: "Set your yearly direction",
+    copy: "Choose the life areas and outcomes that matter most this year.",
   },
   {
     number: "02",
-    title: "AI structures the system",
-    copy: "Execution AI helps shape yearly, monthly, weekly, and daily planning into a connected execution flow.",
+    title: "Break it into executable plans",
+    copy: "Use guided planning with optional AI support for your monthly, weekly, and daily focus.",
   },
   {
     number: "03",
-    title: "Execute with clarity",
-    copy: "Work the plan, track the day, and keep action grounded in the bigger goals instead of scattered motion.",
+    title: "Execute and track behavior",
+    copy: "Complete priorities and routines while preserving linkage to the bigger goals they are meant to move.",
   },
   {
     number: "04",
-    title: "Review and improve",
-    copy: "Learn from your patterns, see what is helping or hurting progress, and refine how you execute over time.",
+    title: "Review and adjust weekly",
+    copy: "Identify what is helping or hurting progress, then make one clear correction before drift compounds.",
   },
 ];
 
 const WHY_CARDS = [
   {
     icon: "neurology",
-    title: "Designed for your brain",
-    copy: "Execution AI works with your patterns, not against them, so consistency becomes more realistic and more sustainable.",
+    title: "Behavior visibility",
+    copy: "See which routines, decisions, and planning habits are helping or hurting progress across your life areas.",
   },
   {
     icon: "verified_user",
-    title: "Real accountability",
-    copy: "Not just reminders. You get check-ins, reviews, and honest signals when execution starts drifting.",
+    title: "Detect drift early",
+    copy: "See when momentum is slipping before a rough week turns into a lost month.",
   },
   {
     icon: "bolt",
-    title: "Adaptable and personal",
-    copy: "Your workload, season, and goals change. The planning system should shift with you instead of breaking under it.",
+    title: "Low-effort follow-through",
+    copy: "Daily use is designed to stay lightweight so the system helps execution instead of becoming more admin work.",
   },
   {
     icon: "lock",
-    title: "Private by default",
-    copy: "Your planning data, reports, and growth signals are handled with care and not treated like public performance content.",
+    title: "Evidence you can trust",
+    copy: "Recommendations should tie back to real execution patterns, not generic productivity advice.",
   },
 ];
 
 const EARLY_ACCESS_ITEMS = [
-  { icon: "check_circle", line1: "Be among", line2: "the first" },
-  { icon: "deployed_code", line1: "Early access", line2: "to new features" },
+  { icon: "track_changes", line1: "See what drives", line2: "your yearly growth" },
+  { icon: "deployed_code", line1: "Guided setup", line2: "from year to day" },
   { icon: "schedule", line1: "100% free", line2: "during beta" },
 ];
 
-const BUILT_FOR_GROUPS = [
+const EARLY_BELIEVERS = [
   {
-    title: "Founders and operators",
-    copy: "People juggling long-range direction with day-to-day execution who need a system that keeps priorities connected.",
-    icon: "rocket_launch",
+    name: "Daniel K.",
+    role: "Solopreneur",
+    stars: 5,
+    copy: "I realized my week looked full, but my main yearly goal was barely moving. Seeing that gap changed how I planned my days.",
+    image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=160&h=160&q=80",
   },
   {
-    title: "Students and researchers",
-    copy: "People working through complex seasons who want to translate big academic or personal goals into consistent weekly action.",
-    icon: "school",
+    name: "Aisha M.",
+    role: "Student",
+    stars: 4,
+    copy: "What clicked for me was seeing how my daily execution was affecting my thesis goal. It made the drift obvious much earlier.",
+    image: "https://images.unsplash.com/photo-1745196934348-52d80e0da259?auto=format&fit=crop&w=160&h=160&q=80",
   },
   {
-    title: "Builders improving follow-through",
-    copy: "Anyone who already sets goals but wants clearer insight into what is moving, what is drifting, and how their behavior is shaping results.",
-    icon: "psychology",
+    name: "Marcus T.",
+    role: "Gym instructor",
+    stars: 5,
+    copy: "Most tools show what I finished. This is the first one that made it clearer why some weeks still were not moving the goals I cared about.",
+    image: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?auto=format&fit=crop&w=160&h=160&q=80",
   },
+];
+
+const HERO_SIGNAL_CHAIN = [
+  { label: "Yearly goal", value: "Launch Execution AI beta" },
+  { label: "Monthly focus", value: "Polish onboarding and reports" },
+  { label: "Weekly sprint", value: "Ship the live landing update" },
+  { label: "Today", value: "Publish and gather early feedback" },
 ];
 
 export default function RootPage() {
@@ -126,37 +139,33 @@ export default function RootPage() {
             <a href="#features" className="transition-colors hover:text-[#10261d]">Features</a>
             <a href="#how" className="transition-colors hover:text-[#10261d]">How It Works</a>
             <a href="#why" className="transition-colors hover:text-[#10261d]">Why Execution AI</a>
-            <a href="#who" className="transition-colors hover:text-[#10261d]">Who It&apos;s For</a>
+            <a href="#believers" className="transition-colors hover:text-[#10261d]">Early Believers</a>
           </div>
 
           <a
             href={APP_URL}
             className="inline-flex items-center gap-2 rounded-[18px] bg-[#006c4a] px-5 py-3 text-sm font-extrabold text-white shadow-[0_16px_32px_rgba(0,108,74,0.16)] transition-all hover:-translate-y-0.5 hover:bg-[#005f41]"
           >
-            Try the Beta
+            Start free
             <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
           </a>
         </nav>
       </div>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:py-24">
+      <section className="mx-auto max-w-7xl px-6 py-16 lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-12 lg:py-24">
         <div className="max-w-4xl">
           <span className="inline-flex animate-[pulse-dot_1.9s_ease-in-out_infinite] rounded-full border border-[#bfe7d4] bg-[#eef5f0] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.2em] text-[#006c4a] shadow-[0_12px_30px_rgba(0,108,74,0.08)]">
-            Beta Access
+            Beta access
           </span>
 
-          <h1 className="mt-8 max-w-3xl font-headline text-5xl font-extrabold leading-[0.97] tracking-[-0.05em] text-[#13241d] sm:text-6xl md:text-7xl">
-            Your goals.
+          <h1 className="mt-8 max-w-2xl font-headline text-6xl font-extrabold leading-[0.97] tracking-[-0.05em] text-[#13241d] md:text-7xl">
+            See what actually
             <br />
-            Your behavior.
-            <br />
-            <span className="text-[#006c4a]">Your growth.</span>
+            <span className="text-[#006c4a]">moves your yearly goals.</span>
           </h1>
 
-          <p className="mt-7 max-w-3xl text-[18px] font-medium leading-[1.9] tracking-[-0.015em] text-[#4e5955] sm:text-[20px]">
-            Execution AI is an AI-powered behavioral intelligence system for long-term goal execution. It connects goals,
-            routines, reflections, and historical activity so users can follow through with more clarity and improve how
-            they execute over time.
+          <p className="mt-7 max-w-[42rem] text-[19px] font-medium leading-[1.65] tracking-[-0.015em] text-[#4e5955]">
+            Execution AI connects your yearly goals to daily actions so you can see what is helping your growth and what is causing drift.
           </p>
 
           <div className="mt-7 flex flex-wrap gap-4 text-sm font-semibold text-[#586064]">
@@ -173,7 +182,7 @@ export default function RootPage() {
               className="inline-flex items-center gap-2 rounded-[18px] bg-[#006c4a] px-7 py-4 font-bold text-white shadow-[0_16px_32px_rgba(0,108,74,0.16)] transition hover:bg-[#005f41]"
               href={APP_URL}
             >
-              Try the Beta
+              Start free
               <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
             </a>
             <a
@@ -184,10 +193,15 @@ export default function RootPage() {
             </a>
           </div>
 
-          <div className="mt-12 max-w-3xl border-t border-[#eaeff1] pt-5">
-            <p className="text-[13px] font-medium tracking-[-0.01em] text-[#52605b]">Be among the first to experience Execution AI.</p>
+          <div className="mt-10 border-t border-[#eaeff1] pt-5">
+            <p className="text-[20px] font-extrabold tracking-[-0.03em] text-[#13241d]">
+              Built to help you finish at least 80% of your yearly goals.
+            </p>
+            <p className="text-[13px] font-medium tracking-[-0.01em] text-[#52605b]">
+              For people intentional about their growth who already set yearly goals and want better follow-through.
+            </p>
 
-            <div className="mt-3 inline-flex w-full max-w-[41rem] rounded-[20px] border border-[#e5ece8] bg-white px-4 py-3 shadow-[0_6px_14px_rgba(23,41,32,0.045)]">
+            <div className="mt-3 w-full max-w-[41rem] rounded-[20px] border border-[#e5ece8] bg-white px-4 py-3 shadow-[0_6px_14px_rgba(23,41,32,0.045)]">
               <div className="grid gap-3 sm:grid-cols-3 sm:gap-6">
                 {EARLY_ACCESS_ITEMS.map((item) => (
                   <div
@@ -207,6 +221,8 @@ export default function RootPage() {
             </div>
           </div>
         </div>
+
+        <ExecutionSignalCard />
       </section>
 
       <section id="features" className="border-y border-[#eaeff1] bg-white py-20">
@@ -217,15 +233,15 @@ export default function RootPage() {
                 What is Execution AI?
               </p>
               <h2 className="mt-4 font-headline text-4xl font-extrabold leading-tight tracking-[-0.04em] text-[#13241d]">
-                Behavioral intelligence for
+                Your execution system
                 <br />
-                <span className="text-[#006c4a]">long-term execution.</span>
+                <span className="text-[#006c4a]">for the whole year.</span>
               </h2>
             </div>
 
             <p className="max-w-lg text-lg leading-8 text-[#586064]">
-              Execution AI goes beyond planning. It helps users connect long-range goals to daily action, understand execution
-              patterns over time, and make better decisions about how they work.
+              Most tools track tasks. Execution AI tracks whether your daily behavior is moving your yearly goals, then turns that
+              into clearer feedback on what needs attention next.
             </p>
           </div>
 
@@ -248,11 +264,11 @@ export default function RootPage() {
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-[#006c4a]">How it works</p>
             <h2 className="mt-4 text-4xl font-extrabold leading-tight tracking-[-0.04em] text-[#13241d] md:text-5xl">
-              A connected system for
-              <span className="text-[#006c4a]"> better follow-through.</span>
+              From yearly direction to
+              <span className="text-[#006c4a]"> daily execution.</span>
             </h2>
             <p className="mt-5 text-lg leading-8 text-[#586064]">
-              Execution AI is designed to carry direction into action, then turn that action into clearer self-awareness over time.
+              Execution AI keeps your goals connected from year to day and helps you improve with weekly evidence instead of guesswork.
             </p>
           </div>
 
@@ -288,31 +304,25 @@ export default function RootPage() {
           <div className="xl:pt-8">
             <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-[#006c4a]">Why Execution AI?</p>
             <h2 className="mt-4 max-w-xl text-4xl font-extrabold leading-tight tracking-[-0.04em] text-[#13241d] md:text-5xl">
-              More than planning.
-              <span className="text-[#006c4a]"> Built for better execution.</span>
+              Not just productivity.
+              <span className="text-[#006c4a]"> Better execution decisions.</span>
             </h2>
             <p className="mt-6 max-w-lg text-lg leading-8 text-[#586064]">
-              The difference is not just structure. It is the way the product helps you understand your patterns, protect momentum,
-              and improve how you actually follow through.
+              The goal is not to do more tasks. The goal is to finish more of the right yearly goals by understanding how you
+              actually execute.
             </p>
 
             <div className="mt-8 rounded-[28px] border border-[#dde7e1] bg-[linear-gradient(180deg,#0f211b_0%,#17362a_100%)] p-6 text-white shadow-[0_24px_54px_rgba(12,30,23,0.18)]">
               <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#85f8c4]">Behavioral pattern highlight</p>
               <h3 className="mt-3 text-[28px] font-extrabold tracking-[-0.04em]">
-                Progress becomes clearer when your system can explain your behavior.
+                When behavior is visible, progress becomes more predictable.
               </h3>
               <p className="mt-4 max-w-md text-sm leading-7 text-white/76">
-                Execution AI helps you spot the rhythms, routines, and friction points that shape whether goals actually move.
+                Execution AI surfaces recurring patterns like drifting focus areas and missed routine windows so you can intervene early.
               </p>
-              <div className="mt-6 space-y-3 text-sm text-white/78">
-                <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/8 p-4">
-                  <span className="material-symbols-outlined text-[18px] text-[#85f8c4]">check_circle</span>
-                  <span>Connected goal layers make it easier to see what is actually moving and what is drifting.</span>
-                </div>
-                <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/8 p-4">
-                  <span className="material-symbols-outlined text-[18px] text-[#85f8c4]">check_circle</span>
-                  <span>Reports and reflections turn execution history into insight instead of leaving it buried in memory.</span>
-                </div>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <InteractiveMetric value="72%" label="Example alignment" />
+                <InteractiveMetric value="85%" label="Example consistency" />
               </div>
             </div>
           </div>
@@ -357,13 +367,13 @@ export default function RootPage() {
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div className="relative z-10">
               <span className="rounded-full bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.18em]">
-                Beta Access
+                Catch drift early
               </span>
               <h2 className="mt-6 max-w-xl font-headline text-4xl font-extrabold leading-tight tracking-[-0.04em]">
-                Be part of the first users shaping the future.
+                Your year does not slip all at once.
               </h2>
               <p className="mt-4 max-w-lg text-white/80">
-                Execution AI is currently in beta. Join early, give feedback, and help shape the product while it is still evolving quickly.
+                It slips when daily execution disconnects from the goals you set. Execution AI helps you spot that earlier and know what to adjust next.
               </p>
             </div>
 
@@ -372,40 +382,47 @@ export default function RootPage() {
                 href={APP_URL}
                 className="flex items-center justify-between rounded-[18px] bg-white px-7 py-5 font-extrabold text-[#006c4a]"
               >
-                Try the Beta
+                Start free
                 <span className="material-symbols-outlined text-[22px]">arrow_forward</span>
               </a>
 
               <div className="mt-5 flex flex-wrap gap-5 text-sm text-white/80">
-                <span>✓ Free during beta</span>
-                <span>✓ Early access</span>
-                <span>✓ Shape the product</span>
+                <span>✓ See what is drifting</span>
+                <span>✓ Know what to adjust</span>
+                <span>✓ Protect yearly progress</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="who" className="py-20">
+      <section id="believers" className="py-20">
         <div className="mx-auto max-w-7xl px-6 text-center">
-          <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-[#006c4a]">Who it&apos;s for</p>
+          <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-[#006c4a]">Early believers</p>
           <h2 className="mt-4 text-4xl font-extrabold tracking-[-0.04em] text-[#13241d] md:text-5xl">
-            Built for people who take
-            <span className="text-[#006c4a]"> execution seriously.</span>
+            People already see the
+            <span className="text-[#006c4a]"> direction.</span>
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-[#586064]">
-            Execution AI is for people who already care about goals and consistency, but want a clearer system for turning
-            direction into follow-through and understanding what is affecting progress.
+            What people respond to most is finally seeing why progress drifts and what to change next.
           </p>
 
           <div className="mt-12 grid gap-6 md:grid-cols-3">
-            {BUILT_FOR_GROUPS.map((item) => (
-              <div key={item.title} className="interactive-card flex h-full flex-col rounded-[30px] border border-[#e6ece8] bg-white p-7 text-left shadow-[0_18px_42px_rgba(22,39,31,0.05)] transition-all hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(22,39,31,0.1)]">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef5f0] text-[#006c4a] shadow-sm">
-                  <span className="material-symbols-outlined text-[24px]">{item.icon}</span>
+            {EARLY_BELIEVERS.map((item) => (
+              <div key={item.name} className="interactive-card flex h-full flex-col rounded-[30px] border border-[#e6ece8] bg-white p-7 text-left shadow-[0_18px_42px_rgba(22,39,31,0.05)] transition-all hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(22,39,31,0.1)]">
+                <div className="flex items-center gap-1 text-[#006c4a]">
+                  {Array.from({ length: item.stars }).map((_, index) => (
+                    <span key={index} className="material-symbols-outlined filled text-[18px]">star</span>
+                  ))}
                 </div>
-                <h3 className="mt-6 text-[24px] font-extrabold tracking-[-0.03em] text-[#1a2722]">{item.title}</h3>
-                <p className="mt-4 flex-1 text-[16px] leading-8 text-[#586064]">{item.copy}</p>
+                <p className="mt-5 flex-1 text-[16px] leading-8 text-[#586064]">&ldquo;{item.copy}&rdquo;</p>
+                <div className="mt-8 flex items-center gap-4">
+                  <TestimonialImage src={item.image} alt={item.name} />
+                  <div>
+                    <p className="text-lg font-extrabold tracking-[-0.03em] text-[#1a2722]">{item.name}</p>
+                    <p className="mt-1 text-sm font-medium text-[#6c7873]">{item.role}</p>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -416,17 +433,21 @@ export default function RootPage() {
         <div className="mx-auto grid max-w-7xl gap-10 md:grid-cols-4">
           <div>
             <h3 className="text-3xl font-extrabold tracking-[-0.04em]">Execution AI</h3>
-            <p className="mt-4 text-sm leading-7 text-white/70">Your system for clarity, focus, accountability, and execution.</p>
+            <p className="mt-4 text-sm leading-7 text-white/70">
+              See what moves your yearly goals and adjust before you drift.
+            </p>
           </div>
 
-          <Footer title="Product" items={[{ label: "Features", href: "#features" }, { label: "How It Works", href: "#how" }, { label: "Who It's For", href: "#who" }]} />
+          <Footer title="Product" items={[{ label: "Features", href: "#features" }, { label: "How It Works", href: "#how" }, { label: "Early Believers", href: "#believers" }]} />
           <Footer title="Company" items={[{ label: "Privacy Policy", href: "/privacy" }, { label: "Terms of Service", href: "/terms" }, { label: "Contact", href: "mailto:hello@executionai.me" }]} />
 
           <div>
-            <h4 className="font-bold">Stay Updated</h4>
-            <p className="mt-3 text-sm leading-7 text-white/70">Follow the beta, try new features early, and help shape what comes next.</p>
+            <h4 className="font-bold">Start your year clearly</h4>
+            <p className="mt-3 text-sm leading-7 text-white/70">
+              Set your yearly goals, connect them to daily action, and start seeing what is helping your growth or causing drift.
+            </p>
             <a href={APP_URL} className="mt-5 inline-flex items-center gap-2 rounded-[18px] bg-[#006c4a] px-5 py-3 font-bold">
-              Try the Beta
+              Start free
               <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
             </a>
           </div>
@@ -436,6 +457,86 @@ export default function RootPage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+function InteractiveMetric({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/8 p-4">
+      <p className="text-[28px] font-extrabold tracking-[-0.04em] text-[#85f8c4]">{value}</p>
+      <p className="mt-1 text-sm font-medium text-white/72">{label}</p>
+    </div>
+  );
+}
+
+function ExecutionSignalCard() {
+  return (
+    <aside className="relative mt-12 lg:mt-4">
+      <div className="absolute inset-x-8 top-12 h-32 rounded-full bg-[#85f8c4]/20 blur-3xl" aria-hidden="true" />
+
+      <div className="relative overflow-hidden rounded-[32px] border border-[#dce9e2] bg-[linear-gradient(180deg,#ffffff_0%,#f5faf7_100%)] p-6 shadow-[0_24px_60px_rgba(19,36,29,0.09)]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(133,248,196,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.55),transparent_36%)]" />
+
+        <div className="relative">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#006c4a]">
+            Execution signal
+          </p>
+          <h3 className="mt-3 text-[28px] font-extrabold tracking-[-0.04em] text-[#13241d]">
+            Momentum looks strong.
+          </h3>
+
+          <p className="mt-4 max-w-sm text-[15px] leading-7 text-[#53615c]">
+            A compact view of how Execution AI links yearly direction to today&apos;s action and explains whether the user is moving well.
+          </p>
+
+          <div className="mt-6 rounded-[24px] border border-[#dfe9e4] bg-[#fdfefe] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#6b7b75]">
+                  Current read
+                </p>
+                <p className="mt-2 text-[16px] font-bold tracking-[-0.02em] text-[#183227]">
+                  Your best weeks start with one clear main goal.
+                </p>
+              </div>
+
+              <div className="shrink-0 rounded-2xl bg-[#0f241c] px-4 py-3 text-center text-white shadow-[0_18px_30px_rgba(15,36,28,0.16)]">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#85f8c4]">Signal</p>
+                <p className="mt-1 text-[24px] font-extrabold tracking-[-0.04em]">84%</p>
+              </div>
+            </div>
+
+            <div className="mt-4 h-2 rounded-full bg-[#dbe8e1]">
+              <div className="h-2 w-[84%] rounded-full bg-[linear-gradient(90deg,#0f241c_0%,#006c4a_52%,#85f8c4_100%)]" />
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {HERO_SIGNAL_CHAIN.map((item, index) => (
+              <div key={item.label} className="flex items-start gap-3 rounded-[20px] border border-[#e4ece7] bg-white/80 px-4 py-3">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eef5f0] text-[11px] font-extrabold text-[#006c4a]">
+                  {index + 1}
+                </span>
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#7a8782]">{item.label}</p>
+                  <p className="mt-1 text-[14px] font-semibold leading-6 text-[#22302a]">{item.value}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function TestimonialImage({ src, alt }: { src: string; alt: string }) {
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-14 w-14 rounded-full object-cover ring-1 ring-[#dce6e1]"
+    />
   );
 }
 

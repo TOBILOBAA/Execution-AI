@@ -1,23 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
+import { Archivo, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { SupabaseAuthSync } from "@/components/SupabaseAuthSync";
 import type { CSSProperties } from "react";
 
-const plusJakarta = localFont({
-  src: [
-    {
-      path: "./fonts/PlusJakartaSans-VariableFont_wght.ttf",
-      style: "normal",
-      weight: "200 800",
-    },
-    {
-      path: "./fonts/PlusJakartaSans-Italic-VariableFont_wght.ttf",
-      style: "italic",
-      weight: "200 800",
-    },
-  ],
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
   variable: "--font-jakarta",
+});
+
+const archivo = Archivo({
+  subsets: ["latin"],
+  variable: "--font-archivo",
 });
 
 export const metadata: Metadata = {
@@ -50,11 +44,11 @@ export default function RootLayout({
         `}</style>
       </head>
       <body
-        className={`${plusJakarta.variable} antialiased`}
+        className={`${plusJakarta.variable} ${archivo.variable} antialiased`}
         style={{
           "--font-headline": "var(--font-jakarta), sans-serif",
-          "--font-body": "var(--font-jakarta), sans-serif",
-          "--font-label": "var(--font-jakarta), sans-serif",
+          "--font-body": "var(--font-archivo), sans-serif",
+          "--font-label": "var(--font-archivo), sans-serif",
         } as CSSProperties}
       >
         <SupabaseAuthSync />

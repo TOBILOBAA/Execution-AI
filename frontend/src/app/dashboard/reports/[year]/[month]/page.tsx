@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { extractReportUserNote } from "@/lib/reportNotes";
+import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 import {
   getMonthlyReport,
   getWeeklyReportsForMonth,
@@ -143,11 +144,7 @@ export default function MonthlyReportPage({
           </p>
         </div>
       ) : showInitialLoading ? (
-        <div className="rounded-2xl p-6 bg-white animate-pulse" style={{ border: "1.5px solid rgba(0,0,0,0.07)" }}>
-          <div className="h-4 w-28 rounded-full" style={{ background: "#ecf1ee" }} />
-          <div className="mt-3 h-3 w-full rounded-full" style={{ background: "#f3f6f4" }} />
-          <div className="mt-2 h-3 w-4/5 rounded-full" style={{ background: "#f3f6f4" }} />
-        </div>
+        <AppLoadingScreen fullscreen={false} title="Loading report" />
       ) : !report ? (
         <div className="rounded-2xl p-6 bg-white" style={{ border: "1.5px dashed rgba(0,108,74,0.25)" }}>
           <p className="text-sm" style={{ color: "#8a9e97" }}>

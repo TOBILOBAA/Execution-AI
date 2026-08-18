@@ -11,6 +11,8 @@ interface AnalyticsPanelProps {
   metrics: DashboardMetrics;
 }
 
+const EMPTY_PROGRESS_MAP: Record<string, number> = {};
+
 function clampProgress(value: number | undefined) {
   return Math.max(0, Math.min(100, Math.round(value ?? 0)));
 }
@@ -43,10 +45,20 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
   const currentYear = referenceDate.getFullYear();
   const currentMonth = referenceDate.getMonth() + 1;
   const currentWeek = getWeekNumber(referenceDate, sessionWeekStartsOn);
+  const yearlyProgressMap = metrics.yearlyGoalProgressById ?? EMPTY_PROGRESS_MAP;
+  const monthlyProgressMap = metrics.monthlyGoalProgressById ?? EMPTY_PROGRESS_MAP;
+  const weeklyProgressMap = metrics.weeklyGoalProgressById ?? EMPTY_PROGRESS_MAP;
 
   const currentYearGoals = useMemo(
-    () => yearlyGoals.filter((goal) => goal.year === currentYear),
-    [currentYear, yearlyGoals],
+    () =>
+      yearlyGoals
+        .filter((goal) => goal.year === currentYear)
+        .sort(
+          (a, b) =>
+            (yearlyProgressMap[b.id] ?? clampProgress(b.progress)) -
+            (yearlyProgressMap[a.id] ?? clampProgress(a.progress)),
+        ),
+    [currentYear, yearlyGoals, yearlyProgressMap],
   );
 
   const currentMonthlyGoals = useMemo(
@@ -61,52 +73,48 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
 
   const categoryById = new Map(categories.map((category) => [category.id, category]));
   const yearlyProgressByGoalId = useMemo(() => {
-    const direct = new Map<string, number>();
+    const derived = new Map<string, number>();
     currentYearGoals.forEach((goal) => {
-      direct.set(goal.id, getGoalDisplayProgress(goal));
+      derived.set(goal.id, yearlyProgressMap[goal.id] ?? getGoalDisplayProgress(goal));
     });
-    return direct;
-  }, [currentYearGoals]);
+    return derived;
+  }, [currentYearGoals, yearlyProgressMap]);
 
-  const averageProgress = currentYearGoals.length
-    ? Math.round(
-        currentYearGoals.reduce((sum, goal) => sum + (yearlyProgressByGoalId.get(goal.id) ?? getGoalDisplayProgress(goal)), 0) /
-          currentYearGoals.length,
-      )
-    : 0;
-  const completedYearlyGoals = currentYearGoals.filter((goal) => getGoalDisplayProgress(goal) >= 100).length;
-
-  const highlightedYearlyGoals = useMemo(
-    () =>
-      [...currentYearGoals]
-        .sort(
-          (a, b) =>
-            (yearlyProgressByGoalId.get(b.id) ?? getGoalDisplayProgress(b)) -
-            (yearlyProgressByGoalId.get(a.id) ?? getGoalDisplayProgress(a)),
+  const averageProgress = metrics.yearlyProgress ?? (
+    currentYearGoals.length
+      ? Math.round(
+          currentYearGoals.reduce((sum, goal) => sum + (yearlyProgressByGoalId.get(goal.id) ?? getGoalDisplayProgress(goal)), 0) /
+            currentYearGoals.length,
         )
-        .slice(0, 2),
-    [currentYearGoals, yearlyProgressByGoalId],
+      : 0
   );
-  const currentWeeklyObjective = useMemo(
-    () =>
-      currentWeeklyGoals.find((goal) => goal.isMain) ??
-      [...currentWeeklyGoals].sort((a, b) => getGoalDisplayProgress(b) - getGoalDisplayProgress(a))[0] ??
-      null,
-    [currentWeeklyGoals],
-  );
-  const currentMonthlyObjective = useMemo(
-    () =>
-      currentMonthlyGoals.find((goal) => goal.isMain) ??
-      [...currentMonthlyGoals].sort((a, b) => getGoalDisplayProgress(b) - getGoalDisplayProgress(a))[0] ??
-      null,
-    [currentMonthlyGoals],
-  );
+  const completedYearlyGoals = currentYearGoals.filter(
+    (goal) => (yearlyProgressByGoalId.get(goal.id) ?? getGoalDisplayProgress(goal)) >= 100,
+  ).length;
+
+  const highlightedYearlyGoals = currentYearGoals.slice(0, 2);
+  const currentWeeklyObjective =
+    currentWeeklyGoals.find((goal) => goal.isMain) ??
+    [...currentWeeklyGoals].sort(
+      (a, b) =>
+        (weeklyProgressMap[b.id] ?? getGoalDisplayProgress(b)) -
+        (weeklyProgressMap[a.id] ?? getGoalDisplayProgress(a)),
+    )[0] ??
+    null;
+  const currentMonthlyObjective =
+    currentMonthlyGoals.find((goal) => goal.isMain) ??
+    [...currentMonthlyGoals].sort(
+      (a, b) =>
+        (monthlyProgressMap[b.id] ?? getGoalDisplayProgress(b)) -
+        (monthlyProgressMap[a.id] ?? getGoalDisplayProgress(a)),
+    )[0] ??
+    null;
 
   const weeklyObjectiveProgress = currentWeeklyObjective
-    ? getGoalDisplayProgress(currentWeeklyObjective)
+    ? (weeklyProgressMap[currentWeeklyObjective.id] ?? getGoalDisplayProgress(currentWeeklyObjective))
     : clampProgress(metrics.weeklyCompletionRate);
   const monthlyObjectiveProgress = currentMonthlyObjective
-    ? getGoalDisplayProgress(currentMonthlyObjective)
+    ? (monthlyProgressMap[currentMonthlyObjective.id] ?? getGoalDisplayProgress(currentMonthlyObjective))
     : clampProgress(metrics.monthlyCompletionRate);
   const contextualRailCopy = currentWeeklyObjective
     ? `This week is anchored by "${currentWeeklyObjective.title}". Keep today connected to that outcome.`

@@ -8,7 +8,7 @@ from app.core.exceptions import NotFoundError
 import app.db.sessions as sessions_db
 from app.services import activity_service
 from app.services import dashboard_service
-from app.schemas.dashboard import NextDayReviewApproveRequest
+from app.schemas.dashboard import NextDayRecoveryApproveRequest, NextDayReviewApproveRequest
 from app.utils.period_guards import get_session_today
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -66,4 +66,22 @@ def approve_next_day_review(
     )
     activity_service.track_approved_next_day_review(db, session_id, effective_date)
     activity_service.refresh_daily_completion_counts(db, session_id, effective_date)
+    return result
+
+
+@router.post("/{session_id}/next-day-review/recovery")
+def approve_next_day_recovery(
+    session_id: UUID,
+    body: NextDayRecoveryApproveRequest,
+    db: Client = Depends(get_db),
+):
+    source_date = date.fromisoformat(body.source_date)
+    result = dashboard_service.approve_next_day_recovery(
+        db,
+        session_id,
+        source_date,
+        body.item_id,
+        body.item_kind,
+    )
+    activity_service.refresh_daily_completion_counts(db, session_id, source_date)
     return result

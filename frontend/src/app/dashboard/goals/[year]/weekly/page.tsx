@@ -112,13 +112,7 @@ export default function WeeklyGoalsPage({ params }: { params: Promise<{ year: st
   }
 
   if (!ready && !hasCachedData) {
-    return (
-      <GoalsLoadingShell
-        eyebrow={`${year} weekly goals`}
-        title="Loading the weekly goals layer"
-        detail="We are pulling every week from the start of the year through the current point so the table reflects the real weekly progression of the system."
-      />
-    );
+    return <GoalsLoadingShell title="Loading weekly goals" />;
   }
 
   const todayIso = today;

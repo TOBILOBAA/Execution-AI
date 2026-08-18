@@ -102,6 +102,11 @@ export default function AuthCallbackPage() {
         <p className="mt-3 text-sm font-medium text-center max-w-md mx-auto" style={{ color: "#6b7c75" }}>
           {message}
         </p>
+        {!failed && (
+          <p className="mt-3 text-[11px] leading-5" style={{ color: "#94a3b8" }}>
+            We&rsquo;re restoring your session and sending you to the right next step.
+          </p>
+        )}
         {failed ? (
           <Link
             href="/auth"

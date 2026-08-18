@@ -73,13 +73,7 @@ export default function GoalsOverviewPage() {
   }, [backendReady, currentYear, sessionId]);
 
   if (!ready && !hasCachedData) {
-    return (
-      <GoalsLoadingShell
-        eyebrow="Goals overview"
-        title="Loading the active year"
-        detail="We are checking the current year, its progress, and the saved yearly goals before showing the overview."
-      />
-    );
+    return <GoalsLoadingShell title="Loading goals overview" />;
   }
 
   const stateCounts = countGoalStates(yearlyGoals, today);

@@ -1191,6 +1191,10 @@ function mapDashboardToStore(
       fallbackMonthlyContextText(data.monthly_context),
     weeklyCompletionRate: data.metrics.weekly_completion_rate,
     monthlyCompletionRate: data.metrics.monthly_completion_rate,
+    yearlyProgress: data.metrics.yearly_progress,
+    weeklyGoalProgressById: data.metrics.weekly_goal_progress_by_id,
+    monthlyGoalProgressById: data.metrics.monthly_goal_progress_by_id,
+    yearlyGoalProgressById: data.metrics.yearly_goal_progress_by_id,
     tasksCompletedToday: data.metrics.tasks_completed_today,
     tasksTotalToday: data.metrics.tasks_total_today,
     habitsCompletedToday: data.metrics.habits_completed_today,
@@ -2698,6 +2702,7 @@ export const useAppStore = create<AppState>()(
         const priority = get().dailyPriorities.find((p) => p.id === id);
         if (!priority) return;
         const newCompleted = !priority?.completed;
+        const { activeDashboardDate } = get();
         set((s) => ({
           dailyPriorities: s.dailyPriorities.map((p) =>
             p.id === id
@@ -2710,7 +2715,10 @@ export const useAppStore = create<AppState>()(
         if (sessionId && isUuid(id)) {
           tasksApi
             .toggleStatus(sessionId, id, newCompleted!)
-            .then(() => set({ syncError: null }))
+            .then(async () => {
+              set({ syncError: null });
+              await get().loadDashboard(activeDashboardDate);
+            })
             .catch((e) =>
               set((s) => ({
                 dailyPriorities: s.dailyPriorities.map((p) =>
@@ -2892,6 +2900,7 @@ export const useAppStore = create<AppState>()(
         const task = get().secondaryTasks.find((t) => t.id === id);
         if (!task) return;
         const newCompleted = !task?.completed;
+        const { activeDashboardDate } = get();
         set((s) => ({
           secondaryTasks: s.secondaryTasks.map((t) =>
             t.id === id
@@ -2903,7 +2912,10 @@ export const useAppStore = create<AppState>()(
         if (sessionId && isUuid(id)) {
           tasksApi
             .toggleStatus(sessionId, id, newCompleted!)
-            .then(() => set({ syncError: null }))
+            .then(async () => {
+              set({ syncError: null });
+              await get().loadDashboard(activeDashboardDate);
+            })
             .catch((e) =>
               set((s) => ({
                 secondaryTasks: s.secondaryTasks.map((t) =>
@@ -2967,7 +2979,10 @@ export const useAppStore = create<AppState>()(
         if (sessionId && isUuid(id)) {
           habitsApi
             .toggle(sessionId, id, newCompleted!, activeDashboardDate)
-            .then(() => set({ syncError: null }))
+            .then(async () => {
+              set({ syncError: null });
+              await get().loadDashboard(activeDashboardDate);
+            })
             .catch((e) =>
               set((s) => ({
                 habits: s.habits.map((h) =>
