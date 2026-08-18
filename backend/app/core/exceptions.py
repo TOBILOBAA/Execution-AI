@@ -33,6 +33,13 @@ class AIGenerationError(HTTPException):
         )
 
 
+class DeliveryError(HTTPException):
+    def __init__(self, message: str = "Delivery failed"):
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=message
+        )
+
+
 class PlanLockedError(HTTPException):
     def __init__(self, resource: str = "Plan"):
         super().__init__(

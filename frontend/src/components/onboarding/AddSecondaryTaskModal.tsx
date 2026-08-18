@@ -20,8 +20,8 @@ interface Props {
     tag?: string;
     weeklyGoalId?: string;
     description: string;
-  }) => void;
-  onDelete?: () => void;
+  }) => void | Promise<void>;
+  onDelete?: () => void | Promise<void>;
   onClose: () => void;
 }
 

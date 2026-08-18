@@ -7,6 +7,7 @@ node_modules/
 
 # Frontend app
 frontend/.next/
+frontend/.next-dev/
 frontend/.env.local
 frontend/node_modules/
 frontend/.vercel/
@@ -14,6 +15,7 @@ frontend/tsconfig.tsbuildinfo
 
 # Backend app
 backend/.env
+backend/venv
 backend/venv/
 backend/__pycache__/
 backend/.pytest_cache/

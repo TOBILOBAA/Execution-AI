@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, Field
-from .common import GoalStatus, PriorityLevel
+from .common import GoalStatus, GoalTruthStatus, PriorityLevel
 
 
 # ─── Categories ───────────────────────────────────────────────────────────────
@@ -24,6 +24,16 @@ class CategoryResponse(BaseModel):
     created_at: datetime
 
 
+class GoalTruthFields(BaseModel):
+    truth_status: GoalTruthStatus | None = None
+    truth_progress: int | None = Field(None, ge=0, le=100)
+    truth_reason: str | None = None
+    has_activity: bool | None = None
+    linked_children_count: int | None = None
+    completed_children_count: int | None = None
+    period_closed: bool | None = None
+
+
 # ─── Yearly Goals ─────────────────────────────────────────────────────────────
 
 class YearlyGoalCreate(BaseModel):
@@ -43,7 +53,7 @@ class YearlyGoalUpdate(BaseModel):
     target_date: str | None = None
 
 
-class YearlyGoalResponse(BaseModel):
+class YearlyGoalResponse(GoalTruthFields):
     id: UUID
     session_id: UUID
     category_id: UUID | None
@@ -85,7 +95,7 @@ class MonthlyGoalUpdate(BaseModel):
     category_id: UUID | None = None
 
 
-class MonthlyGoalResponse(BaseModel):
+class MonthlyGoalResponse(GoalTruthFields):
     id: UUID
     session_id: UUID
     monthly_plan_id: UUID
@@ -131,7 +141,7 @@ class WeeklyGoalUpdate(BaseModel):
     monthly_goal_id: UUID | None = None
 
 
-class WeeklyGoalResponse(BaseModel):
+class WeeklyGoalResponse(GoalTruthFields):
     id: UUID
     session_id: UUID
     weekly_plan_id: UUID
@@ -178,7 +188,7 @@ class DailyPriorityUpdate(BaseModel):
     notes: str | None = None
 
 
-class DailyPriorityResponse(BaseModel):
+class DailyPriorityResponse(GoalTruthFields):
     id: UUID
     session_id: UUID
     daily_plan_id: UUID

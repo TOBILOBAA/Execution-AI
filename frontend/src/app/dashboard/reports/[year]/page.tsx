@@ -31,6 +31,7 @@ import {
   yearlySummary,
   yearlyTopPillar,
 } from "@/lib/reportSnapshots";
+import { extractReportUserNote as reportUserNote } from "@/lib/reportNotes";
 
 type ArchiveTab = "overview" | "quarterly" | "monthly" | "weekly" | "daily";
 
@@ -190,11 +191,11 @@ function compactBullets(values: Array<string | null | undefined>, fallback: stri
   return bullets.length > 0 ? bullets : [fallback];
 }
 
-function daysInYearScope(year: number): number {
-  const now = new Date();
-  if (year === now.getFullYear()) {
+function daysInYearScope(year: number, referenceDateIso: string): number {
+  const referenceDate = new Date(`${referenceDateIso}T12:00:00`);
+  if (!Number.isNaN(referenceDate.getTime()) && year === referenceDate.getFullYear()) {
     const start = new Date(year, 0, 1);
-    return Math.max(1, Math.floor((now.getTime() - start.getTime()) / 86_400_000) + 1);
+    return Math.max(1, Math.floor((referenceDate.getTime() - start.getTime()) / 86_400_000) + 1);
   }
   return new Date(year, 1, 29).getMonth() === 1 ? 366 : 365;
 }
@@ -342,6 +343,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   const router = useRouter();
   const {
     sessionId,
+    activeDashboardDate,
     monthlyGoals,
     reports,
     reportsLoading,
@@ -353,6 +355,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   } = useAppStore(
     useShallow((state) => ({
       sessionId: state.sessionId,
+      activeDashboardDate: state.activeDashboardDate,
       monthlyGoals: state.monthlyGoals,
       reports: state.reports,
       reportsLoading: state.reportsLoading,
@@ -365,7 +368,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   );
   const [generatingQuarter, setGeneratingQuarter] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<ArchiveTab>("overview");
-  const [expandedDailyMonths, setExpandedDailyMonths] = useState<number[]>(() => [new Date().getMonth() + 1]);
+  const [expandedDailyMonths, setExpandedDailyMonths] = useState<number[]>([1]);
   const [visibleWeeklyCount, setVisibleWeeklyCount] = useState(8);
 
   useEffect(() => {
@@ -389,6 +392,18 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   const quarterSnapshots = useMemo(() => listQuarterSnapshots(reports, year), [reports, year]);
   const weeklyReports = useMemo(() => getWeeklyReportsForYear(reports, year), [reports, year]);
   const dailyReports = useMemo(() => getDailyReportsForYear(reports, year), [reports, year]);
+  const referenceDateIso = activeDashboardDate;
+  const referenceYear = Number(referenceDateIso.slice(0, 4)) || year;
+  const referenceMonth = Number(referenceDateIso.slice(5, 7)) || 1;
+  const latestArchivedMonth = useMemo(() => {
+    const monthCandidates = [
+      ...monthlyReports.map((report) => report.period_month ?? 0),
+      ...weeklyReports.map((report) => report.period_month ?? 0),
+      ...dailyReports.map((report) => Number(report.period_date?.slice(5, 7) ?? 0)),
+    ].filter((month): month is number => Number.isFinite(month) && month >= 1 && month <= 12);
+    return monthCandidates.length > 0 ? Math.max(...monthCandidates) : 1;
+  }, [dailyReports, monthlyReports, weeklyReports]);
+  const defaultExpandedDailyMonth = year === referenceYear ? referenceMonth : latestArchivedMonth;
 
   const handleQuarterlyGemini = useCallback(
     async (quarterNum: 1 | 2 | 3 | 4, snapshot: QuarterReportSnapshot) => {
@@ -422,11 +437,12 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
           summary:
             ai.summary ||
             fallback?.summary ||
-            "Monthly reports exist in this quarter, but the AI review could not be formed yet.",
+            "Monthly reports exist in this quarter, but the saved quarterly summary is not available yet.",
           reflection:
             ai.reflection ||
             fallback?.reflection ||
             "The quarter reflection is waiting on stronger monthly reporting depth.",
+          userNote: reportUserNote(persisted),
           nextFocus: ai.nextFocus ?? fallback?.nextFocus ?? null,
         });
       } finally {
@@ -457,11 +473,12 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
         summary:
           ai.summary ||
           fallback?.summary ||
-          "Monthly reports exist in this quarter, but the AI review could not be formed yet.",
+          "Monthly reports exist in this quarter, but the saved quarterly summary is not available yet.",
         reflection:
           ai.reflection ||
           fallback?.reflection ||
           "The quarter reflection is waiting on stronger monthly reporting depth.",
+        userNote: reportUserNote(persisted),
         nextFocus: ai.nextFocus ?? fallback?.nextFocus ?? null,
       });
     },
@@ -471,6 +488,10 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   useEffect(() => {
     setVisibleWeeklyCount(8);
   }, [year]);
+
+  useEffect(() => {
+    setExpandedDailyMonths([defaultExpandedDailyMonth]);
+  }, [defaultExpandedDailyMonth]);
 
   if (Number.isNaN(year)) {
     return (
@@ -498,6 +519,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
   const biggestWin = narrativeField(yearlyReport, "biggest_win");
   const keyPattern = narrativeField(yearlyReport, "key_pattern");
   const nextYearFocus = narrativeField(yearlyReport, "next_year_focus");
+  const yearlyUserNote = reportUserNote(yearlyReport);
   const monthsWithData = asNumber(yearlyMetrics.months_with_data) ?? monthlyReports.length;
   const tasksCompleted = asNumber(yearlyMetrics.tasks_completed);
   const tasksTotal = asNumber(yearlyMetrics.tasks_total);
@@ -507,7 +529,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
     ? Math.round((yearMonthlyGoals.filter((goal) => goal.yearlyGoalId).length / yearMonthlyGoals.length) * 100)
     : 0;
   const consistencyScore = dailyReports.length
-    ? Math.round((dailyReports.length / daysInYearScope(year)) * 100)
+    ? Math.round((dailyReports.length / daysInYearScope(year, referenceDateIso)) * 100)
     : average(
         weeklyReports
           .map((report) => asNumber(asRecord(report.metrics).habit_consistency))
@@ -543,7 +565,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
       .filter((report) => report.period_date)
       .map((report) => [report.period_date as string, report]),
   );
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = referenceDateIso;
   const quarterArchive = Array.from({ length: 4 }, (_, index) => {
     const quarter = index + 1;
     const months = [index * 3 + 1, index * 3 + 2, index * 3 + 3];
@@ -708,7 +730,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
       recommendationSteps[1] ?? null,
       recommendationSteps[2] ?? null,
     ],
-    "AI recommendations will appear here once a yearly narrative has been generated.",
+    "Recommendations from the saved yearly narrative will appear here once a yearly review has been generated.",
   );
 
   return (
@@ -740,7 +762,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
               {year} execution report
             </h1>
             <p className="text-sm mt-2 max-w-2xl" style={{ color: "#8a9e97" }}>
-              Overview shows the full behavioral lowdown. The remaining tabs separate quarterly, monthly, weekly, and daily archives.
+              Overview summarizes the year first. The remaining tabs break the archive into quarterly, monthly, weekly, and daily layers.
             </p>
           </div>
         </div>
@@ -865,6 +887,20 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 Quarterly, monthly, weekly, and daily report breakdowns are preserved for tablet and desktop where the archive has room to stay readable and aligned.
               </p>
             </section>
+
+            {yearlyUserNote && (
+              <section
+                className="rounded-2xl p-5"
+                style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
+                  Your Context
+                </p>
+                <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "#4a5c54" }}>
+                  {yearlyUserNote}
+                </p>
+              </section>
+            )}
           </div>
 
           <div className="hidden md:block">
@@ -961,7 +997,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
               <section className="space-y-4">
                 <div className="flex items-center gap-2">
                   <p className="text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: "#1a1f1e" }}>
-                    2. AI Overview
+                    2. Generated Overview
                   </p>
                 </div>
                 <div
@@ -978,7 +1014,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                       </div>
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "#006c4a" }}>
-                          AI Executive Summary
+                          Generated Summary
                         </p>
                         <p className="text-lg font-semibold mt-2" style={{ color: "#1a1f1e" }}>
                           {recommendationHeadline}
@@ -1043,6 +1079,16 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                     </div>
                   ))}
                 </div>
+                {yearlyUserNote && (
+                  <div className="rounded-2xl p-5 bg-white" style={{ border: "1.5px solid rgba(0,0,0,0.07)" }}>
+                    <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>
+                      Your Context
+                    </p>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "#4a5c54" }}>
+                      {yearlyUserNote}
+                    </p>
+                  </div>
+                )}
                 <div
                   className="rounded-2xl p-5"
                   style={{ background: "rgba(0,108,74,0.05)", border: "1.5px solid rgba(0,108,74,0.10)" }}
@@ -1050,7 +1096,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                   <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
                     <div>
                       <p className="font-bold text-sm" style={{ color: "#006c4a" }}>
-                        AI Recommendation
+                        Recommended Focus
                       </p>
                       <p className="text-sm mt-2 max-w-3xl" style={{ color: "#4a5c54" }}>
                         {executionScore >= 70
@@ -1407,7 +1453,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                         </div>
                       </div>
                       <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
-                        This quarter is still underway. We can keep surfacing the saved monthly snapshots, but the final AI quarterly review should wait until the quarter closes so it becomes one stable review instead of a moving target.
+                        This quarter is still underway. We can keep surfacing the saved monthly snapshots, but the final quarterly review should wait until the quarter closes so it becomes one stable review instead of a moving target.
                       </p>
                     </div>
                   );
@@ -1440,7 +1486,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                             ? firstSentence(quarterlyNarrativeFromReport(quarter.snapshot.report).summary || quarter.snapshot.summary) ??
                               "A saved quarterly review is available for this period."
                             : firstSentence(quarter.snapshot.summary) ??
-                              "Monthly reports exist in this quarter, but a saved AI quarterly review has not been generated yet."}
+                              "Monthly reports exist in this quarter, but a saved quarterly review has not been generated yet."}
                         </p>
                       </div>
                       <div className="rounded-xl p-4" style={{ background: "#f7faf8" }}>
@@ -1457,7 +1503,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                         ? quarterlyNarrativeFromReport(quarter.snapshot.report).reflection ||
                           quarter.snapshot.summary ||
                           "A saved quarterly review is available for this period."
-                        : "Monthly reports already exist for this quarter. Generate the quarterly AI review once to lock in a stable reflection and next-quarter focus."}
+                        : "Monthly reports already exist for this quarter. Generate the quarterly review once to lock in a stable reflection and next-quarter focus."}
                     </p>
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                       {savedQuarterReview ? (
@@ -1676,6 +1722,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                 }
 
                   const weeklyRate = asNumber(asRecord(entry.report.metrics).avg_daily_completion);
+                  const weeklyUserNote = reportUserNote(entry.report);
                   const tone = archiveCardTone(weeklyRate);
                   return (
                     <div
@@ -1720,6 +1767,28 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                           </p>
                         </div>
                       </div>
+                      {weeklyUserNote && (
+                        <div
+                          className="mt-4 rounded-xl p-4"
+                          style={{ background: "rgba(0,108,74,0.04)", border: "1px solid rgba(0,108,74,0.10)" }}
+                        >
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
+                            Your Context
+                          </p>
+                          <p
+                            className="text-sm leading-relaxed whitespace-pre-wrap"
+                            style={{
+                              color: "#4a5c54",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {weeklyUserNote}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1874,6 +1943,7 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                           const tone = archiveCardTone(dailyCompletion(entry.report));
                           const mainGoalsLine = dailyMainGoalsLine(entry.report);
                           const allWorkLine = dailyWorkLine(entry.report);
+                          const dailyUserNote = reportUserNote(entry.report);
                           const reflectionLine =
                             firstSentence(narrativeField(entry.report, "reflection")) ??
                             firstSentence(narrativeField(entry.report, "summary")) ??
@@ -1947,6 +2017,29 @@ export default function YearlyReportPage({ params }: { params: Promise<{ year: s
                                   </p>
                                 </div>
                               </div>
+
+                              {dailyUserNote && (
+                                <div
+                                  className="mt-4 rounded-2xl px-4 py-4"
+                                  style={{ background: "rgba(0,108,74,0.04)", border: "1px solid rgba(0,108,74,0.10)" }}
+                                >
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                                    Your Context
+                                  </p>
+                                  <p
+                                    className="text-sm mt-2 leading-relaxed whitespace-pre-wrap"
+                                    style={{
+                                      color: "#4a5c54",
+                                      display: "-webkit-box",
+                                      WebkitLineClamp: 4,
+                                      WebkitBoxOrient: "vertical",
+                                      overflow: "hidden",
+                                    }}
+                                  >
+                                    {dailyUserNote}
+                                  </p>
+                                </div>
+                              )}
 
                               <div className="mt-auto pt-4">
                                 <p className="text-[11px] leading-relaxed" style={{ color: "#8a9e97" }}>

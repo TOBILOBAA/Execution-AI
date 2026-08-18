@@ -27,9 +27,11 @@ for key, value in {
 
 from app.api.deps import get_db
 from app.api.routes import execution as execution_routes
+from app.db import activity as activity_db
 from app.db import habits as habits_db
 from app.db import reports as reports_db
 from app.db import sessions as sessions_db
+from app.services import activity_service
 from app.services import report_service
 from app.main import (
     LOCAL_DEVELOPMENT_CORS_ORIGINS,
@@ -103,7 +105,7 @@ class RecordingTable:
             if self._maybe_single and not self.result_rows:
                 return FakeResult(None)
             return FakeResult(self.result_rows)
-        if self.update_error is not None and self.update_payload is not None:
+        if self.update_error is not None and (self.update_payload is not None or self.upsert_payload is not None):
             error = self.update_error
             self.update_error = None
             raise error
@@ -184,6 +186,55 @@ class BackendStabilityTests(unittest.TestCase):
         self.assertEqual(len(db.tables["sessions"].update_calls), 2)
         self.assertNotIn("pending_recaps", db.tables["sessions"].update_calls[-1])
         self.assertNotIn("handled_recaps", db.tables["sessions"].update_calls[-1])
+
+    def test_session_update_falls_back_to_fetch_when_update_returns_no_rows(self):
+        session_id = uuid4()
+        db = FakeDB(result_rows_by_table={"sessions": []})
+        fetched = {
+            "id": str(session_id),
+            "timezone": "UTC",
+            "week_starts_on": "monday",
+            "onboarding_step": 4,
+            "onboarding_done": True,
+            "auth_user_id": "user-789",
+            "created_at": "2026-07-20T00:00:00Z",
+        }
+
+        with patch.object(sessions_db, "get_session", return_value=fetched):
+            updated = sessions_db.update_session(
+                db,
+                session_id,
+                {"last_seen_at": "2026-07-20T10:08:01.912543+00:00"},
+            )
+
+        self.assertEqual(updated["id"], fetched["id"])
+        self.assertEqual(updated["timezone"], "UTC")
+        self.assertEqual(updated["week_starts_on"], "monday")
+
+    def test_session_touch_skips_index_error(self):
+        with patch.object(sessions_db, "update_session", side_effect=IndexError("Session update returned no rows")):
+            activity_service._safe_update_session_touch(FakeDB(), uuid4(), {"last_seen_at": "2026-07-20T10:17:27.774611+00:00"})
+
+    def test_daily_activity_upsert_ignores_missing_session_fk(self):
+        missing_session = APIError(
+            {
+                "message": 'insert or update on table "daily_user_activity" violates foreign key constraint "daily_user_activity_session_id_fkey"',
+                "code": "23503",
+                "hint": None,
+                "details": 'Key (session_id)=(session-1) is not present in table "sessions".',
+            }
+        )
+        db = FakeDB(update_error_by_table={"daily_user_activity": missing_session})
+
+        result = activity_db.upsert_daily_activity(
+            db,
+            {
+                "session_id": "session-1",
+                "activity_date": "2026-07-23",
+            },
+        )
+
+        self.assertIsNone(result)
 
     def test_session_start_reuses_existing_auth_user_workspace(self):
         auth_user_id = "user-123"
@@ -343,6 +394,74 @@ class BackendStabilityTests(unittest.TestCase):
         )
         self.assertEqual(report["id"], "report-q1")
 
+    def test_report_get_and_list_hydrate_user_note_from_fallback_narrative(self):
+        session_id = uuid4()
+        db = FakeDB(
+            result_rows_by_table={
+                "report_snapshots": [
+                    {
+                        "id": "report-fallback",
+                        "report_type": "weekly",
+                        "period_year": 2026,
+                        "period_week": 28,
+                        "ai_narrative": {"_user_note_fallback": "Capacity was tighter than expected."},
+                    }
+                ]
+            }
+        )
+
+        report = reports_db.get_report(
+            db,
+            session_id,
+            report_type="weekly",
+            period_year=2026,
+            period_week=28,
+        )
+        listed = reports_db.list_reports(db, session_id)
+
+        self.assertEqual(report["user_note"], "Capacity was tighter than expected.")
+        self.assertEqual(listed[0]["user_note"], "Capacity was tighter than expected.")
+
+    def test_report_upsert_drops_user_note_column_when_schema_is_behind(self):
+        session_id = uuid4()
+        missing_user_note = APIError(
+            {
+                "message": "Could not find the 'user_note' column of 'report_snapshots' in the schema cache",
+                "code": "PGRST204",
+                "hint": None,
+                "details": None,
+            }
+        )
+        db = FakeDB(update_error_by_table={"report_snapshots": missing_user_note})
+
+        with patch.object(
+            reports_db,
+            "get_report",
+            return_value={"id": "report-quarterly", "report_type": "quarterly", "period_year": 2026, "period_quarter": 2},
+        ):
+            updated = reports_db.upsert_report(
+                db,
+                session_id,
+                {
+                    "report_type": "quarterly",
+                    "period_year": 2026,
+                    "period_quarter": 2,
+                    "metrics": {},
+                    "ai_narrative": {"summary": "Quarterly summary"},
+                    "user_note": "This quarter was disrupted by travel.",
+                    "status": "ready",
+                },
+            )
+
+        update_calls = db.tables["report_snapshots"].update_calls
+        self.assertEqual(update_calls[0]["user_note"], "This quarter was disrupted by travel.")
+        self.assertNotIn("user_note", update_calls[1])
+        self.assertEqual(
+            update_calls[1]["ai_narrative"]["_user_note_fallback"],
+            "This quarter was disrupted by travel.",
+        )
+        self.assertEqual(updated["user_note"], "This quarter was disrupted by travel.")
+
     def test_report_list_skips_stale_today_refresh_before_cutoff(self):
         session_id = uuid4()
         today = date(2026, 5, 7)
@@ -403,6 +522,7 @@ class BackendStabilityTests(unittest.TestCase):
         fake_priority = {"id": "priority-1", "title": "Ship backend fixes"}
 
         with (
+            patch.object(execution_routes, "assert_period_current_daily"),
             patch.object(execution_routes.plans_db, "get_daily_plan", return_value=None),
             patch.object(execution_routes.plans_db, "get_weekly_plan", return_value=None),
             patch.object(execution_routes.plans_db, "upsert_daily_plan", return_value=fake_plan) as upsert_plan,

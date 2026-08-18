@@ -20,7 +20,7 @@ interface Props {
     targetDay?: string;
     description: string;
     workload: string;
-  }) => void;
+  }) => void | Promise<void>;
   onClose: () => void;
 }
 

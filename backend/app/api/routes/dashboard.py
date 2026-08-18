@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Request
 from supabase import Client
 
 from app.api.deps import get_db
+from app.core.exceptions import NotFoundError
+import app.db.sessions as sessions_db
 from app.services import activity_service
 from app.services import dashboard_service
 from app.schemas.dashboard import NextDayRecoveryApproveRequest, NextDayReviewApproveRequest
@@ -36,6 +38,8 @@ def get_next_day_review(
     db: Client = Depends(get_db),
 ):
     """Return the persisted review payload for the requested kickoff date."""
+    if not sessions_db.get_session(db, session_id):
+        raise NotFoundError("Session", str(session_id))
     activity_service.track_opened_next_day_review(db, session_id, user_agent=request.headers.get("user-agent"))
     return dashboard_service.get_next_day_review(db, session_id, plan_date)
 

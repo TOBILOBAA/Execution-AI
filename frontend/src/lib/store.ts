@@ -9,6 +9,7 @@ import type {
   WeeklyGoal,
   DailyPriority,
   FoundationalHabit,
+  GoalTruthStatus,
   ModalType,
   WeekStartsOn,
   DashboardRecapEntry,
@@ -23,6 +24,7 @@ import { isUuid } from "./uuid";
 import type { DashboardMetrics } from "./types";
 import {
   ApiError,
+  authApi,
   categoriesApi,
   yearlyGoalsApi,
   monthlyPlanApi,
@@ -31,13 +33,18 @@ import {
   tasksApi,
   habitsApi,
   dashboardApi,
+  goalsApi,
   reportsApi,
   sessionsApi,
   type ApiDashboard,
+  type ApiGoalsHierarchy,
+  type ApiDailyPlan,
+  type ApiMonthlyPlan,
   type ApiReport,
   type ApiYearlyGoal,
   type ApiMonthlyGoal,
   type ApiWeeklyGoal,
+  type ApiWeeklyPlan,
 } from "./api";
 import { ensureBackendSession, clearSessionId } from "./session";
 import { formatApiError } from "./apiErrors";
@@ -94,6 +101,8 @@ interface AppState {
   hydrateAuthFromSupabase: () => Promise<void>;
   /** Password reset email (Supabase + Resend SMTP in project settings). */
   sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
+  /** Clear all auth-owned workspace state after sign-out or expired session recovery. */
+  clearSignedOutWorkspace: () => void;
 
   // ── Backend session ──────────────────────────────────────────────────────────
   sessionId: string | null;
@@ -120,6 +129,9 @@ interface AppState {
   onboardingStep: number;
   onboardingComplete: boolean;
   kickoffPending: boolean;
+  monthlyPlanDraft: unknown | null;
+  weeklyPlanDraft: unknown | null;
+  dailyPlanDraft: unknown | null;
   setOnboardingStep: (step: number) => Promise<boolean>;
   completeOnboarding: () => Promise<boolean>;
   dismissKickoff: () => void;
@@ -222,11 +234,11 @@ interface AppState {
   approveDailyPlan: (date: string, priorities?: unknown[]) => Promise<boolean>;
 
   // ── Report generation ────────────────────────────────────────────────────────
-  generateDailyReport: (date: string) => Promise<ApiReport | null>;
-  generateWeeklyReport: (year: number, weekNumber: number) => Promise<ApiReport | null>;
-  generateMonthlyReport: (year: number, month: number) => Promise<ApiReport | null>;
-  generateQuarterlyReport: (year: number, quarter: number) => Promise<ApiReport | null>;
-  generateYearlyReport: (year: number) => Promise<ApiReport | null>;
+  generateDailyReport: (date: string, userNote?: string) => Promise<ApiReport | null>;
+  generateWeeklyReport: (year: number, weekNumber: number, userNote?: string) => Promise<ApiReport | null>;
+  generateMonthlyReport: (year: number, month: number, userNote?: string) => Promise<ApiReport | null>;
+  generateQuarterlyReport: (year: number, quarter: number, userNote?: string) => Promise<ApiReport | null>;
+  generateYearlyReport: (year: number, userNote?: string) => Promise<ApiReport | null>;
 
   // ── Modal ───────────────────────────────────────────────────────────────────
   activeModal: ModalType | null;
@@ -268,6 +280,13 @@ function requiresServerPersistence(): boolean {
   return isCloudSupabaseConfigured() && !isAuthLocalOnly();
 }
 
+function isAuthDeliveryFailureMessage(message: string, status?: number): boolean {
+  return (
+    /confirmation email|recovery email|error sending|smtp|mailer|email.*fail/i.test(message) ||
+    status === 500
+  );
+}
+
 const pendingYearlyGoalCreates = new Map<string, Promise<void>>();
 const pendingMonthlyGoalCreates = new Map<string, Promise<void>>();
 const pendingWeeklyGoalCreates = new Map<string, Promise<void>>();
@@ -278,6 +297,7 @@ const pendingCategoryCreates = new Map<string, Promise<void>>();
 const pendingDashboardLoads = new Map<string, Promise<void>>();
 const pendingCategoryLoads = new Map<string, Promise<void>>();
 const pendingReportsLoads = new Map<string, Promise<ApiReport[] | null>>();
+const pendingAuthHydrations = new Map<string, Promise<void>>();
 const loadedCategoriesForSession = new Set<string>();
 const localToServerCategoryIds = new Map<string, string>();
 const localToServerYearlyGoalIds = new Map<string, string>();
@@ -476,12 +496,20 @@ async function loadCategoriesOnce(
   const request = categoriesApi
     .list(sessionId)
     .then(async (categories) => {
+      if (get().sessionId !== sessionId) {
+        return;
+      }
       const reconciledCategories = await reconcileOnboardingCategories(sessionId, categories, set, get);
+      if (get().sessionId !== sessionId) {
+        return;
+      }
       applyServerCategories(reconciledCategories, set, get);
       loadedCategoriesForSession.add(sessionId);
     })
     .catch((e) => {
-      set({ syncError: formatApiError("Load categories", e) });
+      if (get().sessionId === sessionId) {
+        set({ syncError: formatApiError("Load categories", e) });
+      }
     })
     .finally(() => {
       if (pendingCategoryLoads.get(sessionId) === request) {
@@ -497,6 +525,7 @@ async function loadDashboardIntoStore(
   sessionId: string,
   requestedDate: string | undefined,
   set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+  get: () => AppState,
 ): Promise<void> {
   const requestKey = `${sessionId}:${requestedDate ?? "__current__"}`;
   const existing = pendingDashboardLoads.get(requestKey);
@@ -508,6 +537,9 @@ async function loadDashboardIntoStore(
   const request = dashboardApi
     .get(sessionId, requestedDate)
     .then((data) => {
+      if (get().sessionId !== sessionId) {
+        return;
+      }
       set((s) => ({
         ...s,
         ...mapDashboardToStore(data, {
@@ -520,7 +552,9 @@ async function loadDashboardIntoStore(
       }));
     })
     .catch((e) => {
-      set({ syncError: formatApiError("Load dashboard from server", e) });
+      if (get().sessionId === sessionId) {
+        set({ syncError: formatApiError("Load dashboard from server", e) });
+      }
     })
     .finally(() => {
       if (pendingDashboardLoads.get(requestKey) === request) {
@@ -531,6 +565,112 @@ async function loadDashboardIntoStore(
 
   pendingDashboardLoads.set(requestKey, request);
   return request;
+}
+
+function isNotFoundApiError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
+function extractPendingPlanDraft<
+  T extends { status: string; ai_draft?: Record<string, unknown> | null },
+>(plan: T | null | undefined): Record<string, unknown> | null {
+  if (!plan || plan.status !== "draft") {
+    return null;
+  }
+  return plan.ai_draft ?? null;
+}
+
+function mapOnboardingHierarchyToStore(data: ApiGoalsHierarchy) {
+  const todaysItems = data.year_daily_priorities
+    .filter((priority) => priority.date === data.today)
+    .map(mapApiGoalToPriority);
+
+  return {
+    categories: data.categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      icon: category.icon,
+      color: category.color,
+    })),
+    yearlyGoals: data.yearly_goals.map(mapApiYearlyGoalToStore),
+    monthlyGoals: data.monthly_goals.map(mapApiMonthlyGoalToStore),
+    weeklyGoals: data.weekly_goals.map(mapApiWeeklyGoalToStore),
+    dailyPriorities: todaysItems.filter((item) => item.isMain),
+    secondaryTasks: todaysItems.filter((item) => !item.isMain),
+    activeDashboardDate: data.today,
+  };
+}
+
+async function loadOnboardingWorkspaceSnapshot(
+  sessionId: string,
+  timezone: string,
+  weekStartsOn: WeekStartsOn,
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+  get: () => AppState,
+): Promise<void> {
+  const today = getToday(timezone);
+  const referenceDate = getReferenceDate(today);
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth() + 1;
+  const weekNumber = getWeekNumber(referenceDate, weekStartsOn);
+
+  const [hierarchyResult, habitsResult, monthlyPlanResult, weeklyPlanResult, dailyPlanResult] =
+    await Promise.allSettled([
+      goalsApi.hierarchy(sessionId, { year, weekNumber }),
+      habitsApi.list(sessionId),
+      monthlyPlanApi.get(sessionId, year, month),
+      weeklyPlanApi.get(sessionId, year, weekNumber),
+      dailyPlanApi.get(sessionId, today),
+    ]);
+
+  if (get().sessionId !== sessionId) {
+    return;
+  }
+
+  const nextState: Partial<AppState> = {
+    monthlyPlanDraft: null,
+    weeklyPlanDraft: null,
+    dailyPlanDraft: null,
+  };
+  let firstError: string | null = null;
+
+  if (hierarchyResult.status === "fulfilled") {
+    Object.assign(nextState, mapOnboardingHierarchyToStore(hierarchyResult.value));
+    loadedCategoriesForSession.add(sessionId);
+  } else {
+    firstError = formatApiError("Restore onboarding planning state", hierarchyResult.reason);
+  }
+
+  if (habitsResult.status === "fulfilled") {
+    nextState.habits = habitsResult.value.map(mapApiHabit);
+  } else if (!firstError) {
+    firstError = formatApiError("Restore onboarding routines", habitsResult.reason);
+  }
+
+  const applyPlanDraft = <
+    T extends ApiMonthlyPlan | ApiWeeklyPlan | ApiDailyPlan,
+  >(
+    result: PromiseSettledResult<T>,
+    field: "monthlyPlanDraft" | "weeklyPlanDraft" | "dailyPlanDraft",
+    label: string,
+  ) => {
+    if (result.status === "fulfilled") {
+      nextState[field] = extractPendingPlanDraft(result.value);
+      return;
+    }
+    if (!isNotFoundApiError(result.reason) && !firstError) {
+      firstError = formatApiError(label, result.reason);
+    }
+  };
+
+  applyPlanDraft(monthlyPlanResult, "monthlyPlanDraft", "Restore monthly draft");
+  applyPlanDraft(weeklyPlanResult, "weeklyPlanDraft", "Restore weekly draft");
+  applyPlanDraft(dailyPlanResult, "dailyPlanDraft", "Restore daily draft");
+
+  set({
+    ...nextState,
+    syncError: firstError,
+  });
 }
 
 // Pre-seeded demo user
@@ -574,6 +714,50 @@ function mergeSeededRegistryUsers(set: (partial: Partial<AppState>) => void, get
   if (changed) set({ registeredUsers: next });
 }
 
+function resetAuthScopedCaches() {
+  pendingDashboardLoads.clear();
+  pendingCategoryLoads.clear();
+  pendingReportsLoads.clear();
+  loadedCategoriesForSession.clear();
+}
+
+function buildSignedOutWorkspaceState(): Partial<AppState> {
+  return {
+    currentUser: null,
+    authReady: true,
+    sessionId: null,
+    sessionTimezone: "UTC",
+    sessionWeekStartsOn: "monday",
+    backendReady: false,
+    workspaceHydrating: false,
+    dashboardLoading: false,
+    reportsLoading: false,
+    reportsHydrated: false,
+    workspaceOwnerId: null,
+    syncError: null,
+    syncStatus: "idle",
+    activeDashboardDate: getToday(),
+    onboardingStep: 1,
+    onboardingComplete: false,
+    kickoffPending: false,
+    monthlyPlanDraft: null,
+    weeklyPlanDraft: null,
+    dailyPlanDraft: null,
+    categories: DEFAULT_CATEGORIES,
+    yearlyGoals: [],
+    monthlyGoals: [],
+    weeklyGoals: [],
+    dailyPriorities: [],
+    secondaryTasks: [],
+    habits: [],
+    metrics: EMPTY_DASHBOARD_METRICS,
+    reports: [],
+    pendingRecaps: [],
+    activeModal: null,
+    modalData: null,
+  };
+}
+
 /**
  * After login: bind workspace to this user, ensure backend session, then pull
  * onboarding metadata + dashboard data in parallel.
@@ -608,10 +792,19 @@ async function attachBackendAfterAuth(
 
   if (switchingAccount) {
     set({
+      sessionId: null,
+      sessionTimezone: "UTC",
+      sessionWeekStartsOn: "monday",
+      activeDashboardDate: getToday(),
+      backendReady: false,
       workspaceOwnerId: userId,
+      dashboardLoading: false,
       onboardingComplete: false,
       onboardingStep: 1,
       kickoffPending: false,
+      monthlyPlanDraft: null,
+      weeklyPlanDraft: null,
+      dailyPlanDraft: null,
       categories: DEFAULT_CATEGORIES,
       yearlyGoals: [],
       monthlyGoals: [],
@@ -623,7 +816,8 @@ async function attachBackendAfterAuth(
       reports: [],
       reportsLoading: false,
       reportsHydrated: false,
-      sessionWeekStartsOn: "monday",
+      pendingRecaps: [],
+      syncError: null,
     });
   } else if (prevOwner === null) {
     set({ workspaceOwnerId: userId });
@@ -653,9 +847,11 @@ async function attachBackendAfterAuth(
     set({ sessionId: sid, backendReady: true });
   } catch (e) {
     set({
+      sessionId: null,
       backendReady: false,
       dashboardLoading: false,
       reportsLoading: false,
+      reportsHydrated: false,
       syncError: formatApiError("Start backend session", e),
       workspaceHydrating: false,
     });
@@ -692,7 +888,7 @@ async function attachBackendAfterAuth(
         dashboardPromise = get().loadCurrentDashboard();
       }
       if (!done) {
-        await categoriesPromise;
+        await loadOnboardingWorkspaceSnapshot(sid, ob.timezone, ob.week_starts_on, set, get);
       }
       if (done && !ob.onboarding_done) {
         void sessionsApi
@@ -753,6 +949,8 @@ function mapApiGoalToPriority(p: {
   id: string; title: string; description?: string; date: string;
   status: string; completed: boolean; priority: string; estimated_minutes?: number;
   is_main: boolean; tag?: string; ai_suggested: boolean; weekly_goal_id?: string; editable?: boolean;
+  truth_status?: string; truth_progress?: number; truth_reason?: string; has_activity?: boolean;
+  linked_children_count?: number; completed_children_count?: number; period_closed?: boolean;
 }): DailyPriority {
   return {
     id: p.id,
@@ -768,6 +966,13 @@ function mapApiGoalToPriority(p: {
     tag: p.tag,
     aiSuggested: p.ai_suggested,
     editable: p.editable,
+    truthStatus: p.truth_status as GoalTruthStatus | undefined,
+    truthProgress: p.truth_progress,
+    truthReason: p.truth_reason,
+    hasActivity: p.has_activity,
+    linkedChildrenCount: p.linked_children_count,
+    completedChildrenCount: p.completed_children_count,
+    periodClosed: p.period_closed,
   };
 }
 
@@ -821,6 +1026,13 @@ function mapApiYearlyGoalToStore(g: ApiYearlyGoal): YearlyGoal {
     progress: g.progress,
     aiSuggested: g.ai_suggested,
     editable: g.editable,
+    truthStatus: g.truth_status as GoalTruthStatus | undefined,
+    truthProgress: g.truth_progress,
+    truthReason: g.truth_reason,
+    hasActivity: g.has_activity,
+    linkedChildrenCount: g.linked_children_count,
+    completedChildrenCount: g.completed_children_count,
+    periodClosed: g.period_closed,
   };
 }
 
@@ -841,6 +1053,13 @@ function mapApiMonthlyGoalToStore(g: ApiMonthlyGoal): MonthlyGoal {
     isMain: g.is_main,
     aiSuggested: g.ai_suggested,
     editable: g.editable,
+    truthStatus: g.truth_status as GoalTruthStatus | undefined,
+    truthProgress: g.truth_progress,
+    truthReason: g.truth_reason,
+    hasActivity: g.has_activity,
+    linkedChildrenCount: g.linked_children_count,
+    completedChildrenCount: g.completed_children_count,
+    periodClosed: g.period_closed,
   };
 }
 
@@ -861,6 +1080,51 @@ function mapApiWeeklyGoalToStore(g: ApiWeeklyGoal): WeeklyGoal {
     workload: g.workload,
     aiSuggested: g.ai_suggested,
     editable: g.editable,
+    truthStatus: g.truth_status as GoalTruthStatus | undefined,
+    truthProgress: g.truth_progress,
+    truthReason: g.truth_reason,
+    hasActivity: g.has_activity,
+    linkedChildrenCount: g.linked_children_count,
+    completedChildrenCount: g.completed_children_count,
+    periodClosed: g.period_closed,
+  };
+}
+
+function deriveGoalTruthStatus(
+  status: string | undefined,
+  progress: number | undefined,
+  fallback: GoalTruthStatus = "in_progress",
+): GoalTruthStatus {
+  if (status === "completed" || (progress ?? 0) >= 100) return "completed";
+  if (status === "missed") return "at_risk";
+  if (status === "pending" || status === "locked") return "not_started";
+  if ((progress ?? 0) <= 0 && fallback !== "in_progress") return "not_started";
+  return fallback;
+}
+
+function applyOptimisticGoalTruth<T extends { status?: string; progress?: number; truthStatus?: GoalTruthStatus; truthProgress?: number }>(
+  goal: T,
+  updates: Partial<T>,
+): T {
+  const merged = { ...goal, ...updates };
+  const nextProgress = typeof merged.progress === "number" ? merged.progress : 0;
+  const nextTruthStatus = deriveGoalTruthStatus(merged.status, nextProgress);
+  return {
+    ...merged,
+    truthStatus: nextTruthStatus,
+    truthProgress: nextTruthStatus === "completed" ? 100 : nextProgress,
+  };
+}
+
+function applyOptimisticPriorityTruth<T extends DailyPriority>(priority: T, completed: boolean): T {
+  return {
+    ...priority,
+    completed,
+    status: completed ? "completed" : "active",
+    truthStatus: completed ? "completed" : "in_progress",
+    truthProgress: completed ? 100 : 0,
+    truthReason: completed ? "This task was completed." : "This task is already part of the execution plan.",
+    hasActivity: true,
   };
 }
 
@@ -956,6 +1220,10 @@ export const useAppStore = create<AppState>()(
       currentUser: null,
       authReady: false,
       registeredUsers: INITIAL_REGISTERED,
+      clearSignedOutWorkspace: () => {
+        resetAuthScopedCaches();
+        set(buildSignedOutWorkspaceState());
+      },
 
       signIn: async (email, password) => {
         mergeSeededRegistryUsers(set, get);
@@ -1014,6 +1282,9 @@ export const useAppStore = create<AppState>()(
             onboardingComplete: false,
             onboardingStep: 1,
             kickoffPending: false,
+            monthlyPlanDraft: null,
+            weeklyPlanDraft: null,
+            dailyPlanDraft: null,
             categories: DEFAULT_CATEGORIES,
             yearlyGoals: [],
             monthlyGoals: [],
@@ -1034,64 +1305,24 @@ export const useAppStore = create<AppState>()(
           return { success: true };
         }
 
-        const { data, error } = await sb.auth.signUp({
-          email: em,
-          password,
-          options: {
-            data: { full_name: name.trim() },
-            emailRedirectTo: buildPublicUrl("/auth/callback"),
-          },
-        });
-        if (error) {
-          const raw = error.message ?? "";
-          if (/confirmation email|sending confirmation/i.test(raw)) {
-            return {
-              success: false,
-              error:
-                "Supabase could not send the confirmation email. Fix it in the Supabase Dashboard: Authentication → Providers → Email — turn off “Confirm email” for local dev, or Project Settings → Authentication → set up Custom SMTP (e.g. Resend). Docs: https://supabase.com/docs/guides/auth/auth-smtp",
-            };
-          }
-          return { success: false, error: raw };
-        }
-        if (!data.user?.email) return { success: false, error: "Sign up failed." };
-
-        if (!data.session) {
+        try {
+          const redirectTo = buildPublicUrl("/auth/callback");
+          await authApi.sendSignupEmail({
+            name: name.trim(),
+            email: em,
+            password,
+            ...(redirectTo ? { redirect_to: redirectTo } : {}),
+          });
           return {
             success: true,
             needsEmailConfirmation: true,
           };
+        } catch (error) {
+          if (error instanceof ApiError) {
+            return { success: false, error: error.message || "Sign up failed." };
+          }
+          return { success: false, error: error instanceof Error ? error.message : "Sign up failed." };
         }
-
-        const u = data.user;
-        const authUser: AuthUser = {
-          id: u.id,
-          name: name.trim(),
-          email: u.email ?? em,
-          plan: "Free",
-        };
-        set({
-          currentUser: authUser,
-          onboardingComplete: false,
-          onboardingStep: 1,
-          kickoffPending: false,
-          categories: DEFAULT_CATEGORIES,
-          yearlyGoals: [],
-          monthlyGoals: [],
-          weeklyGoals: [],
-          dailyPriorities: [],
-          secondaryTasks: [],
-          habits: [],
-          metrics: EMPTY_DASHBOARD_METRICS,
-          reports: [],
-          reportsLoading: false,
-          reportsHydrated: false,
-          pendingRecaps: [],
-          syncError: null,
-          authReady: true,
-          workspaceHydrating: true,
-        });
-        await attachBackendAfterAuth(u.id, get, set);
-        return { success: true };
       },
 
       sendEmailOtp: async (email, opts) => {
@@ -1111,9 +1342,7 @@ export const useAppStore = create<AppState>()(
         });
         if (error) {
           const msg = describeSupabaseAuthError(error.message);
-          const mailDown =
-            /confirmation email|error sending|smtp|mailer|email.*fail/i.test(msg) ||
-            error.status === 500;
+          const mailDown = isAuthDeliveryFailureMessage(msg, error.status);
           return {
             success: false,
             error: mailDown
@@ -1131,7 +1360,7 @@ export const useAppStore = create<AppState>()(
         const em = email.toLowerCase().trim();
         const clean = token.replace(/\D/g, "");
         if (clean.length !== 6) {
-          return { success: false, error: "Enter the 8-digit code from your email." };
+          return { success: false, error: "Enter the 6-digit code from your email." };
         }
 
         const tryTypes =
@@ -1171,6 +1400,9 @@ export const useAppStore = create<AppState>()(
             onboardingComplete: false,
             onboardingStep: 1,
             kickoffPending: false,
+            monthlyPlanDraft: null,
+            weeklyPlanDraft: null,
+            dailyPlanDraft: null,
             categories: DEFAULT_CATEGORIES,
             yearlyGoals: [],
             monthlyGoals: [],
@@ -1201,20 +1433,7 @@ export const useAppStore = create<AppState>()(
           await getSupabaseBrowser()?.auth.signOut();
         }
         if (user) clearSessionId(user.id);
-        set({
-          currentUser: null,
-          sessionId: null,
-          sessionWeekStartsOn: "monday",
-          activeDashboardDate: getToday(),
-          backendReady: false,
-          dashboardLoading: false,
-          reportsLoading: false,
-          reportsHydrated: false,
-          workspaceHydrating: false,
-          syncError: null,
-          pendingRecaps: [],
-          authReady: true,
-        });
+        get().clearSignedOutWorkspace();
       },
 
       hydrateAuthFromSupabase: async () => {
@@ -1233,19 +1452,9 @@ export const useAppStore = create<AppState>()(
           data: { session },
         } = await sb.auth.getSession();
         if (!session?.user?.email) {
-          set({
-            currentUser: null,
-            sessionId: null,
-            sessionWeekStartsOn: "monday",
-            activeDashboardDate: getToday(),
-            backendReady: false,
-            dashboardLoading: false,
-            reportsLoading: false,
-            reportsHydrated: false,
-            workspaceHydrating: false,
-            syncError: null,
-            authReady: true,
-          });
+          const cachedUserId = get().currentUser?.id ?? get().workspaceOwnerId ?? null;
+          if (cachedUserId) clearSessionId(cachedUserId);
+          get().clearSignedOutWorkspace();
           return;
         }
         const u = session.user;
@@ -1253,6 +1462,15 @@ export const useAppStore = create<AppState>()(
         const state = get();
         const sameUser = state.currentUser?.id === authUser.id;
         if (sameUser && state.workspaceHydrating) {
+          const pending = pendingAuthHydrations.get(authUser.id);
+          if (pending) {
+            try {
+              await pending;
+            } finally {
+              set({ authReady: true });
+            }
+            return;
+          }
           set({ authReady: true });
           return;
         }
@@ -1261,9 +1479,14 @@ export const useAppStore = create<AppState>()(
           return;
         }
         set({ currentUser: authUser, syncError: null, workspaceHydrating: true });
+        const hydratePromise = attachBackendAfterAuth(u.id, get, set);
+        pendingAuthHydrations.set(authUser.id, hydratePromise);
         try {
-          await attachBackendAfterAuth(u.id, get, set);
+          await hydratePromise;
         } finally {
+          if (pendingAuthHydrations.get(authUser.id) === hydratePromise) {
+            pendingAuthHydrations.delete(authUser.id);
+          }
           set({ authReady: true });
         }
       },
@@ -1272,15 +1495,22 @@ export const useAppStore = create<AppState>()(
         if (isAuthLocalOnly()) {
           return { success: false, error: "Password reset is not used in local test mode." };
         }
-        const sb = getSupabaseBrowser();
-        if (!sb) {
+        if (!getSupabaseBrowser()) {
           return { success: false, error: "Configure Supabase environment variables to reset passwords." };
         }
-        const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-          redirectTo: buildPublicUrl("/auth/update-password"),
-        });
-        if (error) return { success: false, error: describeSupabaseAuthError(error.message) };
-        return { success: true };
+        try {
+          const redirectTo = buildPublicUrl("/auth/update-password");
+          await authApi.sendPasswordResetEmail({
+            email: email.trim().toLowerCase(),
+            ...(redirectTo ? { redirect_to: redirectTo } : {}),
+          });
+          return { success: true };
+        } catch (error) {
+          if (error instanceof ApiError) {
+            return { success: false, error: error.message || "Could not send reset email." };
+          }
+          return { success: false, error: error instanceof Error ? error.message : "Could not send reset email." };
+        }
       },
 
       // ── Backend session ──────────────────────────────────────────────────────
@@ -1319,6 +1549,9 @@ export const useAppStore = create<AppState>()(
       onboardingStep: 1,
       onboardingComplete: false,
       kickoffPending: false,
+      monthlyPlanDraft: null,
+      weeklyPlanDraft: null,
+      dailyPlanDraft: null,
       setOnboardingStep: async (step) => {
         const { sessionId, backendReady } = get();
         if (sessionId && backendReady) {
@@ -1344,7 +1577,15 @@ export const useAppStore = create<AppState>()(
         if (sessionId && backendReady) {
           try {
             await sessionsApi.update(sessionId, { onboarding_done: true, onboarding_step: 4 });
-            set({ onboardingComplete: true, kickoffPending: true, onboardingStep: 4, syncError: null });
+            set({
+              onboardingComplete: true,
+              kickoffPending: true,
+              onboardingStep: 4,
+              monthlyPlanDraft: null,
+              weeklyPlanDraft: null,
+              dailyPlanDraft: null,
+              syncError: null,
+            });
             await get().loadCurrentDashboard();
             return true;
           } catch (e) {
@@ -1356,7 +1597,14 @@ export const useAppStore = create<AppState>()(
           set({ syncError: "Complete onboarding on server: Backend session is not ready." });
           return false;
         }
-        set({ onboardingComplete: true, kickoffPending: true, onboardingStep: 4 });
+        set({
+          onboardingComplete: true,
+          kickoffPending: true,
+          onboardingStep: 4,
+          monthlyPlanDraft: null,
+          weeklyPlanDraft: null,
+          dailyPlanDraft: null,
+        });
         return true;
       },
       dismissKickoff: () => set({ kickoffPending: false }),
@@ -1380,13 +1628,13 @@ export const useAppStore = create<AppState>()(
       loadDashboard: async (planDate) => {
         const { sessionId, activeDashboardDate } = get();
         if (!sessionId) return;
-        return loadDashboardIntoStore(sessionId, planDate ?? activeDashboardDate, set);
+        return loadDashboardIntoStore(sessionId, planDate ?? activeDashboardDate, set, get);
       },
 
       loadCurrentDashboard: async () => {
         const { sessionId } = get();
         if (!sessionId) return;
-        return loadDashboardIntoStore(sessionId, undefined, set);
+        return loadDashboardIntoStore(sessionId, undefined, set, get);
       },
 
       syncReports: async (force = false) => {
@@ -1404,11 +1652,15 @@ export const useAppStore = create<AppState>()(
         const request = reportsApi
           .list(sessionId)
           .then((serverReports) => {
-            set({ reports: serverReports, reportsHydrated: true, syncError: null });
+            if (get().sessionId === sessionId) {
+              set({ reports: serverReports, reportsHydrated: true, syncError: null });
+            }
             return serverReports;
           })
           .catch((e) => {
-            set({ syncError: formatApiError("Load reports list", e) });
+            if (get().sessionId === sessionId) {
+              set({ syncError: formatApiError("Load reports list", e) });
+            }
             return null;
           })
           .finally(() => {
@@ -1623,7 +1875,7 @@ export const useAppStore = create<AppState>()(
           try {
             await yearlyGoalsApi.update(sessionId, id, patch);
             set((s) => ({
-              yearlyGoals: s.yearlyGoals.map((g) => g.id === id ? { ...g, ...updates } : g),
+              yearlyGoals: s.yearlyGoals.map((g) => (g.id === id ? applyOptimisticGoalTruth(g, updates) : g)),
               syncError: null,
               syncStatus: "saved",
             }));
@@ -1634,7 +1886,7 @@ export const useAppStore = create<AppState>()(
           }
         }
         set((s) => ({
-          yearlyGoals: s.yearlyGoals.map((g) => g.id === id ? { ...g, ...updates } : g),
+          yearlyGoals: s.yearlyGoals.map((g) => (g.id === id ? applyOptimisticGoalTruth(g, updates) : g)),
         }));
         if (!sessionId || !isUuid(id)) return true;
         if (Object.keys(patch).length) {
@@ -1647,7 +1899,8 @@ export const useAppStore = create<AppState>()(
       },
       syncYearlyGoalsToServer: async (options) => {
         const mode = options?.mode ?? "sync";
-        const { yearlyGoals } = get();
+        const { yearlyGoals, activeDashboardDate } = get();
+        const currentPlanningYear = Number(activeDashboardDate.slice(0, 4)) || getCurrentYear();
         let sessionId = get().sessionId;
         if (!sessionId) {
           if (requiresServerPersistence()) {
@@ -1660,10 +1913,10 @@ export const useAppStore = create<AppState>()(
         }
         set({ syncStatus: "saving" });
         const localIds = yearlyGoals
-          .filter((g) => g.year === getCurrentYear() && !isUuid(g.id))
+          .filter((g) => g.year === currentPlanningYear && !isUuid(g.id))
           .map((g) => g.id);
         await waitForPendingCreates(pendingYearlyGoalCreates, localIds);
-        const pending = get().yearlyGoals.filter((g) => g.year === getCurrentYear() && !isUuid(g.id));
+        const pending = get().yearlyGoals.filter((g) => g.year === currentPlanningYear && !isUuid(g.id));
         if (mode === "verify" && pending.length > 0) {
           set({
             syncError: `${pending.length} yearly goal(s) are still saving. Wait a moment and try again.`,
@@ -1705,7 +1958,7 @@ export const useAppStore = create<AppState>()(
             return false;
           }
         }
-        const stillLocal = get().yearlyGoals.filter((g) => g.year === getCurrentYear() && !isUuid(g.id));
+        const stillLocal = get().yearlyGoals.filter((g) => g.year === currentPlanningYear && !isUuid(g.id));
         if (stillLocal.length > 0) {
           set({
             syncError: `${stillLocal.length} yearly goal(s) could not be synced (still local-only). Check your connection and try again.`,
@@ -1714,10 +1967,10 @@ export const useAppStore = create<AppState>()(
           return false;
         }
         try {
-          const serverGoals = await yearlyGoalsApi.list(sessionId, getCurrentYear());
+          const serverGoals = await yearlyGoalsApi.list(sessionId, currentPlanningYear);
           set((s) => ({
             yearlyGoals: [
-              ...s.yearlyGoals.filter((goal) => goal.year !== getCurrentYear()),
+              ...s.yearlyGoals.filter((goal) => goal.year !== currentPlanningYear),
               ...serverGoals.map(mapApiYearlyGoalToStore),
             ],
             syncError: null,
@@ -2053,7 +2306,7 @@ export const useAppStore = create<AppState>()(
             set((s) => ({
               monthlyGoals: s.monthlyGoals.map((g) => {
                 if (g.id !== id) return g;
-                const merged: MonthlyGoal = { ...g, ...updates };
+                const merged: MonthlyGoal = applyOptimisticGoalTruth(g, updates);
                 if (updates.description !== undefined) merged.description = updates.description ? updates.description : undefined;
                 if (updates.workload !== undefined) merged.workload = updates.workload ? updates.workload : undefined;
                 return merged;
@@ -2070,7 +2323,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           monthlyGoals: s.monthlyGoals.map((g) => {
             if (g.id !== id) return g;
-            const merged: MonthlyGoal = { ...g, ...updates };
+            const merged: MonthlyGoal = applyOptimisticGoalTruth(g, updates);
             if (updates.description !== undefined) {
               merged.description = updates.description ? updates.description : undefined;
             }
@@ -2251,7 +2504,7 @@ export const useAppStore = create<AppState>()(
             set((s) => ({
               weeklyGoals: s.weeklyGoals.map((g) => {
                 if (g.id !== id) return g;
-                const merged: WeeklyGoal = { ...g, ...updates };
+                const merged: WeeklyGoal = applyOptimisticGoalTruth(g, updates);
                 if (updates.description !== undefined) merged.description = updates.description ? updates.description : undefined;
                 if (updates.workload !== undefined) merged.workload = updates.workload ? updates.workload : undefined;
                 return merged;
@@ -2268,7 +2521,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           weeklyGoals: s.weeklyGoals.map((g) => {
             if (g.id !== id) return g;
-            const merged: WeeklyGoal = { ...g, ...updates };
+            const merged: WeeklyGoal = applyOptimisticGoalTruth(g, updates);
             if (updates.description !== undefined) {
               merged.description = updates.description ? updates.description : undefined;
             }
@@ -2453,7 +2706,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           dailyPriorities: s.dailyPriorities.map((p) =>
             p.id === id
-              ? { ...p, completed: newCompleted, status: newCompleted ? "completed" : "active" }
+              ? applyOptimisticPriorityTruth(p, newCompleted)
               : p
           ),
         }));
@@ -2469,7 +2722,7 @@ export const useAppStore = create<AppState>()(
             .catch((e) =>
               set((s) => ({
                 dailyPriorities: s.dailyPriorities.map((p) =>
-                  p.id === id ? { ...p, completed: priority.completed, status: priority.status } : p
+                  p.id === id ? priority : p
                 ),
                 syncError: formatApiError("Update task completion", e),
               }))
@@ -2651,7 +2904,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           secondaryTasks: s.secondaryTasks.map((t) =>
             t.id === id
-              ? { ...t, completed: newCompleted, status: newCompleted ? "completed" : "active" }
+              ? applyOptimisticPriorityTruth(t, newCompleted)
               : t
           ),
         }));
@@ -2666,7 +2919,7 @@ export const useAppStore = create<AppState>()(
             .catch((e) =>
               set((s) => ({
                 secondaryTasks: s.secondaryTasks.map((t) =>
-                  t.id === id ? { ...t, completed: task.completed, status: task.status } : t
+                  t.id === id ? task : t
                 ),
                 syncError: formatApiError("Update secondary task", e),
               }))
@@ -3100,7 +3353,7 @@ export const useAppStore = create<AppState>()(
             syncStatus: "saved",
           }));
           const result = await monthlyPlanApi.generate(sessionId, year, month);
-          set({ syncError: null, syncStatus: "saved" });
+          set({ syncError: null, syncStatus: "saved", monthlyPlanDraft: result.ai_draft });
           return { ok: true as const, draft: result.ai_draft };
         } catch (e) {
           if (
@@ -3143,6 +3396,7 @@ export const useAppStore = create<AppState>()(
                 ...s.monthlyGoals.filter((g) => g.month !== month || g.year !== year),
                 ...mapped,
               ],
+              monthlyPlanDraft: null,
               syncError: null,
             }));
           }
@@ -3187,7 +3441,7 @@ export const useAppStore = create<AppState>()(
           }
 
           const result = await weeklyPlanApi.generate(sessionId, year, weekNumber);
-          set({ syncError: null, syncStatus: "saved" });
+          set({ syncError: null, syncStatus: "saved", weeklyPlanDraft: result.ai_draft });
           return { ok: true as const, draft: result.ai_draft };
         } catch (e) {
           if (
@@ -3232,6 +3486,7 @@ export const useAppStore = create<AppState>()(
                 ...s.weeklyGoals.filter((g) => g.weekNumber !== weekNumber || g.year !== year),
                 ...mapped,
               ],
+              weeklyPlanDraft: null,
               syncError: null,
             }));
           }
@@ -3272,7 +3527,7 @@ export const useAppStore = create<AppState>()(
           }
 
           const result = await dailyPlanApi.generate(sessionId, date);
-          set({ syncError: null, syncStatus: "saved" });
+          set({ syncError: null, syncStatus: "saved", dailyPlanDraft: result.ai_draft });
           return { ok: true as const, draft: result.ai_draft };
         } catch (e) {
           if (
@@ -3306,6 +3561,7 @@ export const useAppStore = create<AppState>()(
                 ...s.secondaryTasks.filter((t) => t.date !== date),
                 ...secondaryItems,
               ],
+              dailyPlanDraft: null,
               syncError: null,
             }));
           }
@@ -3317,11 +3573,11 @@ export const useAppStore = create<AppState>()(
       },
 
       // ── Report generation ────────────────────────────────────────────────────
-      generateDailyReport: async (date) => {
+      generateDailyReport: async (date, userNote) => {
         const { sessionId } = get();
         if (!sessionId) return null;
         try {
-          const r = await reportsApi.generateDaily(sessionId, date);
+          const r = await reportsApi.generateDaily(sessionId, date, userNote);
           set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
@@ -3329,11 +3585,11 @@ export const useAppStore = create<AppState>()(
           return null;
         }
       },
-      generateWeeklyReport: async (year, weekNumber) => {
+      generateWeeklyReport: async (year, weekNumber, userNote) => {
         const { sessionId } = get();
         if (!sessionId) return null;
         try {
-          const r = await reportsApi.generateWeekly(sessionId, year, weekNumber);
+          const r = await reportsApi.generateWeekly(sessionId, year, weekNumber, userNote);
           set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
@@ -3341,11 +3597,11 @@ export const useAppStore = create<AppState>()(
           return null;
         }
       },
-      generateMonthlyReport: async (year, month) => {
+      generateMonthlyReport: async (year, month, userNote) => {
         const { sessionId } = get();
         if (!sessionId) return null;
         try {
-          const r = await reportsApi.generateMonthly(sessionId, year, month);
+          const r = await reportsApi.generateMonthly(sessionId, year, month, userNote);
           set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
@@ -3353,11 +3609,11 @@ export const useAppStore = create<AppState>()(
           return null;
         }
       },
-      generateQuarterlyReport: async (year, quarter) => {
+      generateQuarterlyReport: async (year, quarter, userNote) => {
         const { sessionId } = get();
         if (!sessionId) return null;
         try {
-          const r = await reportsApi.generateQuarterly(sessionId, year, quarter);
+          const r = await reportsApi.generateQuarterly(sessionId, year, quarter, userNote);
           set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {
@@ -3365,11 +3621,11 @@ export const useAppStore = create<AppState>()(
           return null;
         }
       },
-      generateYearlyReport: async (year) => {
+      generateYearlyReport: async (year, userNote) => {
         const { sessionId } = get();
         if (!sessionId) return null;
         try {
-          const r = await reportsApi.generateYearly(sessionId, year);
+          const r = await reportsApi.generateYearly(sessionId, year, userNote);
           set((s) => ({ reports: upsertReport(s.reports, r), reportsHydrated: true, syncError: null }));
           return r;
         } catch (e) {

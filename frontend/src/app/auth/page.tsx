@@ -27,6 +27,7 @@ export default function AuthPage() {
     signIn,
     signUp,
     sendPasswordReset,
+    signOut,
     hydrateAuthFromSupabase,
     onboardingComplete,
     authReady,
@@ -39,6 +40,7 @@ export default function AuthPage() {
       signIn: state.signIn,
       signUp: state.signUp,
       sendPasswordReset: state.sendPasswordReset,
+      signOut: state.signOut,
       hydrateAuthFromSupabase: state.hydrateAuthFromSupabase,
       onboardingComplete: state.onboardingComplete,
       authReady: state.authReady,
@@ -99,6 +101,9 @@ export default function AuthPage() {
           >
             Workspace connection
           </p>
+          <p className="text-sm leading-relaxed mb-3" style={{ color: "#475569" }}>
+            You are signed in, but we could not reopen your workspace yet.
+          </p>
           <h1 className="font-headline text-3xl font-extrabold tracking-tight mb-3" style={{ color: "#1a1f1e" }}>
             {title}
           </h1>
@@ -108,15 +113,26 @@ export default function AuthPage() {
           <p className="text-xs leading-relaxed mb-6" style={{ color: "#64748b" }}>
             {footer}
           </p>
-          <button
-            type="button"
-            onClick={() => void retryWorkspaceConnection()}
-            disabled={retryingWorkspace}
-            className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
-            style={{ background: "#006c4a" }}
-          >
-            {retryingWorkspace ? "Retrying…" : "Retry connection"}
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => void retryWorkspaceConnection()}
+              disabled={retryingWorkspace}
+              className="flex-1 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
+              style={{ background: "#006c4a" }}
+            >
+              {retryingWorkspace ? "Retrying…" : "Retry connection"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              disabled={retryingWorkspace}
+              className="flex-1 rounded-2xl px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-60"
+              style={{ border: "1.5px solid rgba(0,0,0,0.08)", color: "#475569", background: "#ffffff" }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -185,10 +201,12 @@ export default function AuthPage() {
       setError("Enter your name before continuing.");
       return;
     }
-    const passwordCheck = validateStrongPassword(password);
-    if (!passwordCheck.valid) {
-      setError(passwordCheck.message);
-      return;
+    if (mode === "signup") {
+      const passwordCheck = validateStrongPassword(password);
+      if (!passwordCheck.valid) {
+        setError(passwordCheck.message);
+        return;
+      }
     }
 
     setLoading(true);

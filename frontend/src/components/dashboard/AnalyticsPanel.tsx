@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import type { DashboardMetrics } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
-import { getWeekNumber } from "@/lib/goalsView";
+import { getGoalDisplayProgress, getWeekNumber } from "@/lib/goalsView";
 import { useShallow } from "zustand/react/shallow";
 
 interface AnalyticsPanelProps {
@@ -72,11 +72,10 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
   );
 
   const categoryById = new Map(categories.map((category) => [category.id, category]));
-
   const yearlyProgressByGoalId = useMemo(() => {
     const derived = new Map<string, number>();
     currentYearGoals.forEach((goal) => {
-      derived.set(goal.id, yearlyProgressMap[goal.id] ?? clampProgress(goal.progress));
+      derived.set(goal.id, yearlyProgressMap[goal.id] ?? getGoalDisplayProgress(goal));
     });
     return derived;
   }, [currentYearGoals, yearlyProgressMap]);
@@ -84,32 +83,50 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
   const averageProgress = metrics.yearlyProgress ?? (
     currentYearGoals.length
       ? Math.round(
-          currentYearGoals.reduce((sum, goal) => sum + (yearlyProgressByGoalId.get(goal.id) ?? clampProgress(goal.progress)), 0) /
+          currentYearGoals.reduce((sum, goal) => sum + (yearlyProgressByGoalId.get(goal.id) ?? getGoalDisplayProgress(goal)), 0) /
             currentYearGoals.length,
         )
       : 0
   );
+  const completedYearlyGoals = currentYearGoals.filter(
+    (goal) => (yearlyProgressByGoalId.get(goal.id) ?? getGoalDisplayProgress(goal)) >= 100,
+  ).length;
 
   const highlightedYearlyGoals = currentYearGoals.slice(0, 2);
   const currentWeeklyObjective =
     currentWeeklyGoals.find((goal) => goal.isMain) ??
     [...currentWeeklyGoals].sort(
-      (a, b) => (weeklyProgressMap[b.id] ?? clampProgress(b.progress)) - (weeklyProgressMap[a.id] ?? clampProgress(a.progress)),
+      (a, b) =>
+        (weeklyProgressMap[b.id] ?? getGoalDisplayProgress(b)) -
+        (weeklyProgressMap[a.id] ?? getGoalDisplayProgress(a)),
     )[0] ??
     null;
   const currentMonthlyObjective =
     currentMonthlyGoals.find((goal) => goal.isMain) ??
     [...currentMonthlyGoals].sort(
-      (a, b) => (monthlyProgressMap[b.id] ?? clampProgress(b.progress)) - (monthlyProgressMap[a.id] ?? clampProgress(a.progress)),
+      (a, b) =>
+        (monthlyProgressMap[b.id] ?? getGoalDisplayProgress(b)) -
+        (monthlyProgressMap[a.id] ?? getGoalDisplayProgress(a)),
     )[0] ??
     null;
 
   const weeklyObjectiveProgress = currentWeeklyObjective
-    ? (weeklyProgressMap[currentWeeklyObjective.id] ?? clampProgress(currentWeeklyObjective.progress))
+    ? (weeklyProgressMap[currentWeeklyObjective.id] ?? getGoalDisplayProgress(currentWeeklyObjective))
     : clampProgress(metrics.weeklyCompletionRate);
   const monthlyObjectiveProgress = currentMonthlyObjective
-    ? (monthlyProgressMap[currentMonthlyObjective.id] ?? clampProgress(currentMonthlyObjective.progress))
+    ? (monthlyProgressMap[currentMonthlyObjective.id] ?? getGoalDisplayProgress(currentMonthlyObjective))
     : clampProgress(metrics.monthlyCompletionRate);
+  const contextualRailCopy = currentWeeklyObjective
+    ? `This week is anchored by "${currentWeeklyObjective.title}". Keep today connected to that outcome.`
+    : currentMonthlyObjective
+      ? `This month still needs a clear weekly push. Keep "${currentMonthlyObjective.title}" moving with the next concrete step.`
+      : currentYearGoals.length > 0
+        ? "Your yearly progress moves when monthly and weekly goals stay connected to what you actually complete."
+        : "Start by saving the outcomes you want this year, then connect this month and week to them.";
+  const contextualRailHref = currentWeeklyObjective
+    ? `/dashboard/goals/${currentYear}/weekly`
+    : `/dashboard/goals/${currentYear}`;
+  const contextualRailCta = currentWeeklyObjective ? "Open weekly goals" : "Open goals";
 
   return (
     <div
@@ -138,7 +155,12 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
             </span>
           </div>
           <p className="mt-2 max-w-[320px] text-[15px] leading-7" style={{ color: "rgba(255,255,255,0.62)" }}>
-            of your yearly goals completed
+            average progress across your yearly goals
+          </p>
+          <p className="mt-2 text-sm leading-6" style={{ color: "rgba(255,255,255,0.48)" }}>
+            {currentYearGoals.length > 0
+              ? `${completedYearlyGoals} of ${currentYearGoals.length} yearly goals completed`
+              : "No yearly goals saved for this year yet."}
           </p>
         </div>
       </div>
@@ -171,7 +193,7 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
           ) : (
             highlightedYearlyGoals.map((goal, index) => {
               const category = goal.categoryId ? categoryById.get(goal.categoryId) : null;
-              const progress = yearlyProgressByGoalId.get(goal.id) ?? clampProgress(goal.progress);
+              const progress = yearlyProgressByGoalId.get(goal.id) ?? getGoalDisplayProgress(goal);
               return (
                 <div
                   key={goal.id}
@@ -238,12 +260,16 @@ export function AnalyticsPanel({ metrics }: AnalyticsPanelProps) {
 
       <div className="mt-6 space-y-4">
         <p className="text-[14px] leading-7" style={{ color: "rgba(255,255,255,0.58)" }}>
-          Yearly progress moves when your monthly and weekly goals stay connected to what you actually complete.
+          {contextualRailCopy}
         </p>
-        <div className="inline-flex items-center gap-2 text-[15px] font-semibold" style={{ color: "#85f8c4" }}>
+        <Link
+          href={contextualRailHref}
+          className="inline-flex items-center gap-2 text-[15px] font-semibold transition-opacity hover:opacity-85"
+          style={{ color: "#85f8c4" }}
+        >
           <span className="material-symbols-outlined text-[18px]">north_east</span>
-          Keep going
-        </div>
+          {contextualRailCta}
+        </Link>
       </div>
     </div>
   );

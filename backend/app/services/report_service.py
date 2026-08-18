@@ -149,9 +149,22 @@ def _decorate_report(db: Client, session_id: UUID, report: dict) -> dict:
     }
 
 
+def _normalize_report_user_note(user_note: str | None) -> str | None:
+    if user_note is None:
+        return None
+    trimmed = user_note.strip()
+    return trimmed or None
+
+
+def _resolve_report_user_note(existing_report: dict | None, incoming_note: str | None) -> str | None:
+    if incoming_note is None:
+        return _normalize_report_user_note(reports_db.extract_report_user_note(existing_report))
+    return _normalize_report_user_note(incoming_note)
+
+
 # ─── Daily Report ─────────────────────────────────────────────────────────────
 
-def generate_daily_report(db: Client, session_id: UUID, report_date: date) -> dict:
+def generate_daily_report(db: Client, session_id: UUID, report_date: date, user_note: str | None = None) -> dict:
     """
     Generate or regenerate a daily report for the given date.
     Enforces cutoff hour: reports can only be generated after REPORT_CUTOFF_HOUR UTC.
@@ -167,6 +180,15 @@ def generate_daily_report(db: Client, session_id: UUID, report_date: date) -> di
             f"Daily report is available after {settings.report_cutoff_hour}:00 UTC. "
             f"Current hour: {now_utc.hour}:00 UTC."
         )
+
+    existing_report = reports_db.get_report(
+        db,
+        session_id,
+        report_type="daily",
+        period_year=report_date.year,
+        period_date=report_date,
+    )
+    effective_user_note = _resolve_report_user_note(existing_report, user_note)
 
     # Gather data
     priorities = plans_db.list_daily_priorities(db, session_id, report_date)
@@ -190,6 +212,8 @@ def generate_daily_report(db: Client, session_id: UUID, report_date: date) -> di
     metrics["date"] = report_date.isoformat()
     goal_context = build_report_prompt_context(session_id, report_date, report_date, db)
     execution_diary = build_execution_diary(session_id, report_date, report_date, db)
+    if effective_user_note:
+        execution_diary = {**execution_diary, "current_period_note": effective_user_note}
 
     # AI narrative
     ai_narrative = None
@@ -212,6 +236,7 @@ def generate_daily_report(db: Client, session_id: UUID, report_date: date) -> di
         "period_month": report_date.month,
         "metrics": metrics,
         "ai_narrative": ai_narrative,
+        "user_note": effective_user_note,
         "ai_generated_at": datetime.now(timezone.utc).isoformat() if ai_narrative else None,
         "status": "ready" if ai_narrative else "failed",
     })
@@ -224,12 +249,20 @@ def generate_daily_report(db: Client, session_id: UUID, report_date: date) -> di
 # ─── Weekly Report ────────────────────────────────────────────────────────────
 
 def generate_weekly_report(
-    db: Client, session_id: UUID, year: int, week_number: int
+    db: Client, session_id: UUID, year: int, week_number: int, user_note: str | None = None
 ) -> dict:
     week_starts_on = sessions_db.get_effective_week_starts_on(db, session_id)
     week_start, week_end = get_week_boundaries(year, week_number, week_starts_on)
     week_label = week_date_range_label(week_start, week_end)
     weekly_plan = plans_db.get_weekly_plan(db, session_id, year, week_number)
+    existing_report = reports_db.get_report(
+        db,
+        session_id,
+        report_type="weekly",
+        period_year=year,
+        period_week=week_number,
+    )
+    effective_user_note = _resolve_report_user_note(existing_report, user_note)
 
     # Collect all daily data for the week
     daily_plans = plans_db.list_daily_plans_for_week(db, session_id, week_start, week_end)
@@ -259,6 +292,8 @@ def generate_weekly_report(
     metrics["review_signal"] = build_period_review_signal(session_id, week_start, week_end, db, "weekly")
     goal_context = build_report_prompt_context(session_id, week_start, week_end, db)
     execution_diary = build_execution_diary(session_id, week_start, week_end, db)
+    if effective_user_note:
+        execution_diary = {**execution_diary, "current_period_note": effective_user_note}
 
     ai_narrative = None
     try:
@@ -279,6 +314,7 @@ def generate_weekly_report(
         "period_month": weekly_plan.get("month") if weekly_plan else week_start.month,
         "metrics": metrics,
         "ai_narrative": ai_narrative,
+        "user_note": effective_user_note,
         "tailored_pattern": ai_narrative.get("tailored_pattern") if ai_narrative else None,
         "tailored_action": ai_narrative.get("tailored_action") if ai_narrative else None,
         "ai_generated_at": datetime.now(timezone.utc).isoformat() if ai_narrative else None,
@@ -293,9 +329,17 @@ def generate_weekly_report(
 # ─── Monthly Report ───────────────────────────────────────────────────────────
 
 def generate_monthly_report(
-    db: Client, session_id: UUID, year: int, month: int
+    db: Client, session_id: UUID, year: int, month: int, user_note: str | None = None
 ) -> dict:
     month_label = f"{month_name(month)} {year}"
+    existing_report = reports_db.get_report(
+        db,
+        session_id,
+        report_type="monthly",
+        period_year=year,
+        period_month=month,
+    )
+    effective_user_note = _resolve_report_user_note(existing_report, user_note)
 
     monthly_goals = plans_db.list_monthly_goals(db, session_id, year, month)
     weekly_plans = plans_db.list_weekly_plans_for_month(db, session_id, year, month)
@@ -336,6 +380,8 @@ def generate_monthly_report(
     metrics["review_signal"] = build_period_review_signal(session_id, month_start, month_end, db, "monthly")
     goal_context = build_report_prompt_context(session_id, month_start, month_end, db)
     execution_diary = build_execution_diary(session_id, month_start, month_end, db)
+    if effective_user_note:
+        execution_diary = {**execution_diary, "current_period_note": effective_user_note}
 
     ai_narrative = None
     try:
@@ -355,6 +401,7 @@ def generate_monthly_report(
         "period_year": year,
         "metrics": metrics,
         "ai_narrative": ai_narrative,
+        "user_note": effective_user_note,
         "tailored_pattern": ai_narrative.get("tailored_pattern") if ai_narrative else None,
         "tailored_action": ai_narrative.get("tailored_action") if ai_narrative else None,
         "ai_generated_at": datetime.now(timezone.utc).isoformat() if ai_narrative else None,
@@ -368,9 +415,17 @@ def generate_monthly_report(
 
 # ─── Quarterly Report ─────────────────────────────────────────────────────────
 
-def generate_quarterly_report(db: Client, session_id: UUID, year: int, quarter: int) -> dict:
+def generate_quarterly_report(db: Client, session_id: UUID, year: int, quarter: int, user_note: str | None = None) -> dict:
     months = _quarter_months(quarter)
     month_label = ", ".join(month_name(month) for month in months)
+    existing_report = reports_db.get_report(
+        db,
+        session_id,
+        report_type="quarterly",
+        period_year=year,
+        period_quarter=quarter,
+    )
+    effective_user_note = _resolve_report_user_note(existing_report, user_note)
     category_lookup = {
         row["id"]: row["name"]
         for row in categories_db.list_categories(db, session_id)
@@ -400,6 +455,8 @@ def generate_quarterly_report(db: Client, session_id: UUID, year: int, quarter: 
     metrics["review_signal"] = build_period_review_signal(session_id, quarter_start, quarter_end, db, "quarterly")
     goal_context = build_report_prompt_context(session_id, quarter_start, quarter_end, db)
     execution_diary = build_execution_diary(session_id, quarter_start, quarter_end, db)
+    if effective_user_note:
+        execution_diary = {**execution_diary, "current_period_note": effective_user_note}
 
     ai_narrative = None
     try:
@@ -419,6 +476,7 @@ def generate_quarterly_report(db: Client, session_id: UUID, year: int, quarter: 
         "period_quarter": quarter,
         "metrics": metrics,
         "ai_narrative": ai_narrative,
+        "user_note": effective_user_note,
         "tailored_pattern": ai_narrative.get("tailored_pattern") if ai_narrative else None,
         "tailored_action": ai_narrative.get("tailored_action") if ai_narrative else None,
         "ai_generated_at": datetime.now(timezone.utc).isoformat() if ai_narrative else None,
@@ -432,7 +490,14 @@ def generate_quarterly_report(db: Client, session_id: UUID, year: int, quarter: 
 
 # ─── Yearly Report ────────────────────────────────────────────────────────────
 
-def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
+def generate_yearly_report(db: Client, session_id: UUID, year: int, user_note: str | None = None) -> dict:
+    existing_report = reports_db.get_report(
+        db,
+        session_id,
+        report_type="yearly",
+        period_year=year,
+    )
+    effective_user_note = _resolve_report_user_note(existing_report, user_note)
     monthly_summaries = []
     for month in range(1, 13):
         monthly_goals = plans_db.list_monthly_goals(db, session_id, year, month)
@@ -487,6 +552,8 @@ def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
     metrics["review_signal"] = build_period_review_signal(session_id, year_start, year_end, db, "yearly")
     goal_context = build_report_prompt_context(session_id, year_start, year_end, db)
     execution_diary = build_execution_diary(session_id, year_start, year_end, db)
+    if effective_user_note:
+        execution_diary = {**execution_diary, "current_period_note": effective_user_note}
 
     ai_narrative = None
     try:
@@ -505,6 +572,7 @@ def generate_yearly_report(db: Client, session_id: UUID, year: int) -> dict:
         "period_year": year,
         "metrics": metrics,
         "ai_narrative": ai_narrative,
+        "user_note": effective_user_note,
         "tailored_pattern": ai_narrative.get("tailored_pattern") if ai_narrative else None,
         "tailored_action": ai_narrative.get("tailored_action") if ai_narrative else None,
         "ai_generated_at": datetime.now(timezone.utc).isoformat() if ai_narrative else None,

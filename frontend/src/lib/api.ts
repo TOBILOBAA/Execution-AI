@@ -120,6 +120,11 @@ export interface Session {
   handled_recaps?: string[];
 }
 
+export interface ApiAuthEmailResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface ApiRecapQueueEntry {
   type: "weekly" | "monthly" | "quarterly" | "yearly";
   period_year: number;
@@ -139,7 +144,17 @@ export interface ApiCategory {
   created_at: string;
 }
 
-export interface ApiYearlyGoal {
+export interface ApiGoalTruthFields {
+  truth_status?: string;
+  truth_progress?: number;
+  truth_reason?: string;
+  has_activity?: boolean;
+  linked_children_count?: number;
+  completed_children_count?: number;
+  period_closed?: boolean;
+}
+
+export interface ApiYearlyGoal extends ApiGoalTruthFields {
   id: string;
   session_id: string;
   category_id?: string;
@@ -155,7 +170,7 @@ export interface ApiYearlyGoal {
   updated_at: string;
 }
 
-export interface ApiMonthlyGoal {
+export interface ApiMonthlyGoal extends ApiGoalTruthFields {
   id: string;
   session_id: string;
   monthly_plan_id: string;
@@ -177,7 +192,7 @@ export interface ApiMonthlyGoal {
   updated_at: string;
 }
 
-export interface ApiWeeklyGoal {
+export interface ApiWeeklyGoal extends ApiGoalTruthFields {
   id: string;
   session_id: string;
   weekly_plan_id: string;
@@ -199,7 +214,7 @@ export interface ApiWeeklyGoal {
   updated_at: string;
 }
 
-export interface ApiDailyPriority {
+export interface ApiDailyPriority extends ApiGoalTruthFields {
   id: string;
   session_id: string;
   daily_plan_id: string;
@@ -348,6 +363,53 @@ export interface ApiGoalsHierarchy {
   selected_week_daily_priorities: ApiDailyPriority[];
 }
 
+export interface ApiMonthlyPlan {
+  id: string;
+  session_id: string;
+  year: number;
+  month: number;
+  status: string;
+  days_in_month: number;
+  days_remaining: number;
+  ai_draft?: Record<string, unknown> | null;
+  ai_generated_at?: string | null;
+  approved_at?: string | null;
+  goals: ApiMonthlyGoal[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiWeeklyPlan {
+  id: string;
+  session_id: string;
+  year: number;
+  month: number;
+  week_number: number;
+  week_start: string;
+  week_end: string;
+  status: string;
+  days_remaining: number;
+  ai_draft?: Record<string, unknown> | null;
+  ai_generated_at?: string | null;
+  approved_at?: string | null;
+  goals: ApiWeeklyGoal[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiDailyPlan {
+  id: string;
+  session_id: string;
+  date: string;
+  status: string;
+  ai_draft?: Record<string, unknown> | null;
+  ai_generated_at?: string | null;
+  approved_at?: string | null;
+  priorities: ApiDailyPriority[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiReport {
   id: string;
   session_id: string;
@@ -359,6 +421,7 @@ export interface ApiReport {
   period_year: number;
   metrics: Record<string, unknown>;
   ai_narrative?: Record<string, unknown>;
+  user_note?: string | null;
   tailored_pattern?: string | null;
   tailored_action?: string | null;
   has_execution_data?: boolean;
@@ -400,6 +463,16 @@ export const sessionsApi = {
     },
   ) =>
     patch<Session>(`/session/${sessionId}`, updates),
+};
+
+// ─── Auth delivery ───────────────────────────────────────────────────────────
+
+export const authApi = {
+  sendSignupEmail: (data: { name: string; email: string; password: string; redirect_to?: string }) =>
+    post<ApiAuthEmailResponse>("/auth/signup-email", data),
+
+  sendPasswordResetEmail: (data: { email: string; redirect_to?: string }) =>
+    post<ApiAuthEmailResponse>("/auth/password-reset-email", data),
 };
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -456,7 +529,7 @@ export const monthlyPlanApi = {
     post<{ id: string; status: string }>(`/monthly-plan/save?session_id=${sessionId}&year=${year}&month=${month}`, { goals }),
 
   get: (sessionId: string, year: number, month: number) =>
-    get<{ id: string; goals: ApiMonthlyGoal[]; status: string }>
+    get<ApiMonthlyPlan>
       (`/monthly-plan/${sessionId}?year=${year}&month=${month}`),
 
   addGoal: (sessionId: string, year: number, month: number, data: {
@@ -491,7 +564,7 @@ export const weeklyPlanApi = {
     post<{ id: string; status: string }>(`/weekly-plan/save?session_id=${sessionId}&year=${year}&week_number=${weekNumber}`, { goals }),
 
   get: (sessionId: string, year: number, weekNumber: number) =>
-    get<{ id: string; goals: ApiWeeklyGoal[]; status: string }>
+    get<ApiWeeklyPlan>
       (`/weekly-plan/${sessionId}?year=${year}&week_number=${weekNumber}`),
 
   addGoal: (sessionId: string, year: number, weekNumber: number, data: {
@@ -525,7 +598,7 @@ export const dailyPlanApi = {
     post<{ id: string; status: string }>(`/daily-plan/save?session_id=${sessionId}&date=${date}`, { priorities }),
 
   get: (sessionId: string, date: string) =>
-    get<{ id: string; priorities: ApiDailyPriority[]; status: string }>
+    get<ApiDailyPlan>
       (`/daily-plan/${sessionId}?date=${date}`),
 };
 
@@ -660,22 +733,38 @@ export const reportsApi = {
   list: (sessionId: string) =>
     get<ApiReport[]>(`/reports/${sessionId}`),
 
-  generateDaily: (sessionId: string, date: string) =>
-    post<ApiReport>("/reports/daily/generate", { session_id: sessionId, date }, AI_GENERATE_TIMEOUT_MS),
-
-  generateWeekly: (sessionId: string, year: number, weekNumber: number) =>
+  generateDaily: (sessionId: string, date: string, userNote?: string) =>
     post<ApiReport>(
-      "/reports/weekly/generate",
-      { session_id: sessionId, year, week_number: weekNumber },
+      "/reports/daily/generate",
+      { session_id: sessionId, date, ...(userNote !== undefined ? { user_note: userNote } : {}) },
       AI_GENERATE_TIMEOUT_MS,
     ),
 
-  generateMonthly: (sessionId: string, year: number, month: number) =>
-    post<ApiReport>("/reports/monthly/generate", { session_id: sessionId, year, month }, AI_GENERATE_TIMEOUT_MS),
+  generateWeekly: (sessionId: string, year: number, weekNumber: number, userNote?: string) =>
+    post<ApiReport>(
+      "/reports/weekly/generate",
+      { session_id: sessionId, year, week_number: weekNumber, ...(userNote !== undefined ? { user_note: userNote } : {}) },
+      AI_GENERATE_TIMEOUT_MS,
+    ),
 
-  generateQuarterly: (sessionId: string, year: number, quarter: number) =>
-    post<ApiReport>("/reports/quarterly/generate", { session_id: sessionId, year, quarter }, AI_GENERATE_TIMEOUT_MS),
+  generateMonthly: (sessionId: string, year: number, month: number, userNote?: string) =>
+    post<ApiReport>(
+      "/reports/monthly/generate",
+      { session_id: sessionId, year, month, ...(userNote !== undefined ? { user_note: userNote } : {}) },
+      AI_GENERATE_TIMEOUT_MS,
+    ),
 
-  generateYearly: (sessionId: string, year: number) =>
-    post<ApiReport>("/reports/yearly/generate", { session_id: sessionId, year }, AI_GENERATE_TIMEOUT_MS),
+  generateQuarterly: (sessionId: string, year: number, quarter: number, userNote?: string) =>
+    post<ApiReport>(
+      "/reports/quarterly/generate",
+      { session_id: sessionId, year, quarter, ...(userNote !== undefined ? { user_note: userNote } : {}) },
+      AI_GENERATE_TIMEOUT_MS,
+    ),
+
+  generateYearly: (sessionId: string, year: number, userNote?: string) =>
+    post<ApiReport>(
+      "/reports/yearly/generate",
+      { session_id: sessionId, year, ...(userNote !== undefined ? { user_note: userNote } : {}) },
+      AI_GENERATE_TIMEOUT_MS,
+    ),
 };

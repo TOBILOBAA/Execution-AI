@@ -18,6 +18,7 @@ import type {
   Category,
   DailyPriority,
   FoundationalHabit,
+  GoalTruthStatus,
   MonthlyGoal,
   WeeklyGoal,
   YearlyGoal,
@@ -83,6 +84,13 @@ function mapApiYearlyGoal(goal: ApiYearlyGoal): YearlyGoal {
     targetDate: goal.target_date,
     aiSuggested: goal.ai_suggested,
     editable: goal.editable,
+    truthStatus: goal.truth_status as GoalTruthStatus | undefined,
+    truthProgress: goal.truth_progress,
+    truthReason: goal.truth_reason,
+    hasActivity: goal.has_activity,
+    linkedChildrenCount: goal.linked_children_count,
+    completedChildrenCount: goal.completed_children_count,
+    periodClosed: goal.period_closed,
   };
 }
 
@@ -103,6 +111,13 @@ function mapApiMonthlyGoal(goal: ApiMonthlyGoal): MonthlyGoal {
     isMain: goal.is_main,
     aiSuggested: goal.ai_suggested,
     editable: goal.editable,
+    truthStatus: goal.truth_status as GoalTruthStatus | undefined,
+    truthProgress: goal.truth_progress,
+    truthReason: goal.truth_reason,
+    hasActivity: goal.has_activity,
+    linkedChildrenCount: goal.linked_children_count,
+    completedChildrenCount: goal.completed_children_count,
+    periodClosed: goal.period_closed,
   };
 }
 
@@ -123,6 +138,13 @@ function mapApiWeeklyGoal(goal: ApiWeeklyGoal): WeeklyGoal {
     workload: goal.workload,
     aiSuggested: goal.ai_suggested,
     editable: goal.editable,
+    truthStatus: goal.truth_status as GoalTruthStatus | undefined,
+    truthProgress: goal.truth_progress,
+    truthReason: goal.truth_reason,
+    hasActivity: goal.has_activity,
+    linkedChildrenCount: goal.linked_children_count,
+    completedChildrenCount: goal.completed_children_count,
+    periodClosed: goal.period_closed,
   };
 }
 
@@ -141,6 +163,13 @@ function mapApiDailyPriority(priority: ApiDailyPriority): DailyPriority {
     tag: priority.tag,
     aiSuggested: priority.ai_suggested,
     editable: priority.editable,
+    truthStatus: priority.truth_status as GoalTruthStatus | undefined,
+    truthProgress: priority.truth_progress,
+    truthReason: priority.truth_reason,
+    hasActivity: priority.has_activity,
+    linkedChildrenCount: priority.linked_children_count,
+    completedChildrenCount: priority.completed_children_count,
+    periodClosed: priority.period_closed,
   };
 }
 

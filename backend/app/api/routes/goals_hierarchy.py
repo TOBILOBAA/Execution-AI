@@ -13,6 +13,7 @@ from app.utils.period_guards import (
     is_plannable_weekly_period,
     is_plannable_yearly_period,
 )
+from app.services.goal_truth_service import decorate_goal_truth
 import app.db.yearly_goals as yg_db
 import app.db.categories as cat_db
 import app.db.plans as plans_db
@@ -118,17 +119,39 @@ def get_goals_hierarchy(
     for priority in year_daily_priorities:
         priority["editable"] = is_current_daily_period(db, session_id, date.fromisoformat(priority["date"]))
 
+    decorated = decorate_goal_truth(
+        yearly_goals=yearly_goals,
+        monthly_goals=monthly_goals,
+        weekly_goals=weekly_goals,
+        daily_priorities=year_daily_priorities,
+        today=ctx.today,
+        week_starts_on=week_starts_on,
+    )
+    weekly_truth_by_id = {
+        str(goal["id"]): goal for goal in decorated["weekly_goals"]
+    }
+    selected_week_daily_priorities = [
+        decorated_priority
+        for decorated_priority in decorated["daily_priorities"]
+        if selected_week_start
+        and selected_week_end
+        and selected_week_start <= date.fromisoformat(decorated_priority["date"]) <= selected_week_end
+    ]
+
     return {
         "year": target_year,
         "last_synced_at": datetime.now(UTC).isoformat(),
-        "yearly_goals": yearly_goals,
+        "yearly_goals": decorated["yearly_goals"],
         "categories": categories,
         "current_month": ctx.current_month,
-        "monthly_goals": monthly_goals,
+        "monthly_goals": decorated["monthly_goals"],
         "current_week_number": ctx.current_week_number,
-        "weekly_goals": weekly_goals,
+        "weekly_goals": [
+            weekly_truth_by_id.get(str(goal["id"]), goal)
+            for goal in weekly_goals
+        ],
         "today": ctx.today.isoformat(),
-        "year_daily_priorities": year_daily_priorities,
+        "year_daily_priorities": decorated["daily_priorities"],
         "selected_week_number": selected_week_number,
         "selected_week_start": selected_week_start.isoformat() if selected_week_start else None,
         "selected_week_end": selected_week_end.isoformat() if selected_week_end else None,

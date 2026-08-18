@@ -1,11 +1,78 @@
 """Report snapshot repository."""
 from datetime import date
 from uuid import UUID
+from postgrest.exceptions import APIError
 from supabase import Client
 
 from app.db._utils import serialize_payload
 
 TABLE = "report_snapshots"
+USER_NOTE_FALLBACK_KEY = "_user_note_fallback"
+
+
+def _is_missing_column(exc: APIError, column_name: str) -> bool:
+    details = str(exc)
+    return column_name in details and (
+        "PGRST204" in details or "schema cache" in details
+    )
+
+
+def _drop_unsupported_report_columns(payload: dict, exc: APIError) -> dict:
+    unsupported = {
+        key
+        for key in ("user_note",)
+        if key in payload and _is_missing_column(exc, key)
+    }
+    if not unsupported:
+        return payload
+    return {key: value for key, value in payload.items() if key not in unsupported}
+
+
+def extract_report_user_note(report: dict | None) -> str | None:
+    if not report:
+        return None
+
+    note = report.get("user_note")
+    if isinstance(note, str):
+        trimmed = note.strip()
+        if trimmed:
+            return trimmed
+
+    narrative = report.get("ai_narrative")
+    if isinstance(narrative, dict):
+        fallback = narrative.get(USER_NOTE_FALLBACK_KEY)
+        if isinstance(fallback, str):
+            trimmed = fallback.strip()
+            if trimmed:
+                return trimmed
+
+    return None
+
+
+def _hydrate_report_user_note(report: dict | None) -> dict | None:
+    if not report:
+        return report
+    note = extract_report_user_note(report)
+    if not note:
+        return report
+    if report.get("user_note") == note:
+        return report
+    return {**report, "user_note": note}
+
+
+def _embed_user_note_fallback(payload: dict) -> dict:
+    report = dict(payload)
+    note = report.get("user_note")
+    trimmed = note.strip() if isinstance(note, str) else None
+    if not trimmed:
+        return report
+
+    narrative = report.get("ai_narrative")
+    next_narrative = dict(narrative) if isinstance(narrative, dict) else {}
+    next_narrative[USER_NOTE_FALLBACK_KEY] = trimmed
+    report["ai_narrative"] = next_narrative
+    report["user_note"] = trimmed
+    return report
 
 
 def _natural_lookup_fields(
@@ -52,11 +119,13 @@ def get_report(
     ).items():
         query = query.eq(field, value)
     result = query.execute()
-    return result.data[0] if result.data else None
+    return _hydrate_report_user_note(result.data[0] if result.data else None)
 
 
 def upsert_report(db: Client, session_id: UUID, data: dict) -> dict:
-    payload = serialize_payload({**data, "session_id": str(session_id)})
+    payload = _embed_user_note_fallback(
+        serialize_payload({**data, "session_id": str(session_id)})
+    )
     report_type = payload.get("report_type")
     if report_type not in {"daily", "weekly", "monthly", "quarterly", "yearly"}:
         raise ValueError(f"Unsupported report_type: {report_type!r}")
@@ -78,18 +147,32 @@ def upsert_report(db: Client, session_id: UUID, data: dict) -> dict:
     if existing:
         return update_report(db, existing["id"], payload)
 
-    result = db.table(TABLE).insert(payload).execute()
-    return result.data[0]
+    try:
+        result = db.table(TABLE).insert(payload).execute()
+    except APIError as exc:
+        fallback_payload = _drop_unsupported_report_columns(payload, exc)
+        if fallback_payload == payload:
+            raise
+        result = db.table(TABLE).insert(fallback_payload).execute()
+    return _hydrate_report_user_note(result.data[0])
 
 
 def update_report(db: Client, report_id: UUID, updates: dict) -> dict:
-    result = (
-        db.table(TABLE)
-        .update(updates)
-        .eq("id", str(report_id))
-        .execute()
-    )
-    return result.data[0]
+    payload = _embed_user_note_fallback(updates)
+    query = db.table(TABLE).update(payload).eq("id", str(report_id))
+    try:
+        result = query.execute()
+    except APIError as exc:
+        fallback_payload = _drop_unsupported_report_columns(payload, exc)
+        if fallback_payload == payload:
+            raise
+        result = (
+            db.table(TABLE)
+            .update(fallback_payload)
+            .eq("id", str(report_id))
+            .execute()
+        )
+    return _hydrate_report_user_note(result.data[0])
 
 
 def mark_daily_report_stale(
@@ -125,7 +208,7 @@ def list_reports(
         .order("created_at", desc=True)
         .execute()
     )
-    return result.data or []
+    return [_hydrate_report_user_note(row) for row in (result.data or [])]
 
 
 def log_ai_generation(db: Client, data: dict) -> None:

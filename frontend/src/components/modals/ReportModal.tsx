@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { ModalType } from "@/lib/types";
 
 interface Props {
@@ -18,21 +18,118 @@ interface QuarterReportModalData {
   topPillar: string | null;
   summary: string;
   reflection: string;
+  userNote?: string | null;
   nextFocus: string | null;
 }
 
-// ── Backdrop + modal shell ─────────────────────────────────────────────────────
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function formatDateLabel(dateIso: string) {
+  const date = new Date(`${dateIso}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return dateIso;
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function buildArchiveLink(type: ModalType, data: unknown) {
+  const details = asRecord(data);
+  const explicitYear = asNumber(details.year);
+  const explicitMonth = asNumber(details.month);
+  const explicitDate = asString(details.date);
+  const derivedYear = explicitYear ?? (explicitDate ? Number(explicitDate.slice(0, 4)) : null);
+
+  switch (type) {
+    case "monthly-report":
+      if (explicitYear && explicitMonth) return `/dashboard/reports/${explicitYear}/${explicitMonth}`;
+      return explicitYear ? `/dashboard/reports/${explicitYear}` : "/dashboard/reports";
+    case "yearly-report":
+      return explicitYear ? `/dashboard/reports/${explicitYear}` : "/dashboard/reports";
+    case "weekly-report":
+      return derivedYear ? `/dashboard/reports/${derivedYear}` : "/dashboard/reports";
+    case "daily-report":
+      return derivedYear ? `/dashboard/reports/${derivedYear}` : "/dashboard/reports";
+    default:
+      return "/dashboard/reports";
+  }
+}
+
+function buildLegacyReportCopy(type: ModalType, data: unknown) {
+  const details = asRecord(data);
+  const year = asNumber(details.year);
+  const month = asNumber(details.month);
+  const week = asNumber(details.week);
+  const date = asString(details.date);
+
+  if (type === "daily-report") {
+    return {
+      eyebrow: "Daily report",
+      title: date ? formatDateLabel(date) : "Saved daily reflection",
+      detail:
+        "Daily reflections are generated in the end-of-day flow and stored in the yearly reports archive. This legacy modal no longer renders a separate fake recap screen.",
+      cta: "Open reports archive",
+    };
+  }
+
+  if (type === "weekly-report") {
+    return {
+      eyebrow: "Weekly report",
+      title: year && week ? `Week ${week}, ${year}` : "Saved weekly review",
+      detail:
+        "Weekly reviews belong in the reports archive and the review prompt flow. This fallback keeps the route truthful instead of showing demo-only summary content.",
+      cta: "Open yearly archive",
+    };
+  }
+
+  if (type === "monthly-report") {
+    const title =
+      year && month
+        ? new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", {
+            month: "long",
+            year: "numeric",
+            timeZone: "UTC",
+          })
+        : "Saved monthly review";
+    return {
+      eyebrow: "Monthly report",
+      title,
+      detail:
+        "Monthly reviews now live in the reports archive, where they can show saved metrics, generated reflections, and linked weekly evidence from that month.",
+      cta: "Open monthly archive",
+    };
+  }
+
+  return {
+    eyebrow: "Yearly report",
+    title: year ? `${year} execution report` : "Yearly execution report",
+    detail:
+      "Yearly reviews now live on the full archive page instead of a standalone summary modal, so the user always sees the real metrics, saved narrative, and linked period evidence together.",
+    cta: "Open yearly archive",
+  };
+}
+
 function ModalShell({
   onClose,
   children,
   wide = false,
-  extraWide = false,
   labelledBy,
 }: {
   onClose: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
   wide?: boolean;
-  extraWide?: boolean;
   labelledBy?: string;
 }) {
   return (
@@ -46,8 +143,8 @@ function ModalShell({
     >
       <div
         className="flex w-full max-h-[calc(100dvh-1rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl overscroll-contain sm:max-h-[calc(100dvh-3rem)]"
-        style={{ maxWidth: extraWide ? 880 : wide ? 720 : 560 }}
-        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: wide ? 720 : 560 }}
+        onClick={(event) => event.stopPropagation()}
       >
         {children}
       </div>
@@ -55,358 +152,68 @@ function ModalShell({
   );
 }
 
-// ── Day Recap Modal ───────────────────────────────────────────────────────────
-const DAY_DATA = {
-  date: "Oct 24",
-  weekday: "Thursday, 2024",
-  perfScore: 92,
-  focusHours: 6.5,
-  completion: 88,
-  habitStreak: 12,
-  aiStatus: "Systematic execution observed. High focus alignment with core objectives.",
-  priorities: [
-    { title: "Finalize Architectural System documentation", meta: "Deep Work Session · 2h 15m", completed: true },
-    { title: "Quarterly Execution Review with Leadership",  meta: "Meeting · 45m",              completed: true },
-    { title: "Internal Team Onboarding Module",             meta: "Postponed to Oct 25",         completed: false, note: "Postponed to Oct 25" },
-  ],
-  secondary: [
-    { title: "Inbox Zero clearance",   meta: "Processed 24 threads", completed: true },
-    { title: "Review Q4 Budget drafts", meta: "Pending feedback",     completed: false },
-    { title: "Update CRM leads",        meta: "12 entries modified",  completed: true },
-  ],
-  habits: [
-    { name: "Hydration",  icon: "water_drop",      done: true },
-    { name: "Mobility",   icon: "fitness_center",  done: true },
-    { name: "Meditation", icon: "self_improvement", done: true },
-    { name: "Reading",    icon: "menu_book",        done: false },
-  ],
-  reflection: "Today's execution was marked by a strong start on high-leverage goals. You spent 82% of your focus hours on documented goals. The missed goal 'Internal Team Onboarding' was likely due to over-extension of the leadership meeting — consider capping future review sessions at 30 minutes to protect afternoon execution blocks.",
-  tomorrow: [
-    "Research competitive execution frameworks",
-    "Quarterly roadmap presentation prep",
-    "Weekly performance audit",
-  ],
-};
+function ArchiveFallbackModal({ onClose, type, data }: { onClose: () => void; type: ModalType; data: unknown }) {
+  const copy = buildLegacyReportCopy(type, data);
+  const href = buildArchiveLink(type, data);
 
-function DayRecapModal({ onClose }: { onClose: () => void }) {
   return (
-    <ModalShell onClose={onClose} wide labelledBy="day-recap-title">
+    <ModalShell onClose={onClose} labelledBy="legacy-report-title">
       <div className="flex min-h-0 flex-col">
-        {/* Header */}
         <div className="flex items-start justify-between px-4 pb-5 pt-5 sm:px-6 sm:pt-6">
           <div>
-            <h2 id="day-recap-title" className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>Day Recap</h2>
-            <p className="text-sm mt-0.5" style={{ color: "#8a9e97" }}>Excellent progress today. Take a moment to reflect.</p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl transition-all hover:opacity-60" style={{ color: "#a8b5af" }}>
-            <span className="material-symbols-outlined text-[20px]">close</span>
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
-
-        {/* Efficiency + Focus Time */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-          <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Efficiency</p>
-            <div className="flex items-baseline gap-1 mb-2">
-              <span className="font-headline font-extrabold text-3xl" style={{ color: "#1a1f1e" }}>8/10</span>
-              <span className="text-xs" style={{ color: "#8a9e97" }}>Goals Met</span>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#e8eeeb" }}>
-              <div className="h-full rounded-full" style={{ width: "80%", background: "#006c4a" }} />
-            </div>
-          </div>
-          <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Focus Time</p>
-            <div className="flex items-baseline gap-1 mb-2">
-              <span className="font-headline font-extrabold text-3xl" style={{ color: "#1a1f1e" }}>5.2h</span>
-              <span className="text-xs" style={{ color: "#8a9e97" }}>Deep Work</span>
-            </div>
-            <div className="flex gap-1">
-              {[1,1,1,1,0.6,0.3].map((v, i) => (
-                <div key={i} className="flex-1 h-1.5 rounded-full" style={{ background: v === 1 ? "#006c4a" : v > 0.5 ? "rgba(0,108,74,0.5)" : "rgba(0,108,74,0.2)" }} />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* AI Insights */}
-        <div className="rounded-2xl p-4 mb-5 flex gap-3" style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.12)" }}>
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#006c4a" }}>
-            <span className="material-symbols-outlined text-[15px] text-white">auto_awesome</span>
-          </div>
-          <div>
-            <p className="text-xs font-bold mb-1" style={{ color: "#006c4a" }}>AI Insights</p>
-            <p className="text-xs leading-relaxed" style={{ color: "#4a5c54" }}>
-              You reached a flow state within 15 minutes of your first goal. This suggests your morning routine is optimised. However, your energy dipped around 3 PM — consider scheduling your review work during this window tomorrow to maintain momentum without burnout.
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>
+              {copy.eyebrow}
             </p>
-          </div>
-        </div>
-
-        {/* Suggested for Tomorrow */}
-        <div className="mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Suggested for Tomorrow</p>
-            <button className="text-[10px] font-bold uppercase tracking-widest transition-opacity hover:opacity-60" style={{ color: "#006c4a" }}>Add Goal</button>
-          </div>
-          <div className="space-y-1">
-            {DAY_DATA.tomorrow.map((t, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-3 rounded-xl" style={{ background: "#f9fbfa" }}>
-                <span className="material-symbols-outlined text-[16px] flex-shrink-0" style={{ color: "#c4d0cb" }}>drag_indicator</span>
-                <p className="text-sm" style={{ color: "#1a1f1e" }}>{t}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        </div>
-
-        <div className="shrink-0 border-t px-4 py-4 sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
-          <button onClick={onClose} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-sm font-bold text-white transition-opacity hover:opacity-80" style={{ background: "#006c4a" }}>
-            Finish Day &amp; Plan Tomorrow
-            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-          </button>
-          <p className="text-center text-[10px] font-bold uppercase tracking-widest mt-2" style={{ color: "#c4d0cb" }}>Shift + Enter to Confirm</p>
-        </div>
-      </div>
-    </ModalShell>
-  );
-}
-
-// ── Weekly Execution Summary Modal ────────────────────────────────────────────
-const WEEK_DATA = {
-  weekNum: 42,
-  weekTitle: "Operational Excellence",
-  dateRange: "Oct 16 – Oct 22, 2023",
-  efficiencyPct: 94,
-  efficiencyDelta: "+4.2%",
-  tasksCompleted: 47,
-  tasksTotal: 50,
-  focusHours: 32.5,
-  focusTarget: 40,
-  aiInsight: "\"You demonstrated exceptional momentum in the first half of the week. Your deep work blocks on Tuesday and Wednesday accounted for 60% of your output. Focus on maintaining this intensity on Fridays to avoid the end-of-week drop-off.\"",
-  habits: [
-    { name: "Morning Routine", icon: "wb_sunny", dots: [1,1,1,0,1,1,1] },
-    { name: "Deep Reading",    icon: "menu_book", dots: [1,0,1,0,1,0,1] },
-    { name: "Movement",        icon: "fitness_center", dots: [1,1,0,1,1,0,1] },
-  ],
-};
-
-function WeeklyReportModal({ onClose }: { onClose: () => void }) {
-  const focusPct = Math.round((WEEK_DATA.focusHours / WEEK_DATA.focusTarget) * 100);
-  return (
-    <ModalShell onClose={onClose} wide labelledBy="weekly-report-title">
-      <div className="flex min-h-0 flex-col">
-        {/* Header */}
-        <div className="flex items-start justify-between px-4 pb-1 pt-5 sm:px-6 sm:pt-6">
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>Execution Summary</p>
-          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-xl transition-opacity hover:opacity-60" style={{ color: "#a8b5af" }}>
-            <span className="material-symbols-outlined text-[20px]">close</span>
-          </button>
-        </div>
-        <div className="px-4 sm:px-6">
-          <h2 id="weekly-report-title" className="font-headline font-bold text-2xl mb-1" style={{ color: "#1a1f1e" }}>Week {WEEK_DATA.weekNum}: {WEEK_DATA.weekTitle}</h2>
-          <p className="text-sm mb-5" style={{ color: "#8a9e97" }}>{WEEK_DATA.dateRange}</p>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-          <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className="material-symbols-outlined text-[14px]" style={{ color: "#006c4a" }}>bolt</span>
-              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>Efficiency Score</p>
-            </div>
-            <div className="flex items-baseline gap-1.5 mb-1">
-              <span className="font-headline font-extrabold text-3xl" style={{ color: "#1a1f1e" }}>{WEEK_DATA.efficiencyPct}%</span>
-              <span className="text-sm font-bold" style={{ color: "#006c4a" }}>{WEEK_DATA.efficiencyDelta}</span>
-            </div>
-            <p className="text-xs" style={{ color: "#a8b5af" }}>{WEEK_DATA.tasksCompleted} of {WEEK_DATA.tasksTotal} scheduled goals completed</p>
-          </div>
-          <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className="material-symbols-outlined text-[14px]" style={{ color: "#006c4a" }}>schedule</span>
-              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>Focus Time</p>
-            </div>
-            <div className="flex items-baseline gap-1 mb-2">
-              <span className="font-headline font-extrabold text-3xl" style={{ color: "#1a1f1e" }}>{WEEK_DATA.focusHours}h</span>
-              <span className="text-sm" style={{ color: "#a8b5af" }}>/ {WEEK_DATA.focusTarget}h target</span>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#e8eeeb" }}>
-              <div className="h-full rounded-full" style={{ width: `${Math.min(focusPct, 100)}%`, background: "#006c4a" }} />
-            </div>
-          </div>
-        </div>
-
-        {/* AI Performance Insights */}
-        <div className="rounded-2xl p-4 mb-5 flex gap-3" style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.12)" }}>
-          <span className="material-symbols-outlined text-[18px] flex-shrink-0 mt-0.5" style={{ color: "#006c4a" }}>auto_awesome</span>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#006c4a" }}>AI Performance Insights</p>
-            <p className="text-xs leading-relaxed italic" style={{ color: "#4a5c54" }}>{WEEK_DATA.aiInsight}</p>
-          </div>
-        </div>
-
-        {/* Routines */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>Routines</p>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a8b5af" }}>Weekly Completion</p>
-          </div>
-          <div className="space-y-3">
-            {WEEK_DATA.habits.map((h) => (
-              <div key={h.name} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "#f4f6f4" }}>
-                  <span className="material-symbols-outlined text-[16px]" style={{ color: "#006c4a" }}>{h.icon}</span>
-                </div>
-                <p className="text-sm flex-1" style={{ color: "#1a1f1e" }}>{h.name}</p>
-                <div className="flex items-center gap-1">
-                  {h.dots.map((done, i) => (
-                    <div key={i} className="w-3 h-3 rounded-full" style={{ background: done ? "#006c4a" : "rgba(0,108,74,0.15)" }} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex shrink-0 flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
-          <button onClick={onClose} className="flex-1 py-3 rounded-2xl text-sm font-bold transition-opacity hover:opacity-70" style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#6b7c75" }}>
-            Reflect &amp; Close
-          </button>
-          <button onClick={onClose} className="flex-1 py-3 rounded-2xl text-sm font-bold text-white transition-opacity hover:opacity-80" style={{ background: "#006c4a" }}>
-            Start Next Week
-          </button>
-        </div>
-      </div>
-    </ModalShell>
-  );
-}
-
-// ── Monthly Insight Modal ─────────────────────────────────────────────────────
-function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unknown }) {
-  const d = data as { month?: number; year?: number } | undefined;
-  const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const monthName = d?.month ? MONTH_NAMES[d.month - 1] : "June";
-  const year = d?.year ?? 2026;
-  const nextMonth = d?.month ? (MONTH_NAMES[d.month] ?? "Next Month") : "July";
-
-  return (
-    <ModalShell onClose={onClose} extraWide labelledBy="monthly-insight-title">
-      <div className="flex min-h-0 flex-col">
-        {/* Header */}
-        <div className="flex items-start justify-between px-4 pb-5 pt-5 sm:px-6 sm:pt-6">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>Monthly Insight</p>
-            <h2 id="monthly-insight-title" className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>{monthName} {year}</h2>
+            <h2 id="legacy-report-title" className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>
+              {copy.title}
+            </h2>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl transition-opacity hover:opacity-60" style={{ color: "#a8b5af" }}>
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
-
-        {/* Executive Summary */}
-        <div className="rounded-2xl p-5 mb-5 flex gap-3" style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.15)" }}>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#006c4a" }}>
-            <span className="material-symbols-outlined text-[18px] text-white">auto_awesome</span>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6 space-y-4">
+          <div
+            className="rounded-2xl p-5"
+            style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.14)" }}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#006c4a" }}>
+              Archive-first view
+            </p>
+            <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+              {copy.detail}
+            </p>
           </div>
-          <div>
-            <p className="text-sm font-bold mb-2" style={{ color: "#1a1f1e" }}>Executive Performance Summary</p>
-            <p className="text-xs leading-relaxed" style={{ color: "#4a5c54" }}>
-              You&rsquo;ve demonstrated exceptional consistency in your <strong>Routines</strong> this month, maintaining an 88% success rate. While the <strong>Main Goal</strong> completion reached 92%, your focus dipped slightly in Week 3. Adjusting your evening wind-down routine by 15 minutes could mitigate future mid-month fatigue.
+
+          <div
+            className="rounded-2xl p-5"
+            style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>
+              Why this changed
+            </p>
+            <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
+              The product now prefers archive pages and review flows that are backed by saved report records. That keeps report metrics, summaries, and period context consistent instead of splitting them across old modal-only layouts.
             </p>
           </div>
         </div>
 
-        {/* Main Goal + Secondary */}
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-4 mb-5">
-          {/* Main objective */}
-          <div className="rounded-2xl p-5" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>Main Goal</p>
-                <p className="font-headline font-bold text-base" style={{ color: "#1a1f1e" }}>Scale Operations: Project Phoenix</p>
-              </div>
-              <div className="text-right">
-                <p className="font-headline font-bold text-2xl" style={{ color: "#006c4a" }}>92%</p>
-                <p className="text-[9px]" style={{ color: "#a8b5af" }}>COMPLETED</p>
-              </div>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden mb-4" style={{ background: "#e8eeeb" }}>
-              <div className="h-full rounded-full" style={{ width: "92%", background: "#006c4a" }} />
-            </div>
-            <div className="space-y-2">
-              {[
-                { text: "Hire Lead Infrastructure Architect", done: true },
-                { text: "Beta Testing Phase 1 Completion",   done: true },
-                { text: "Finalize Q3 Strategy Roadmap",      done: false },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-2.5">
-                  <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                    style={{ borderColor: item.done ? "#006c4a" : "#d1d9d5", background: item.done ? "#006c4a" : "transparent" }}>
-                    {item.done && <span className="material-symbols-outlined text-[10px] text-white">check</span>}
-                  </div>
-                  <p className="text-xs" style={{ color: item.done ? "#a8b5af" : "#1a1f1e", textDecoration: item.done ? "line-through" : "none" }}>{item.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Secondary goals */}
-          <div className="flex flex-col gap-3">
-            <div className="rounded-2xl p-4 flex-1" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
-              <p className="text-[9px] font-bold uppercase tracking-widest mb-3" style={{ color: "#a8b5af" }}>Secondary Goals</p>
-              {[{ label: "Health: Marathon Prep", pct: 75 }, { label: "Personal: Piano Practice", pct: 40 }].map((s) => (
-                <div key={s.label} className="mb-3">
-                  <div className="flex justify-between mb-1">
-                    <p className="text-[11px]" style={{ color: "#4a5c54" }}>{s.label}</p>
-                    <p className="text-[11px] font-bold" style={{ color: "#1a1f1e" }}>{s.pct}%</p>
-                  </div>
-                  <div className="h-1 rounded-full overflow-hidden" style={{ background: "#e8eeeb" }}>
-                    <div className="h-full rounded-full" style={{ width: `${s.pct}%`, background: "#1a1f1e" }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="rounded-2xl p-3" style={{ background: "#f4f6f4" }}>
-              <p className="text-[10px] italic text-center" style={{ color: "#8a9e97" }}>&quot;Progress is not linear; keep moving forward.&quot;</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Routines */}
-        <div className="mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Routines</p>
-            <p className="text-xs font-bold" style={{ color: "#006c4a" }}>{monthName.slice(0,3)} Avg: 88%</p>
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {[{ name:"Deep Sleep",icon:"bedtime"},{name:"Meditation",icon:"self_improvement"},{name:"Hydration",icon:"water_drop"},{name:"Deep Work",icon:"work"}].map((h) => (
-              <div key={h.name} className="rounded-xl p-3 flex flex-col items-center gap-2" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.06)" }}>
-                <span className="material-symbols-outlined text-[22px]" style={{ color: "#006c4a" }}>{h.icon}</span>
-                <p className="text-[10px] font-semibold text-center" style={{ color: "#4a5c54" }}>{h.name}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex shrink-0 flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-1 text-xs font-bold transition-opacity hover:opacity-60" style={{ color: "#6b7c75" }}>
-              <span className="material-symbols-outlined text-[14px]">download</span>Export PDF
-            </button>
-            <button className="text-xs font-bold transition-opacity hover:opacity-60" style={{ color: "#6b7c75" }}>Share Report</button>
-          </div>
-          <button onClick={onClose} className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-80" style={{ background: "#006c4a" }}>
-            Archive &amp; Set {nextMonth} Goals
+        <div className="flex shrink-0 flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 rounded-2xl text-sm font-bold transition-opacity hover:opacity-70"
+            style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#6b7c75" }}
+          >
+            Close
           </button>
+          <a
+            href={href}
+            className="flex-1 py-3 rounded-2xl text-sm font-bold text-white text-center transition-opacity hover:opacity-80"
+            style={{ background: "#006c4a" }}
+          >
+            {copy.cta}
+          </a>
         </div>
       </div>
     </ModalShell>
@@ -414,8 +221,8 @@ function MonthlyInsightModal({ onClose, data }: { onClose: () => void; data: unk
 }
 
 function QuarterlyReportModal({ onClose, data }: { onClose: () => void; data: unknown }) {
-  const d = (data ?? {}) as QuarterReportModalData;
-  const coveredMonths = d.coveredMonths?.length ? d.coveredMonths.join(", ") : "No monthly reports saved yet";
+  const details = (data ?? {}) as QuarterReportModalData;
+  const coveredMonths = details.coveredMonths?.length ? details.coveredMonths.join(", ") : "No monthly reports saved yet";
 
   return (
     <ModalShell onClose={onClose} wide labelledBy="quarterly-report-title">
@@ -426,7 +233,7 @@ function QuarterlyReportModal({ onClose, data }: { onClose: () => void; data: un
               Quarterly review
             </p>
             <h2 id="quarterly-report-title" className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>
-              Q{d.quarter ?? 1} {d.year ?? 2026}
+              Q{details.quarter ?? 1} {details.year ?? new Date().getFullYear()}
             </h2>
             <p className="mt-1 text-sm" style={{ color: "#8a9e97" }}>
               Built from saved monthly reports across {coveredMonths}.
@@ -440,12 +247,12 @@ function QuarterlyReportModal({ onClose, data }: { onClose: () => void; data: un
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
           <div className="rounded-2xl p-5 mb-5 flex gap-3" style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.15)" }}>
             <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#006c4a" }}>
-              <span className="material-symbols-outlined text-[18px] text-white">auto_awesome</span>
+              <span className="material-symbols-outlined text-[18px] text-white">summarize</span>
             </div>
             <div>
-              <p className="text-sm font-bold mb-2" style={{ color: "#1a1f1e" }}>AI Quarterly Summary</p>
+              <p className="text-sm font-bold mb-2" style={{ color: "#1a1f1e" }}>Saved quarterly summary</p>
               <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
-                {d.summary || "Monthly reports exist in this quarter, but the summary could not be formed yet."}
+                {details.summary || "Monthly reports exist in this quarter, but the saved summary is not available yet."}
               </p>
             </div>
           </div>
@@ -454,13 +261,13 @@ function QuarterlyReportModal({ onClose, data }: { onClose: () => void; data: un
             <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Average completion</p>
               <p className="font-headline font-extrabold text-3xl" style={{ color: "#1a1f1e" }}>
-                {d.avgCompletion === null ? "—" : `${d.avgCompletion}%`}
+                {details.avgCompletion === null ? "—" : `${details.avgCompletion}%`}
               </p>
             </div>
             <div className="rounded-2xl p-4" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Top pillar</p>
               <p className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>
-                {d.topPillar || "Not identified yet"}
+                {details.topPillar || "Not identified yet"}
               </p>
             </div>
           </div>
@@ -468,18 +275,27 @@ function QuarterlyReportModal({ onClose, data }: { onClose: () => void; data: un
           <div className="rounded-2xl p-4 mb-5" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>Reflection</p>
             <p className="text-sm leading-relaxed" style={{ color: "#4a5c54" }}>
-              {d.reflection || "The quarter summary is waiting on more monthly reporting depth."}
+              {details.reflection || "The quarter reflection is waiting on stronger monthly reporting depth."}
             </p>
           </div>
 
-          {d.nextFocus && (
+          {details.userNote ? (
+            <div className="rounded-2xl p-4 mb-5" style={{ background: "rgba(0,108,74,0.04)", border: "1.5px solid rgba(0,108,74,0.10)" }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#8a9e97" }}>Your Context</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "#4a5c54" }}>
+                {details.userNote}
+              </p>
+            </div>
+          ) : null}
+
+          {details.nextFocus ? (
             <div className="rounded-2xl p-4" style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.12)" }}>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#006c4a" }}>Next focus</p>
               <p className="text-sm font-semibold leading-relaxed" style={{ color: "#1a1f1e" }}>
-                {d.nextFocus}
+                {details.nextFocus}
               </p>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="shrink-0 border-t px-4 py-4 sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
@@ -492,57 +308,13 @@ function QuarterlyReportModal({ onClose, data }: { onClose: () => void; data: un
   );
 }
 
-// ── Yearly Report Modal (opens from the old "View Report" button) ─────────────
-function YearlyReportModal({ onClose, data }: { onClose: () => void; data: unknown }) {
-  const d = data as { year?: number; completionRate?: number; topPillar?: string; streak?: number } | undefined;
-  return (
-    <ModalShell onClose={onClose} wide labelledBy="yearly-report-title">
-      <div className="flex min-h-0 flex-col">
-        <div className="flex items-start justify-between px-4 pb-5 pt-5 sm:px-6 sm:pt-6">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>Annual Report</p>
-            <h2 id="yearly-report-title" className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>{d?.year ?? 2026} Summary</h2>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl transition-opacity hover:opacity-60" style={{ color: "#a8b5af" }}>
-            <span className="material-symbols-outlined text-[20px]">close</span>
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-          {[{ label: "Completion Rate", value: `${d?.completionRate ?? 94}%` }, { label: "Best Streak", value: `${d?.streak ?? 42}d` }].map((s) => (
-            <div key={s.label} className="rounded-2xl p-4 text-center" style={{ background: "#f9fbfa", border: "1.5px solid rgba(0,0,0,0.07)" }}>
-              <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#a8b5af" }}>{s.label}</p>
-              <p className="font-headline font-bold text-2xl" style={{ color: "#1a1f1e" }}>{s.value}</p>
-            </div>
-          ))}
-        </div>
-        <div className="rounded-2xl p-4 mb-5 flex gap-2" style={{ background: "rgba(0,108,74,0.06)", border: "1.5px solid rgba(0,108,74,0.12)" }}>
-          <span className="material-symbols-outlined text-[18px] flex-shrink-0" style={{ color: "#006c4a" }}>auto_awesome</span>
-          <p className="text-xs leading-relaxed" style={{ color: "#4a5c54" }}>
-            Top pillar: <strong>{d?.topPillar ?? "Career"}</strong>. Your execution velocity peaked in Q3. View the full report for AI master review and Hall of Fame highlights.
-          </p>
-        </div>
-        </div>
-        <div className="flex shrink-0 flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:px-6" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
-          <button onClick={onClose} className="flex-1 py-3 rounded-2xl text-sm font-bold transition-opacity hover:opacity-70" style={{ border: "1.5px solid rgba(0,0,0,0.1)", color: "#6b7c75" }}>Close</button>
-          <a href={`/dashboard/reports/${d?.year ?? 2026}`} className="flex-1 py-3 rounded-2xl text-sm font-bold text-white text-center transition-opacity hover:opacity-80" style={{ background: "#006c4a" }}>
-            Full Report
-          </a>
-        </div>
-      </div>
-    </ModalShell>
-  );
-}
-
-// ── Router ────────────────────────────────────────────────────────────────────
 export function ReportModal({ open, onClose, type, data }: Props) {
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -553,18 +325,9 @@ export function ReportModal({ open, onClose, type, data }: Props) {
 
   if (!open) return null;
 
-  switch (type) {
-    case "daily-report":
-      return <DayRecapModal onClose={onClose} />;
-    case "quarterly-report":
-      return <QuarterlyReportModal onClose={onClose} data={data} />;
-    case "weekly-report":
-      return <WeeklyReportModal onClose={onClose} />;
-    case "monthly-report":
-      return <MonthlyInsightModal onClose={onClose} data={data} />;
-    case "yearly-report":
-      return <YearlyReportModal onClose={onClose} data={data} />;
-    default:
-      return null;
+  if (type === "quarterly-report") {
+    return <QuarterlyReportModal onClose={onClose} data={data} />;
   }
+
+  return <ArchiveFallbackModal onClose={onClose} type={type} data={data} />;
 }

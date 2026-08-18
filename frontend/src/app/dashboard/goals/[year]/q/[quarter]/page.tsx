@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { GoalCompletionButton } from "@/components/goals/GoalCompletionButton";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
+import { averageProgress, getGoalDisplayProgress, isGoalComplete } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
 import type { MonthlyGoal } from "@/lib/types";
 
@@ -85,9 +86,7 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
     const goals = quarterMonthlyGoals.filter((goal) => goal.month === month);
     const mainGoal = goals.find((goal) => goal.isMain) ?? goals[0] ?? null;
     const supportGoals = goals.filter((goal) => !mainGoal || goal.id !== mainGoal.id);
-    const progress = goals.length
-      ? Math.round(goals.reduce((sum, goal) => sum + goal.progress, 0) / goals.length)
-      : 0;
+    const progress = averageProgress(goals);
     const weeklyCount = goals.reduce((count, goal) => count + (weeklyByMonthly.get(goal.id)?.length ?? 0), 0);
     const yearlyGoal = mainGoal ? yearlyGoals.find((goal) => goal.id === mainGoal.yearlyGoalId) : null;
     return {
@@ -103,11 +102,9 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
   });
 
   const mainGoalCount = quarterMonthlyGoals.filter((goal) => goal.isMain).length;
-  const completedCount = quarterMonthlyGoals.filter((goal) => goal.status === "completed" || goal.progress >= 100).length;
+  const completedCount = quarterMonthlyGoals.filter((goal) => isGoalComplete(goal)).length;
   const missingWeeklyCount = quarterMonthlyGoals.filter((goal) => (weeklyByMonthly.get(goal.id)?.length ?? 0) === 0).length;
-  const overallProgress = quarterMonthlyGoals.length
-    ? Math.round(quarterMonthlyGoals.reduce((sum, goal) => sum + goal.progress, 0) / quarterMonthlyGoals.length)
-    : 0;
+  const overallProgress = averageProgress(quarterMonthlyGoals);
   const mainFocus = monthCards.find((card) => card.mainGoal)?.mainGoal ?? null;
   const currentMonthInQuarter = months.includes(currentMonth);
   const currentYear = Number(today.slice(0, 4));
@@ -278,11 +275,11 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                       {card.mainGoal && card.mainGoal.editable ? (
                         <>
                           <GoalCompletionButton
-                            completed={card.mainGoal.status === "completed" || card.mainGoal.progress >= 100}
+                            completed={isGoalComplete(card.mainGoal)}
                             onClick={() =>
                               updateMonthlyGoal(card.mainGoal!.id, {
-                                status: card.mainGoal!.status === "completed" || card.mainGoal!.progress >= 100 ? "active" : "completed",
-                                progress: card.mainGoal!.status === "completed" || card.mainGoal!.progress >= 100 ? Math.min(card.mainGoal!.progress, 99) : 100,
+                                status: isGoalComplete(card.mainGoal!) ? "active" : "completed",
+                                progress: isGoalComplete(card.mainGoal!) ? Math.min(getGoalDisplayProgress(card.mainGoal!), 99) : 100,
                               })
                             }
                           />
@@ -387,11 +384,11 @@ export default function QuarterPage({ params }: { params: Promise<{ year: string
                               {goal.editable ? (
                                 <>
                                   <GoalCompletionButton
-                                    completed={goal.status === "completed" || goal.progress >= 100}
+                                    completed={isGoalComplete(goal)}
                                     onClick={() =>
                                       updateMonthlyGoal(goal.id, {
-                                        status: goal.status === "completed" || goal.progress >= 100 ? "active" : "completed",
-                                        progress: goal.status === "completed" || goal.progress >= 100 ? Math.min(goal.progress, 99) : 100,
+                                        status: isGoalComplete(goal) ? "active" : "completed",
+                                        progress: isGoalComplete(goal) ? Math.min(getGoalDisplayProgress(goal), 99) : 100,
                                       })
                                     }
                                   />

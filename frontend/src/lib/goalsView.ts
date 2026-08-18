@@ -1,4 +1,12 @@
-import type { DailyPriority, GoalStatus, MonthlyGoal, WeeklyGoal, WeekStartsOn, YearlyGoal } from "./types";
+import type {
+  DailyPriority,
+  GoalStatus,
+  GoalTruthStatus,
+  MonthlyGoal,
+  WeeklyGoal,
+  WeekStartsOn,
+  YearlyGoal,
+} from "./types";
 
 export const GOALS_MONTH_NAMES = [
   "January",
@@ -28,6 +36,10 @@ type GoalLike = {
   progress?: number;
   targetDate?: string;
   completed?: boolean;
+  truthStatus?: GoalTruthStatus;
+  truthProgress?: number;
+  truthReason?: string;
+  hasActivity?: boolean;
 };
 
 type MonthExecutionSummary = {
@@ -76,6 +88,10 @@ export function getQuarterFromMonth(month: number): number {
   return Math.min(4, Math.max(1, Math.ceil(month / 3)));
 }
 
+function clampPercent(value: number | undefined): number {
+  return Math.max(0, Math.min(100, Math.round(value ?? 0)));
+}
+
 function isOverdue(targetDate?: string, todayIso = new Date().toISOString().slice(0, 10)): boolean {
   if (!targetDate) return false;
   const due = new Date(`${targetDate}T12:00:00`);
@@ -85,6 +101,18 @@ function isOverdue(targetDate?: string, todayIso = new Date().toISOString().slic
 }
 
 export function classifyGoalState(goal: GoalLike, todayIso = new Date().toISOString().slice(0, 10)): GoalStateKey {
+  if (goal.truthStatus === "completed") {
+    return "completed";
+  }
+  if (goal.truthStatus === "at_risk") {
+    return "at-risk";
+  }
+  if (goal.truthStatus === "not_started") {
+    return "not-started";
+  }
+  if (goal.truthStatus === "review_ready" || goal.truthStatus === "in_progress") {
+    return "on-track";
+  }
   if (goal.completed || goal.status === "completed" || (goal.progress ?? 0) >= 100) {
     return "completed";
   }
@@ -97,12 +125,27 @@ export function classifyGoalState(goal: GoalLike, todayIso = new Date().toISOStr
   return "on-track";
 }
 
-function isGoalComplete(goal: GoalLike): boolean {
+export function isGoalComplete(goal: GoalLike): boolean {
+  if (goal.truthStatus) {
+    return goal.truthStatus === "completed";
+  }
   return goal.completed || goal.status === "completed" || (goal.progress ?? 0) >= 100;
 }
 
+export function getGoalDisplayProgress(goal: GoalLike): number {
+  if (isGoalComplete(goal)) return 100;
+  return clampPercent(goal.truthProgress ?? goal.progress);
+}
+
+export function getGoalDisplayStatusLabel(goal: GoalLike): string {
+  if (goal.truthStatus === "review_ready") {
+    return "Review Ready";
+  }
+  return getGoalStateMeta(classifyGoalState(goal)).label;
+}
+
 function goalProgress(goal: GoalLike): number {
-  return isGoalComplete(goal) ? 100 : Math.max(0, Math.min(100, goal.progress ?? 0));
+  return getGoalDisplayProgress(goal);
 }
 
 function getYearMonthIndex(year: number, month: number): number {
@@ -121,7 +164,7 @@ function compareMonthlyGoals(a: MonthlyGoal, b: MonthlyGoal): number {
 }
 
 function hasCompletedDailyPriority(priority: DailyPriority): boolean {
-  return priority.completed || priority.status === "completed";
+  return isGoalComplete(priority) || priority.completed || priority.status === "completed";
 }
 
 function computeMonthlyExecutionProgress(
@@ -161,6 +204,8 @@ function hasMonthRecoverySignal(summary: MonthExecutionSummary): boolean {
   return (
     summary.readyForReview ||
     summary.executionProgress > 0 ||
+    summary.monthGoal.hasActivity ||
+    summary.monthGoal.truthStatus === "review_ready" ||
     summary.monthGoal.status === "active" ||
     summary.weeklyGoals.length > 0 ||
     summary.dailyPriorities.length > 0
@@ -174,7 +219,7 @@ export function deriveYearlyGoalReviewSummary(
   dailyPrioritiesByWeekly: Map<string, DailyPriority[]>,
   todayIso = new Date().toISOString().slice(0, 10),
 ): YearlyGoalReviewSummary {
-  if (yearlyGoal.status === "completed") {
+  if (isGoalComplete(yearlyGoal)) {
     return {
       state: "completed",
       progress: 100,
@@ -244,7 +289,7 @@ export function deriveYearlyGoalReviewSummary(
       progress: summary.executionProgress,
     })),
   );
-  const progress = Math.max(yearlyGoal.progress ?? 0, derivedProgress);
+  const progress = Math.max(getGoalDisplayProgress(yearlyGoal), derivedProgress);
 
   if (unresolvedMissedMonths.length > 0) {
     const missedCount = unresolvedMissedMonths.length;
@@ -371,9 +416,9 @@ export function getProgressTone(progress: number): string {
   return "#94a3b8";
 }
 
-export function averageProgress<T extends { progress: number }>(items: T[]): number {
+export function averageProgress<T extends { progress?: number; truthProgress?: number; truthStatus?: GoalTruthStatus; completed?: boolean; status?: GoalStatus }>(items: T[]): number {
   if (items.length === 0) return 0;
-  return Math.round(items.reduce((sum, item) => sum + item.progress, 0) / items.length);
+  return Math.round(items.reduce((sum, item) => sum + getGoalDisplayProgress(item), 0) / items.length);
 }
 
 export function countGoalStates<T extends GoalLike>(
@@ -544,19 +589,19 @@ export function groupDailyByWeekly(priorities: DailyPriority[]) {
 }
 
 export function countCompletedDaily(priorities: DailyPriority[]) {
-  return priorities.filter((priority) => priority.completed || priority.status === "completed").length;
+  return priorities.filter((priority) => isGoalComplete(priority)).length;
 }
 
 export function countInProgressDaily(priorities: DailyPriority[]) {
-  return priorities.filter((priority) => !priority.completed && classifyGoalState(priority) === "on-track").length;
+  return priorities.filter((priority) => !isGoalComplete(priority) && classifyGoalState(priority) === "on-track").length;
 }
 
 export function countNotStartedDaily(priorities: DailyPriority[]) {
-  return priorities.filter((priority) => !priority.completed && classifyGoalState(priority) === "not-started").length;
+  return priorities.filter((priority) => !isGoalComplete(priority) && classifyGoalState(priority) === "not-started").length;
 }
 
 export function countAtRiskDaily(priorities: DailyPriority[]) {
-  return priorities.filter((priority) => !priority.completed && classifyGoalState(priority) === "at-risk").length;
+  return priorities.filter((priority) => !isGoalComplete(priority) && classifyGoalState(priority) === "at-risk").length;
 }
 
 export function asPercent(part: number, total: number): number {

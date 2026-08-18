@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { GoalCompletionButton } from "@/components/goals/GoalCompletionButton";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
+import { averageProgress, getGoalDisplayProgress, isGoalComplete } from "@/lib/goalsView";
 import { useAppStore } from "@/lib/store";
 
 function formatDateLabel(iso: string) {
@@ -72,10 +73,8 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
   const linkedYearly = linkedMonthly ? yearlyGoals.find((goal) => goal.id === linkedMonthly.yearlyGoalId) ?? null : null;
   const linkedPriorityCount = selectedWeekDailyPriorities.filter((priority) => priority.weeklyGoalId).length;
   const unlinkedPriorityCount = selectedWeekDailyPriorities.filter((priority) => !priority.weeklyGoalId).length;
-  const completedGoals = weekGoals.filter((goal) => goal.status === "completed" || goal.progress >= 100).length;
-  const weekProgress = weekGoals.length
-    ? Math.round(weekGoals.reduce((sum, goal) => sum + goal.progress, 0) / weekGoals.length)
-    : 0;
+  const completedGoals = weekGoals.filter((goal) => isGoalComplete(goal)).length;
+  const weekProgress = averageProgress(weekGoals);
 
   const groupedPriorities = [...selectedWeekDailyPriorities]
     .sort((a, b) => a.date.localeCompare(b.date) || (a.isMain === b.isMain ? a.title.localeCompare(b.title) : a.isMain ? -1 : 1))
@@ -211,11 +210,11 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
                 {mainGoal && mainGoal.editable ? (
                   <>
                     <GoalCompletionButton
-                      completed={mainGoal.status === "completed" || mainGoal.progress >= 100}
+                      completed={isGoalComplete(mainGoal)}
                       onClick={() =>
                         updateWeeklyGoal(mainGoal.id, {
-                          status: mainGoal.status === "completed" || mainGoal.progress >= 100 ? "active" : "completed",
-                          progress: mainGoal.status === "completed" || mainGoal.progress >= 100 ? Math.min(mainGoal.progress, 99) : 100,
+                          status: isGoalComplete(mainGoal) ? "active" : "completed",
+                          progress: isGoalComplete(mainGoal) ? Math.min(getGoalDisplayProgress(mainGoal), 99) : 100,
                         })
                       }
                     />
@@ -306,7 +305,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
                             {goal.isMain ? "Main goal" : "Secondary goal"}
                           </span>
                           <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>
-                            {goal.progress}% complete
+                            {getGoalDisplayProgress(goal)}% complete
                           </span>
                         </div>
                         <h3 className="font-semibold text-base mt-3" style={{ color: "#1a1f1e" }}>
@@ -320,11 +319,11 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
                         {goal.editable ? (
                           <>
                             <GoalCompletionButton
-                              completed={goal.status === "completed" || goal.progress >= 100}
+                              completed={isGoalComplete(goal)}
                               onClick={() =>
                                 updateWeeklyGoal(goal.id, {
-                                  status: goal.status === "completed" || goal.progress >= 100 ? "active" : "completed",
-                                  progress: goal.status === "completed" || goal.progress >= 100 ? Math.min(goal.progress, 99) : 100,
+                                  status: isGoalComplete(goal) ? "active" : "completed",
+                                  progress: isGoalComplete(goal) ? Math.min(getGoalDisplayProgress(goal), 99) : 100,
                                 })
                               }
                             />
@@ -350,7 +349,7 @@ export default function WeeklySprintPage({ params }: { params: Promise<{ year: s
                       </div>
                     </div>
                     <div className="mt-4 h-2 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.06)" }}>
-                      <div className="h-full rounded-full" style={{ width: `${goal.progress}%`, background: "#006c4a" }} />
+                      <div className="h-full rounded-full" style={{ width: `${getGoalDisplayProgress(goal)}%`, background: "#006c4a" }} />
                     </div>
                   </div>
                 ))}

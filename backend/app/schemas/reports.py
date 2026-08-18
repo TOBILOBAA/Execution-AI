@@ -10,29 +10,34 @@ from .common import ReportType, ReportStatus
 class DailyReportRequest(BaseModel):
     session_id: UUID
     date: date
+    user_note: str | None = None
 
 
 class WeeklyReportRequest(BaseModel):
     session_id: UUID
     year: int
     week_number: int
+    user_note: str | None = None
 
 
 class MonthlyReportRequest(BaseModel):
     session_id: UUID
     year: int
     month: int = Field(..., ge=1, le=12)
+    user_note: str | None = None
 
 
 class QuarterlyReportRequest(BaseModel):
     session_id: UUID
     year: int
     quarter: int = Field(..., ge=1, le=4)
+    user_note: str | None = None
 
 
 class YearlyReportRequest(BaseModel):
     session_id: UUID
     year: int
+    user_note: str | None = None
 
 
 # ─── Computed metrics snapshots (code-produced, not LLM) ──────────────────────
@@ -173,6 +178,7 @@ class ReportResponse(BaseModel):
     period_year: int
     metrics: dict
     ai_narrative: dict | None
+    user_note: str | None = None
     tailored_pattern: str | None = None
     tailored_action: str | None = None
     has_execution_data: bool = False

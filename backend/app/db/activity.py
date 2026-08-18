@@ -23,9 +23,21 @@ def _analytics_relation_missing(exc: APIError) -> bool:
     )
 
 
+def _analytics_session_missing(exc: APIError, table_name: str) -> bool:
+    details = str(exc).lower()
+    return table_name in details and (
+        "session_id_fkey" in details
+        or 'is not present in table "sessions"' in details
+        or "violates foreign key constraint" in details
+    )
+
+
 def _guard_analytics(exc: APIError) -> bool:
     if _analytics_relation_missing(exc):
         logger.warning("analytics_schema_missing", error=str(exc))
+        return True
+    if _analytics_session_missing(exc, TABLE):
+        logger.warning("analytics_session_missing", error=str(exc))
         return True
     return False
 
@@ -107,6 +119,9 @@ def upsert_user_device_activity(db: Client, payload: dict) -> dict | None:
         if "user_device_activity" in details and ("does not exist" in details or "schema cache" in details or "pgrst" in details):
             logger.warning("analytics_device_schema_missing", error=str(exc))
             return None
+        if _analytics_session_missing(exc, DEVICE_TABLE):
+            logger.warning("analytics_device_session_missing", error=str(exc))
+            return None
         raise
     return result.data[0] if result.data else None
 
@@ -128,6 +143,9 @@ def list_user_device_activity(
         details = str(exc).lower()
         if "user_device_activity" in details and ("does not exist" in details or "schema cache" in details or "pgrst" in details):
             logger.warning("analytics_device_schema_missing", error=str(exc))
+            return []
+        if _analytics_session_missing(exc, DEVICE_TABLE):
+            logger.warning("analytics_device_session_missing", error=str(exc))
             return []
         raise
     return result.data or []

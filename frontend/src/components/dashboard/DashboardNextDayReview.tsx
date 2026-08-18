@@ -9,6 +9,7 @@ import { AddHabitModal } from "@/components/onboarding/AddHabitModal";
 import type { Category, FoundationalHabit, HabitFrequency, MonthlyGoal, WeeklyGoal } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { describeSyncError } from "@/lib/apiErrors";
+import { DAILY_MAIN_GOAL_CAP, DAILY_SECONDARY_GOAL_CAP } from "@/lib/planningConstraints";
 
 type EditableReviewItem = ApiNextDayReviewItem & { localId: string; yearly_goal_ref?: string };
 type RecoverableEntry = { id: string; title: string; kind: "main" | "task" | "habit" };
@@ -26,13 +27,11 @@ type PlannerModalState =
   | { type: "task"; item?: EditableReviewItem }
   | { type: "habit"; habit?: FoundationalHabit };
 
-const MAX_MAIN_PRIORITIES = 3;
 const REVIEW_DISMISS_KEY_PREFIX = "execution-ai:next-day-review:dismissed";
 
 function makeReviewDismissKey(sessionId: string, today: string, sourceDate: string) {
   return `${REVIEW_DISMISS_KEY_PREFIX}:${sessionId}:${today}:${sourceDate}`;
 }
-
 function makeLocalId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -168,18 +167,25 @@ function addUniqueItem(items: EditableReviewItem[], item: ApiNextDayReviewItem, 
 }
 
 function addUniqueMainItem(items: EditableReviewItem[], item: ApiNextDayReviewItem, prefix: string) {
-  if (items.length >= MAX_MAIN_PRIORITIES) {
+  if (items.length >= DAILY_MAIN_GOAL_CAP) {
     return items;
   }
   return addUniqueItem(items, item, prefix);
 }
 
-function mergeUniqueItems(current: EditableReviewItem[], incoming: ApiNextDayReviewItem[], prefix: string) {
-  return incoming.reduce((acc, item) => addUniqueItem(acc, item, prefix), current);
+function addUniqueSecondaryItem(items: EditableReviewItem[], item: ApiNextDayReviewItem, prefix: string) {
+  if (items.length >= DAILY_SECONDARY_GOAL_CAP) {
+    return items;
+  }
+  return addUniqueItem(items, item, prefix);
 }
 
 function mergeUniqueMainItems(current: EditableReviewItem[], incoming: ApiNextDayReviewItem[], prefix: string) {
-  return incoming.slice(0, MAX_MAIN_PRIORITIES).reduce((acc, item) => addUniqueMainItem(acc, item, prefix), current);
+  return incoming.slice(0, DAILY_MAIN_GOAL_CAP).reduce((acc, item) => addUniqueMainItem(acc, item, prefix), current);
+}
+
+function mergeUniqueSecondaryItems(current: EditableReviewItem[], incoming: ApiNextDayReviewItem[], prefix: string) {
+  return incoming.slice(0, DAILY_SECONDARY_GOAL_CAP).reduce((acc, item) => addUniqueSecondaryItem(acc, item, prefix), current);
 }
 
 function findCategoryIdByTag(categories: Category[], tag?: string) {
@@ -711,7 +717,8 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
   const planningTomorrow = Boolean(planDate && review && review.today === planDate);
   const cleanPriorities = priorities.map(toReviewItem).filter((item) => item.title.length > 0);
   const cleanTasks = tasks.map(toReviewItem).filter((item) => item.title.length > 0);
-  const mainPriorityCapReached = priorities.length >= MAX_MAIN_PRIORITIES;
+  const mainPriorityCapReached = priorities.length >= DAILY_MAIN_GOAL_CAP;
+  const secondaryTaskCapReached = tasks.length >= DAILY_SECONDARY_GOAL_CAP;
 
   const availablePrioritySuggestions = useMemo(
     () =>
@@ -790,8 +797,12 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
   async function handleApprove() {
     const currentReview = review;
     if (!sessionId || !currentReview) return;
-    if (cleanPriorities.length === 0) {
-      setError("Add at least one main goal before saving the plan.");
+    if (cleanPriorities.length !== DAILY_MAIN_GOAL_CAP) {
+      setError("Keep exactly one main goal before saving the plan.");
+      return;
+    }
+    if (cleanTasks.length > DAILY_SECONDARY_GOAL_CAP) {
+      setError("Keep this plan to at most three secondary goals before saving.");
       return;
     }
     setSaving(true);
@@ -845,7 +856,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
       }
       const draft = result.draft as DailyAIDraft;
       const aiPriorities = (draft.top_priorities ?? [])
-        .slice(0, MAX_MAIN_PRIORITIES)
+        .slice(0, DAILY_MAIN_GOAL_CAP)
         .filter((item) => item.title?.trim())
         .map<EditableReviewItem>((item) => ({
           localId: makeLocalId("priority"),
@@ -859,6 +870,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
           is_main: true,
         }));
       const aiTasks = (draft.secondary_tasks ?? [])
+        .slice(0, DAILY_SECONDARY_GOAL_CAP)
         .filter((item) => item.title?.trim())
         .map<EditableReviewItem>((item) => ({
           localId: makeLocalId("task"),
@@ -872,7 +884,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
           is_main: false,
         }));
       setPriorities((current) => mergeUniqueMainItems(current, aiPriorities, "priority"));
-      setTasks((current) => mergeUniqueItems(current, aiTasks, "task"));
+      setTasks((current) => mergeUniqueSecondaryItems(current, aiTasks, "task"));
       setAiNote(
         draft.reasoning?.trim()
           || (draft.foundational_habits?.length
@@ -911,7 +923,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     setPriorities((current) =>
       editingPriority
         ? current.map((item) => (item.localId === editingPriority.localId ? nextItem : item))
-        : current.length >= MAX_MAIN_PRIORITIES
+        : current.length >= DAILY_MAIN_GOAL_CAP
           ? current
           : [...current, nextItem],
     );
@@ -939,7 +951,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     setTasks((current) =>
       plannerModal?.type === "task" && plannerModal.item
         ? current.map((item) => (item.localId === plannerModal.item?.localId ? nextItem : item))
-        : [...current, nextItem],
+        : current.length >= DAILY_SECONDARY_GOAL_CAP
+          ? current
+          : [...current, nextItem],
     );
     setPlannerModal(null);
   }
@@ -1209,7 +1223,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                         onRemove={(localId) => setPriorities((current) => current.filter((item) => item.localId !== localId))}
                         onAddSuggestion={(item) => setPriorities((current) => addUniqueMainItem(current, { ...item, is_main: true }, "priority"))}
                         addDisabled={mainPriorityCapReached}
-                        addDisabledCopy="Main goal cap reached"
+                        addDisabledCopy="Main goal saved"
                       />
                     ) : mobilePlanView === "tasks" ? (
                       <PlannerSection
@@ -1224,7 +1238,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                         onAdd={() => setPlannerModal({ type: "task" })}
                         onEdit={(item) => setPlannerModal({ type: "task", item })}
                         onRemove={(localId) => setTasks((current) => current.filter((item) => item.localId !== localId))}
-                        onAddSuggestion={(item) => setTasks((current) => addUniqueItem(current, { ...item, is_main: false }, "task"))}
+                        onAddSuggestion={(item) => setTasks((current) => addUniqueSecondaryItem(current, { ...item, is_main: false }, "task"))}
+                        addDisabled={secondaryTaskCapReached}
+                        addDisabledCopy="3 secondary goals saved"
                       />
                     ) : (
                       <HabitSection
@@ -1303,7 +1319,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                         onRemove={(localId) => setPriorities((current) => current.filter((item) => item.localId !== localId))}
                         onAddSuggestion={(item) => setPriorities((current) => addUniqueMainItem(current, { ...item, is_main: true }, "priority"))}
                         addDisabled={mainPriorityCapReached}
-                        addDisabledCopy="Main goal cap reached"
+                        addDisabledCopy="Main goal saved"
                       />
 
                       <PlannerSection
@@ -1318,7 +1334,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                         onAdd={() => setPlannerModal({ type: "task" })}
                         onEdit={(item) => setPlannerModal({ type: "task", item })}
                         onRemove={(localId) => setTasks((current) => current.filter((item) => item.localId !== localId))}
-                        onAddSuggestion={(item) => setTasks((current) => addUniqueItem(current, { ...item, is_main: false }, "task"))}
+                        onAddSuggestion={(item) => setTasks((current) => addUniqueSecondaryItem(current, { ...item, is_main: false }, "task"))}
+                        addDisabled={secondaryTaskCapReached}
+                        addDisabledCopy="3 secondary goals saved"
                       />
                     </div>
 
@@ -1404,6 +1422,8 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
         <AddDailyPriorityModal
           categories={categories}
           weeklyGoals={weeklyGoals}
+          mainGoalCapReached={!plannerModal.item && mainPriorityCapReached}
+          mainGoalCapMessage="You can only save 1 main goal for this day."
           initialTitle={plannerModal.item?.title}
           initialCategoryId={inferCategoryId(plannerModal.item ?? {}, categories, weeklyGoals, monthlyGoals) ?? findCategoryIdByTag(categories, plannerModal.item?.tag)}
           initialWeeklyGoalId={inferWeeklyGoalId(plannerModal.item ?? {}, weeklyGoals) ?? plannerModal.item?.weekly_goal_id}
@@ -1418,6 +1438,8 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
         <AddSecondaryTaskModal
           categories={categories}
           weeklyGoals={weeklyGoals}
+          secondaryGoalCapReached={!plannerModal.item && secondaryTaskCapReached}
+          secondaryGoalCapMessage="You can only save up to 3 secondary goals for this day."
           initialTitle={plannerModal.item?.title}
           initialCategoryId={inferCategoryId(plannerModal.item ?? {}, categories, weeklyGoals, monthlyGoals) ?? findCategoryIdByTag(categories, plannerModal.item?.tag)}
           initialWeeklyGoalId={inferWeeklyGoalId(plannerModal.item ?? {}, weeklyGoals) ?? plannerModal.item?.weekly_goal_id}

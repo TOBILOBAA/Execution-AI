@@ -37,7 +37,7 @@ def generate_daily_report(
     Past dates can be generated at any time.
     """
     try:
-        return report_service.generate_daily_report(db, body.session_id, body.date)
+        return report_service.generate_daily_report(db, body.session_id, body.date, user_note=body.user_note)
     except RuntimeError as exc:
         raise AIGenerationError(str(exc)) from exc
 
@@ -49,7 +49,7 @@ def generate_weekly_report(
 ):
     """Generate or regenerate a weekly execution report."""
     try:
-        return report_service.generate_weekly_report(db, body.session_id, body.year, body.week_number)
+        return report_service.generate_weekly_report(db, body.session_id, body.year, body.week_number, user_note=body.user_note)
     except RuntimeError as exc:
         raise AIGenerationError(str(exc)) from exc
 
@@ -61,7 +61,7 @@ def generate_monthly_report(
 ):
     """Generate or regenerate a monthly execution report."""
     try:
-        return report_service.generate_monthly_report(db, body.session_id, body.year, body.month)
+        return report_service.generate_monthly_report(db, body.session_id, body.year, body.month, user_note=body.user_note)
     except RuntimeError as exc:
         raise AIGenerationError(str(exc)) from exc
 
@@ -73,7 +73,7 @@ def generate_yearly_report(
 ):
     """Generate or regenerate a yearly execution report."""
     try:
-        return report_service.generate_yearly_report(db, body.session_id, body.year)
+        return report_service.generate_yearly_report(db, body.session_id, body.year, user_note=body.user_note)
     except RuntimeError as exc:
         raise AIGenerationError(str(exc)) from exc
 
@@ -85,6 +85,6 @@ def generate_quarterly_report(
 ):
     """Generate or regenerate a quarterly execution report."""
     try:
-        return report_service.generate_quarterly_report(db, body.session_id, body.year, body.quarter)
+        return report_service.generate_quarterly_report(db, body.session_id, body.year, body.quarter, user_note=body.user_note)
     except RuntimeError as exc:
         raise AIGenerationError(str(exc)) from exc

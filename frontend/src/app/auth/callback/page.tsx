@@ -53,9 +53,9 @@ export default function AuthCallbackPage() {
         setStep("Restoring your workspace");
         setMessage("Signing you in…");
         await useAppStore.getState().hydrateAuthFromSupabase();
-        const done = useAppStore.getState().onboardingComplete;
+        const { onboardingComplete, backendReady } = useAppStore.getState();
         setStep("Redirecting");
-        router.replace(done ? "/dashboard" : "/onboarding");
+        router.replace(backendReady ? (onboardingComplete ? "/dashboard" : "/onboarding") : "/auth");
         return;
       }
       const hash = window.location.hash.replace(/^#/, "");
@@ -74,9 +74,9 @@ export default function AuthCallbackPage() {
             return;
           }
           await useAppStore.getState().hydrateAuthFromSupabase();
-          const done = useAppStore.getState().onboardingComplete;
+          const { onboardingComplete, backendReady } = useAppStore.getState();
           setStep("Redirecting");
-          router.replace(done ? "/dashboard" : "/onboarding");
+          router.replace(backendReady ? (onboardingComplete ? "/dashboard" : "/onboarding") : "/auth");
           return;
         }
       }

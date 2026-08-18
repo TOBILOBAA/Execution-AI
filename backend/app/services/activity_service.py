@@ -173,6 +173,9 @@ def _safe_update_session_touch(db: Client, session_id: UUID, updates: dict) -> N
             logger.warning("analytics_session_columns_missing", session_id=str(session_id), error=str(exc))
             return
         raise
+    except IndexError as exc:
+        logger.warning("analytics_session_touch_skipped", session_id=str(session_id), error=str(exc))
+        return
 
 
 def _merge_daily_activity(existing: dict | None, payload: dict) -> dict:

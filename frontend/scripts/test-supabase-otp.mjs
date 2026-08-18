@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import { buildResendTestEmail } from "./test-email.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -49,7 +50,7 @@ if (!url || !key) {
   process.exit(1);
 }
 
-const testEmail = `execution-ai-otp-probe-${Date.now()}@example.com`;
+const testEmail = buildResendTestEmail("execution-ai-otp-probe");
 console.log("Supabase URL:", url);
 console.log("Anon key prefix:", key.slice(0, 12) + "…");
 console.log("Probe email:", testEmail);

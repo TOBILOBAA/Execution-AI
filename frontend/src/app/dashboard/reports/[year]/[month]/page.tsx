@@ -1,9 +1,10 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { reportsApi, type ApiReport } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
+import { useShallow } from "zustand/react/shallow";
+import { extractReportUserNote } from "@/lib/reportNotes";
 import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 import {
   getMonthlyReport,
@@ -27,37 +28,27 @@ export default function MonthlyReportPage({
   const year = parseInt(yearStr, 10);
   const month = parseInt(monthStr, 10);
   const router = useRouter();
-  const sessionId = useAppStore((state) => state.sessionId);
-  const [reports, setReports] = useState<ApiReport[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { sessionId, activeDashboardDate, reports, reportsLoading, reportsHydrated, syncReports, syncError } = useAppStore(
+    useShallow((state) => ({
+      sessionId: state.sessionId,
+      activeDashboardDate: state.activeDashboardDate,
+      reports: state.reports,
+      reportsLoading: state.reportsLoading,
+      reportsHydrated: state.reportsHydrated,
+      syncReports: state.syncReports,
+      syncError: state.syncError,
+    })),
+  );
 
   useEffect(() => {
     if (!sessionId || Number.isNaN(year) || Number.isNaN(month)) return;
+    void syncReports();
+  }, [month, sessionId, syncReports, year]);
 
-    let cancelled = false;
-
-    reportsApi
-      .list(sessionId)
-      .then((data) => {
-        if (!cancelled) {
-          setReports(data);
-          setError(null);
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Could not load reports.");
-          setReports([]);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId, year, month]);
-
-  const report = useMemo(() => getMonthlyReport(reports ?? [], year, month), [reports, year, month]);
-  const weeklyReports = useMemo(() => getWeeklyReportsForMonth(reports ?? [], year, month), [reports, year, month]);
+  const error = syncError?.includes("Load reports list") ? syncError : null;
+  const showInitialLoading = Boolean(sessionId && !reportsHydrated && reportsLoading && reports.length === 0);
+  const report = useMemo(() => getMonthlyReport(reports, year, month), [reports, year, month]);
+  const weeklyReports = useMemo(() => getWeeklyReportsForMonth(reports, year, month), [reports, year, month]);
 
   if (Number.isNaN(year) || Number.isNaN(month)) {
     return (
@@ -85,9 +76,11 @@ export default function MonthlyReportPage({
   const tasksCompleted = typeof metrics.tasks_completed === "number" ? metrics.tasks_completed : null;
   const tasksTotal = typeof metrics.tasks_total === "number" ? metrics.tasks_total : null;
   const bestWeek = typeof metrics.best_week === "number" ? metrics.best_week : null;
-  const today = new Date();
+  const savedUserNote = extractReportUserNote(report);
   const periodKey = year * 12 + month;
-  const currentPeriodKey = today.getFullYear() * 12 + (today.getMonth() + 1);
+  const referenceYear = Number(activeDashboardDate.slice(0, 4)) || new Date().getFullYear();
+  const referenceMonth = Number(activeDashboardDate.slice(5, 7)) || 1;
+  const currentPeriodKey = referenceYear * 12 + referenceMonth;
   const periodState: "future" | "current" | "past" =
     periodKey > currentPeriodKey ? "future" : periodKey < currentPeriodKey ? "past" : "current";
   const hasSavedAiReview = Boolean(report?.ai_generated_at);
@@ -129,6 +122,11 @@ export default function MonthlyReportPage({
             {label}
           </h1>
         </div>
+        {showInitialLoading && (
+          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c4d0cb" }}>
+            Loading
+          </span>
+        )}
       </div>
 
       {error && (
@@ -145,7 +143,7 @@ export default function MonthlyReportPage({
             Sign in and create a backend session to view your report history.
           </p>
         </div>
-      ) : reports === null ? (
+      ) : showInitialLoading ? (
         <AppLoadingScreen fullscreen={false} title="Loading report" />
       ) : !report ? (
         <div className="rounded-2xl p-6 bg-white" style={{ border: "1.5px dashed rgba(0,108,74,0.25)" }}>
@@ -180,7 +178,7 @@ export default function MonthlyReportPage({
                 Historical snapshot
               </p>
               <p className="text-sm leading-relaxed mt-2" style={{ color: "#4a5c54" }}>
-                This month was reconstructed from saved plans, weekly reports, and execution rows. It is useful as a truthful archive snapshot, but it is not the same as a final saved AI monthly review.
+                This month was reconstructed from saved plans, weekly reports, and execution rows. It is useful as a truthful archive snapshot, but it is not the same as a final saved monthly review.
               </p>
             </div>
           ) : null}
@@ -223,7 +221,7 @@ export default function MonthlyReportPage({
                 <span className="material-symbols-outlined text-[18px] text-white">auto_awesome</span>
               </div>
               <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>
-                {periodState === "current" ? "Live Monthly Snapshot" : isHistoricalSnapshot ? "Historical Monthly Snapshot" : "Monthly Narrative"}
+                {periodState === "current" ? "Live Monthly Snapshot" : isHistoricalSnapshot ? "Historical Monthly Snapshot" : "Saved Monthly Summary"}
               </p>
             </div>
             <p className="text-sm leading-relaxed mb-3" style={{ color: "#4a5c54" }}>
@@ -288,6 +286,17 @@ export default function MonthlyReportPage({
               </p>
             </div>
           </div>
+
+          {savedUserNote && (
+            <div className="bg-white rounded-2xl p-5" style={{ border: "1.5px solid rgba(0,0,0,0.07)" }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#a8b5af" }}>
+                Your Context
+              </p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "#4a5c54" }}>
+                {savedUserNote}
+              </p>
+            </div>
+          )}
 
           <div>
             <h2 className="font-headline font-bold text-xl mb-4" style={{ color: "#1a1f1e" }}>

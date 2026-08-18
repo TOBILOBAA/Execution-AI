@@ -34,6 +34,18 @@ def _drop_unsupported_session_columns(payload: dict, exc: APIError) -> dict:
         )
         if key in payload and _is_missing_column(exc, key)
     }
+    # Recap columns were introduced together, so older schemas that miss one
+    # generally cannot persist either field safely.
+    if (
+        ("pending_recaps" in payload or "handled_recaps" in payload)
+        and (
+            _is_missing_column(exc, "pending_recaps")
+            or _is_missing_column(exc, "handled_recaps")
+        )
+    ):
+        unsupported.update(
+            key for key in ("pending_recaps", "handled_recaps") if key in payload
+        )
     if not unsupported:
         return payload
     return {key: value for key, value in payload.items() if key not in unsupported}
@@ -116,6 +128,8 @@ def get_session(db: Client, session_id: UUID) -> dict | None:
     result = (
         db.table(TABLE).select("*").eq("id", str(session_id)).maybe_single().execute()
     )
+    if result is None or getattr(result, "data", None) is None:
+        return None
     return _hydrate_session_defaults(result.data)
 
 
@@ -145,6 +159,11 @@ def update_session(db: Client, session_id: UUID, updates: dict) -> dict:
             .eq("id", str(session_id))
             .execute()
         )
+    if not getattr(updated, "data", None):
+        refreshed = get_session(db, session_id)
+        if refreshed is not None:
+            return refreshed
+        raise IndexError(f"Session update returned no rows for session_id={session_id}")
     return _hydrate_session_defaults(updated.data[0])
 
 

@@ -6,10 +6,13 @@ import { GoalsHierarchyNav } from "@/components/goals/GoalsHierarchyNav";
 import { GoalsInfoTooltip } from "@/components/goals/GoalsInfoTooltip";
 import { GoalsLoadingShell } from "@/components/goals/GoalsLoadingShell";
 import { useGoalsHierarchy } from "@/hooks/useGoalsHierarchy";
-import { dashboardApi, type ApiDailyPriority, type ApiDashboard } from "@/lib/api";
+import { dashboardApi, type ApiDailyPriority, type ApiDashboard, type ApiHabit } from "@/lib/api";
 import {
+  classifyGoalState,
   countGoalStates,
   formatGoalDay,
+  getGoalDisplayStatusLabel,
+  isGoalComplete,
   getGoalStateMeta,
   getProgressTone,
   listDaysForYearThroughDate,
@@ -50,6 +53,13 @@ function mapApiPriorityToStoreShape(priority: ApiDailyPriority): DailyPriority {
     tag: priority.tag,
     aiSuggested: priority.ai_suggested,
     editable: priority.editable,
+    truthStatus: priority.truth_status as DailyPriority["truthStatus"],
+    truthProgress: priority.truth_progress,
+    truthReason: priority.truth_reason,
+    hasActivity: priority.has_activity,
+    linkedChildrenCount: priority.linked_children_count,
+    completedChildrenCount: priority.completed_children_count,
+    periodClosed: priority.period_closed,
   };
 }
 
@@ -70,12 +80,19 @@ function mapStorePriorityToApiShape(priority: DailyPriority): ApiDailyPriority {
     tag: priority.tag,
     ai_suggested: priority.aiSuggested ?? false,
     editable: priority.editable,
+    truth_status: priority.truthStatus,
+    truth_progress: priority.truthProgress,
+    truth_reason: priority.truthReason,
+    has_activity: priority.hasActivity,
+    linked_children_count: priority.linkedChildrenCount,
+    completed_children_count: priority.completedChildrenCount,
+    period_closed: priority.periodClosed,
     created_at: "",
     updated_at: "",
   };
 }
 
-function mapStoreHabitToApiShape(habit: FoundationalHabit) {
+function mapStoreHabitToApiShape(habit: FoundationalHabit): ApiHabit {
   return {
     id: habit.id,
     session_id: "",
@@ -84,6 +101,9 @@ function mapStoreHabitToApiShape(habit: FoundationalHabit) {
     frequency: habit.frequency,
     active: habit.active,
     category_id: habit.categoryId,
+    yearly_goal_id: habit.yearlyGoalId,
+    monthly_goal_id: habit.monthlyGoalId,
+    weekly_goal_id: habit.weeklyGoalId,
     sort_order: 0,
     completed_today: habit.completedToday,
     streak: habit.streak,
@@ -123,6 +143,9 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     error,
     today,
     yearDailyPriorities,
+    weeklyGoals,
+    monthlyGoals,
+    yearlyGoals,
   } = useGoalsHierarchy(year);
   const dayQuery = searchParams?.get("day");
   const selectedDay = dayQuery && dayQuery.startsWith(`${year}-`) ? dayQuery : null;
@@ -181,6 +204,18 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
 
     return JSON.stringify({ priorities, secondaryTasks, habits });
   }, [selectedDay, storeDailyPriorities, storeHabits, storeSecondaryTasks]);
+  const weeklyGoalById = useMemo(
+    () => new Map(weeklyGoals.map((goal) => [goal.id, goal])),
+    [weeklyGoals],
+  );
+  const monthlyGoalById = useMemo(
+    () => new Map(monthlyGoals.map((goal) => [goal.id, goal])),
+    [monthlyGoals],
+  );
+  const yearlyGoalById = useMemo(
+    () => new Map(yearlyGoals.map((goal) => [goal.id, goal])),
+    [yearlyGoals],
+  );
 
   const immediateSelectedDayDetail = useMemo(() => {
     if (!selectedDay) return null;
@@ -340,13 +375,12 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
     const taskStateCounts = countGoalStates(taskItems, today);
     const completedHabits = activeHabits.filter((habit) => habit.completedToday).length;
     const openHabits = activeHabits.length - completedHabits;
-    const completedCount =
-      taskItems.filter((item) => item.completed || item.status === "completed").length + completedHabits;
+    const completedCount = taskItems.filter((item) => isGoalComplete(item)).length + completedHabits;
     const totalCount = taskItems.length + activeHabits.length;
     const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
     return {
       date,
-      prioritiesCount: totalCount,
+      plannedItemsCount: totalCount,
       completed: taskStateCounts.completed + completedHabits,
       inProgress: taskStateCounts["on-track"],
       atRisk: taskStateCounts["at-risk"],
@@ -504,6 +538,13 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {resolvedSelectedDayDetail.daily_priorities.map((priority) => {
                     const storePriority = mapApiPriorityToStoreShape(priority);
+                    const statusState = classifyGoalState(storePriority, today);
+                    const statusMeta = getGoalStateMeta(statusState);
+                    const linkedWeeklyGoal = priority.weekly_goal_id ? weeklyGoalById.get(priority.weekly_goal_id) : null;
+                    const linkedMonthlyGoal =
+                      linkedWeeklyGoal?.monthlyGoalId ? monthlyGoalById.get(linkedWeeklyGoal.monthlyGoalId) : null;
+                    const linkedYearlyGoal =
+                      linkedMonthlyGoal?.yearlyGoalId ? yearlyGoalById.get(linkedMonthlyGoal.yearlyGoalId) : null;
                     return (
                       <div
                         key={priority.id}
@@ -514,15 +555,27 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                         }}
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <span
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
-                            style={{
-                              background: priority.completed ? "rgba(0,108,74,0.10)" : "rgba(0,0,0,0.05)",
-                              color: priority.completed ? "#006c4a" : "#6b7c75",
-                            }}
-                          >
-                            {priority.completed ? "Done" : "Open"}
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                              style={{
+                                background: priority.completed ? "rgba(0,108,74,0.10)" : "rgba(0,0,0,0.05)",
+                                color: priority.completed ? "#006c4a" : "#6b7c75",
+                              }}
+                            >
+                              {priority.completed ? "Done" : "Open"}
+                            </span>
+                            <span
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                              style={{
+                                background: statusMeta.background,
+                                border: `1px solid ${statusMeta.border}`,
+                                color: statusMeta.text,
+                              }}
+                            >
+                              {getGoalDisplayStatusLabel(storePriority)}
+                            </span>
+                          </div>
                           {selectedDayIsCurrent ? (
                             <button
                               type="button"
@@ -547,6 +600,26 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                           >
                             {priority.title}
                           </p>
+                          <div className="space-y-1">
+                            <p className="text-xs" style={{ color: linkedWeeklyGoal ? "#1f6f5a" : "#8a9e97" }}>
+                              {linkedWeeklyGoal ? `Linked weekly goal: ${linkedWeeklyGoal.title}` : "Unlinked: no weekly goal connected yet."}
+                            </p>
+                            {linkedMonthlyGoal ? (
+                              <p className="text-xs" style={{ color: "#6b7c75" }}>
+                                Monthly parent: {linkedMonthlyGoal.title}
+                              </p>
+                            ) : null}
+                            {linkedYearlyGoal ? (
+                              <p className="text-xs" style={{ color: "#6b7c75" }}>
+                                Yearly parent: {linkedYearlyGoal.title}
+                              </p>
+                            ) : null}
+                            {priority.truth_reason ? (
+                              <p className="text-xs leading-relaxed" style={{ color: "#6b7c75" }}>
+                                {priority.truth_reason}
+                              </p>
+                            ) : null}
+                          </div>
 
                           {selectedDayIsCurrent ? (
                             <button
@@ -594,6 +667,9 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                 <div className="space-y-2">
                   {resolvedSelectedDayDetail.secondary_tasks.map((task) => {
                     const storeTask = mapApiPriorityToStoreShape(task);
+                    const statusState = classifyGoalState(storeTask, today);
+                    const statusMeta = getGoalStateMeta(statusState);
+                    const linkedWeeklyGoal = task.weekly_goal_id ? weeklyGoalById.get(task.weekly_goal_id) : null;
                     return (
                       <div
                         key={task.id}
@@ -601,18 +677,35 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                         style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)" }}
                       >
                         <div className="min-w-0">
-                          <p
-                            className="text-sm font-semibold"
-                            style={{
-                              color: task.completed ? "#8a9e97" : "#1a1f1e",
-                              textDecoration: task.completed ? "line-through" : "none",
-                            }}
-                          >
-                            {task.title}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p
+                              className="text-sm font-semibold"
+                              style={{
+                                color: task.completed ? "#8a9e97" : "#1a1f1e",
+                                textDecoration: task.completed ? "line-through" : "none",
+                              }}
+                            >
+                              {task.title}
+                            </p>
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                              style={{
+                                background: statusMeta.background,
+                                border: `1px solid ${statusMeta.border}`,
+                                color: statusMeta.text,
+                              }}
+                            >
+                              {getGoalDisplayStatusLabel(storeTask)}
+                            </span>
+                          </div>
+                          <p className="text-xs mt-1" style={{ color: linkedWeeklyGoal ? "#1f6f5a" : "#8a9e97" }}>
+                            {linkedWeeklyGoal ? `Linked weekly goal: ${linkedWeeklyGoal.title}` : "Unlinked: no weekly goal connected yet."}
                           </p>
-                          <p className="text-xs mt-1" style={{ color: "#6b7c75" }}>
-                            {task.tag || "Secondary goal"}
-                          </p>
+                          {task.truth_reason ? (
+                            <p className="text-xs mt-2 leading-relaxed" style={{ color: "#6b7c75" }}>
+                              {task.truth_reason}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
                           {selectedDayIsCurrent ? (
@@ -672,56 +765,72 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                   {resolvedSelectedDayDetail.habits.filter((habit) => habit.active).map((habit) => (
-                    <div
-                      key={habit.id}
-                      className="rounded-2xl p-4"
-                      style={{
-                        background: "#fff",
-                        border: habit.completed_today ? "1px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.05)",
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-[18px]" style={{ color: habit.completed_today ? "#006c4a" : "#8a9e97" }}>
-                              {habit.icon}
-                            </span>
-                            <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>
-                              {habit.name}
-                            </p>
+                    (() => {
+                      const linkedWeeklyGoal = habit.weekly_goal_id ? weeklyGoalById.get(habit.weekly_goal_id) : null;
+                      const linkedMonthlyGoal = habit.monthly_goal_id ? monthlyGoalById.get(habit.monthly_goal_id) : null;
+                      const linkedYearlyGoal = habit.yearly_goal_id ? yearlyGoalById.get(habit.yearly_goal_id) : null;
+                      return (
+                        <div
+                          key={habit.id}
+                          className="rounded-2xl p-4"
+                          style={{
+                            background: "#fff",
+                            border: habit.completed_today ? "1px solid rgba(0,108,74,0.14)" : "1px solid rgba(0,0,0,0.05)",
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-[18px]" style={{ color: habit.completed_today ? "#006c4a" : "#8a9e97" }}>
+                                  {habit.icon}
+                                </span>
+                                <p className="text-sm font-semibold" style={{ color: "#1a1f1e" }}>
+                                  {habit.name}
+                                </p>
+                              </div>
+                              <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
+                                {habit.frequency.replace("_", " ")}
+                              </p>
+                              <p className="text-xs mt-2" style={{ color: linkedWeeklyGoal || linkedMonthlyGoal || linkedYearlyGoal ? "#1f6f5a" : "#8a9e97" }}>
+                                {linkedWeeklyGoal
+                                  ? `Linked weekly goal: ${linkedWeeklyGoal.title}`
+                                  : linkedMonthlyGoal
+                                    ? `Linked monthly goal: ${linkedMonthlyGoal.title}`
+                                    : linkedYearlyGoal
+                                      ? `Linked yearly goal: ${linkedYearlyGoal.title}`
+                                      : "Unlinked: no goal connected yet."}
+                              </p>
+                            </div>
+                            {selectedDayIsCurrent ? (
+                              <button
+                                type="button"
+                                onClick={() => void toggleHabit(habit.id)}
+                                className="w-7 h-7 rounded-full flex items-center justify-center"
+                                style={{
+                                  background: habit.completed_today ? "#006c4a" : "#f7faf8",
+                                  border: habit.completed_today ? "none" : "1px solid rgba(0,0,0,0.08)",
+                                  color: habit.completed_today ? "#fff" : "#6b7c75",
+                                }}
+                              >
+                                <span className="material-symbols-outlined text-[14px]">
+                                  {habit.completed_today ? "check" : "add"}
+                                </span>
+                              </button>
+                            ) : (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                                style={{
+                                  background: habit.completed_today ? "rgba(0,108,74,0.08)" : "rgba(0,0,0,0.05)",
+                                  color: habit.completed_today ? "#006c4a" : "#8a9e97",
+                                }}
+                              >
+                                {habit.completed_today ? "Done" : "Not done"}
+                              </span>
+                            )}
                           </div>
-                          <p className="text-xs mt-2" style={{ color: "#6b7c75" }}>
-                            {habit.frequency.replace("_", " ")}
-                          </p>
                         </div>
-                        {selectedDayIsCurrent ? (
-                          <button
-                            type="button"
-                            onClick={() => void toggleHabit(habit.id)}
-                            className="w-7 h-7 rounded-full flex items-center justify-center"
-                            style={{
-                              background: habit.completed_today ? "#006c4a" : "#f7faf8",
-                              border: habit.completed_today ? "none" : "1px solid rgba(0,0,0,0.08)",
-                              color: habit.completed_today ? "#fff" : "#6b7c75",
-                            }}
-                          >
-                            <span className="material-symbols-outlined text-[14px]">
-                              {habit.completed_today ? "check" : "add"}
-                            </span>
-                          </button>
-                        ) : (
-                          <span
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
-                            style={{
-                              background: habit.completed_today ? "rgba(0,108,74,0.08)" : "rgba(0,0,0,0.05)",
-                              color: habit.completed_today ? "#006c4a" : "#8a9e97",
-                            }}
-                          >
-                            {habit.completed_today ? "Done" : "Not done"}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                      );
+                    })()
                   ))}
                 </div>
               )}
@@ -841,7 +950,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                         {formatGoalDay(row.date)}
                       </p>
                       <p className="mt-1 text-xs" style={{ color: "#8a9e97" }}>
-                        {row.prioritiesCount} planned main goal{row.prioritiesCount === 1 ? "" : "s"}
+                        {row.plannedItemsCount} planned item{row.plannedItemsCount === 1 ? "" : "s"}
                       </p>
                     </div>
                     <span
@@ -903,7 +1012,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
           <table className="min-w-full">
             <thead>
               <tr className="text-left" style={{ background: "#fbfcfb" }}>
-                {["Day", "Goals", "Completed", "In Progress", "At Risk", "Not Started", "Progress"].map((label) => (
+                {["Day", "Planned Items", "Completed", "In Progress", "At Risk", "Not Started", "Progress"].map((label) => (
                   <th
                     key={label}
                     className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em]"
@@ -934,7 +1043,7 @@ export default function DailyGoalsPage({ params }: { params: Promise<{ year: str
                         </p>
                       </td>
                       <td className="px-4 py-4 text-sm font-semibold" style={{ color: "#1a1f1e" }}>
-                        {row.prioritiesCount}
+                        {row.plannedItemsCount}
                       </td>
                       <td className="px-4 py-4 text-sm" style={{ color: getGoalStateMeta("completed").text }}>
                         {row.completed}

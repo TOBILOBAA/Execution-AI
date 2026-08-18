@@ -20,6 +20,7 @@ from supabase import Client
 
 from app.core.exceptions import ConflictError, NotFoundError
 import app.db.sessions as sessions_db
+from app.services.goal_truth_service import decorate_goal_truth
 from app.utils.date_utils import get_temporal_context, get_week_boundaries, week_number_for
 from app.utils.metrics import (
     compute_weighted_daily_completion,
@@ -277,21 +278,34 @@ def get_dashboard(db: Client, session_id: UUID, plan_date: date | None = None) -
 
     # ── Today's data ─────────────────────────────────────────────────────────
     today = ctx.today
-    all_priorities = plans_db.list_daily_priorities(db, session_id, today)
+    year_start = date(ctx.current_year, 1, 1)
+    year_end = today
+    decorated_truth = decorate_goal_truth(
+        yearly_goals=yg_db.list_yearly_goals(db, session_id, ctx.current_year),
+        monthly_goals=plans_db.list_monthly_goals_for_year(db, session_id, ctx.current_year),
+        weekly_goals=plans_db.list_weekly_goals_for_year(db, session_id, ctx.current_year),
+        daily_priorities=plans_db.list_daily_priorities_for_range(db, session_id, year_start, year_end),
+        today=today,
+        week_starts_on=week_starts_on,
+    )
+    yearly_goals = decorated_truth["yearly_goals"]
+    monthly_goals = [
+        goal
+        for goal in decorated_truth["monthly_goals"]
+        if int(goal["year"]) == ctx.current_year and int(goal["month"]) == ctx.current_month
+    ]
+    weekly_goals = [
+        goal
+        for goal in decorated_truth["weekly_goals"]
+        if int(goal["year"]) == ctx.current_year and int(goal["week_number"]) == ctx.current_week_number
+    ]
+    all_priorities = [
+        priority
+        for priority in decorated_truth["daily_priorities"]
+        if priority.get("date") == today.isoformat()
+    ]
     main_priorities = [p for p in all_priorities if p.get("is_main")]
     secondary_tasks = [p for p in all_priorities if not p.get("is_main")]
-
-    # ── Weekly goals ──────────────────────────────────────────────────────────
-    weekly_goals = plans_db.list_weekly_goals(
-        db, session_id, ctx.current_year, ctx.current_week_number
-    )
-
-    # ── Monthly context ────────────────────────────────────────────────────────
-    monthly_goals = plans_db.list_monthly_goals(
-        db, session_id, ctx.current_year, ctx.current_month
-    )
-
-    yearly_goals = yg_db.list_yearly_goals(db, session_id, ctx.current_year)
 
     # ── Habits ────────────────────────────────────────────────────────────────
     habits = habits_db.list_habits(db, session_id, active_only=True)

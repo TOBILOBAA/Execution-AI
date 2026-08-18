@@ -7,6 +7,7 @@ purely focused on prompt formatting and schema validation.
 from __future__ import annotations
 
 from collections import defaultdict
+import calendar
 from datetime import date, datetime, timedelta
 from uuid import UUID
 
@@ -15,9 +16,10 @@ from supabase import Client
 import app.db.categories as categories_db
 import app.db.habits as habits_db
 import app.db.plans as plans_db
+import app.db.reports as reports_db
 import app.db.sessions as sessions_db
 import app.db.yearly_goals as yearly_goals_db
-from app.utils.date_utils import week_start_for
+from app.utils.date_utils import get_week_boundaries, week_start_for
 
 
 WEEKDAY_KEYS = [
@@ -116,6 +118,73 @@ def _parse_timestamp(value: str | None) -> datetime | None:
         return datetime.fromisoformat(normalized)
     except ValueError:
         return None
+
+
+def _report_window(report: dict, week_starts_on: str) -> tuple[date, date] | None:
+    report_type = report.get("report_type")
+    year = report.get("period_year")
+    if report_type == "daily" and report.get("period_date"):
+        report_date = date.fromisoformat(report["period_date"])
+        return report_date, report_date
+    if report_type == "weekly" and year and report.get("period_week"):
+        return get_week_boundaries(year, report["period_week"], week_starts_on)
+    if report_type == "monthly" and year and report.get("period_month"):
+        month = report["period_month"]
+        return date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1])
+    if report_type == "quarterly" and year and report.get("period_quarter"):
+        quarter = report["period_quarter"]
+        start_month = ((quarter - 1) * 3) + 1
+        end_month = start_month + 2
+        return date(year, start_month, 1), date(year, end_month, calendar.monthrange(year, end_month)[1])
+    if report_type == "yearly" and year:
+        return date(year, 1, 1), date(year, 12, 31)
+    return None
+
+
+def _report_note_label(report: dict) -> str:
+    report_type = report.get("report_type")
+    year = report.get("period_year")
+    if report_type == "daily" and report.get("period_date"):
+        return report["period_date"]
+    if report_type == "weekly" and report.get("period_week"):
+        return f"Week {report['period_week']} {year}"
+    if report_type == "monthly" and report.get("period_month"):
+        month_date = date(year, report["period_month"], 1)
+        return month_date.strftime("%B %Y")
+    if report_type == "quarterly" and report.get("period_quarter"):
+        return f"Q{report['period_quarter']} {year}"
+    return str(year)
+
+
+def _list_saved_period_notes(
+    session_id: UUID,
+    period_start: date,
+    period_end: date,
+    week_starts_on: str,
+    db: Client,
+) -> list[dict]:
+    # Notes should enrich recap context when a real DB client is available, but
+    # diary generation must still work in tests and lightweight call paths.
+    if not hasattr(db, "table"):
+        return []
+
+    saved_period_notes: list[dict] = []
+    for report in reports_db.list_reports(db, session_id):
+        note = (reports_db.extract_report_user_note(report) or "").strip()
+        if not note:
+            continue
+        window = _report_window(report, week_starts_on)
+        if window is None:
+            continue
+        if window[1] < period_start or window[0] > period_end:
+            continue
+        saved_period_notes.append({
+            "report_type": report.get("report_type"),
+            "label": _report_note_label(report),
+            "note": note,
+        })
+
+    return saved_period_notes[-12:]
 
 
 def _expected_habit_occurrences(
@@ -251,6 +320,14 @@ def build_execution_diary(session_id: UUID, period_start: date, period_end: date
                 "scheduled_for": scheduled_for,
             })
 
+    saved_period_notes = _list_saved_period_notes(
+        session_id,
+        period_start,
+        period_end,
+        week_starts_on,
+        db,
+    )
+
     return {
         "daily_completion_counts": daily_completion_counts,
         "weekday_slip_rates": weekday_slip_rates,
@@ -259,6 +336,7 @@ def build_execution_diary(session_id: UUID, period_start: date, period_end: date
         "goals_shipped": list(dict.fromkeys(goals_shipped)),
         "goals_missed": list(dict.fromkeys(goals_missed)),
         "late_completions": late_completions,
+        "saved_period_notes": saved_period_notes,
     }
 
 

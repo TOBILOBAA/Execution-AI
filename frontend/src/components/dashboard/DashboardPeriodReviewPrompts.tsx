@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
 import { sessionsApi, type ApiReport } from "@/lib/api";
+import { extractReportUserNote } from "@/lib/reportNotes";
 import { AddYearlyGoalModal } from "@/components/modals/AddYearlyGoalModal";
 import { AddMonthlyGoalModal as PlanningMonthlyGoalModal } from "@/components/onboarding/AddMonthlyGoalModal";
 import { AddWeeklyGoalModal as PlanningWeeklyGoalModal } from "@/components/onboarding/AddWeeklyGoalModal";
@@ -24,7 +25,7 @@ interface ReviewCandidate {
   key: string;
   periodLabel: string;
   entry: DashboardRecapEntry;
-  generate: () => Promise<ApiReport | null>;
+  generate: (userNote?: string) => Promise<ApiReport | null>;
 }
 
 interface DraftGoal {
@@ -790,6 +791,8 @@ export function DashboardPeriodReviewPrompts() {
   const [planDraft, setPlanDraft] = useState<PeriodPlanDraft | null>(null);
   const [draftKeys, setDraftKeys] = useState<Set<string>>(() => new Set());
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
   const [goalEditor, setGoalEditor] = useState<GoalEditorState>(null);
   const [habitEditor, setHabitEditor] = useState<HabitEditorState>(null);
   const [yearGoalModalOpen, setYearGoalModalOpen] = useState(false);
@@ -799,6 +802,7 @@ export function DashboardPeriodReviewPrompts() {
   /** Bumps when the modal closes so in-flight AI/report calls cannot mutate state afterward. */
   const modalAiEpochRef = useRef(0);
   const forcedReview = parseForcedReview(searchParams?.get("review_test") ?? null);
+  const forcedRecapKey = searchParams?.get("recap") ?? null;
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
@@ -810,6 +814,7 @@ export function DashboardPeriodReviewPrompts() {
     setPlanDraft(null);
     setDraftKeys(new Set());
     setSavedNotice(null);
+    setNoteDraft("");
     setGoalEditor(null);
     setHabitEditor(null);
     setYearGoalModalOpen(false);
@@ -885,6 +890,14 @@ export function DashboardPeriodReviewPrompts() {
       ),
     [activeWeekContext, monthlyGoals, nextWeekGoals, nextWeekMonth, weekContext.nextYear],
   );
+  const linkedPendingRecap = useMemo(
+    () => (forcedRecapKey ? pendingRecaps.find((entry) => recapKey(entry) === forcedRecapKey) ?? null : null),
+    [forcedRecapKey, pendingRecaps],
+  );
+
+  useEffect(() => {
+    setNoteDraft(extractReportUserNote(report) ?? "");
+  }, [report]);
 
   useEffect(() => {
     if (!sessionId || !onboardingComplete || kickoffPending || candidate) return;
@@ -917,7 +930,7 @@ export function DashboardPeriodReviewPrompts() {
                   firedAt: new Date().toISOString(),
                 }
               : null;
-    const nextEntry = forcedEntry ?? pendingRecaps[0];
+    const nextEntry = linkedPendingRecap ?? forcedEntry ?? pendingRecaps[0];
     if (!nextEntry) return;
 
     const chosen: ReviewCandidate = {
@@ -925,18 +938,18 @@ export function DashboardPeriodReviewPrompts() {
       key: recapKey(nextEntry),
       periodLabel: buildRecapLabel(nextEntry),
       entry: nextEntry,
-      generate: async () => {
+      generate: async (userNote) => {
         if (nextEntry.type === "weekly" && nextEntry.periodWeek) {
-          return generateWeeklyReport(nextEntry.periodYear, nextEntry.periodWeek);
+          return generateWeeklyReport(nextEntry.periodYear, nextEntry.periodWeek, userNote);
         }
         if (nextEntry.type === "monthly" && nextEntry.periodMonth) {
-          return generateMonthlyReport(nextEntry.periodYear, nextEntry.periodMonth);
+          return generateMonthlyReport(nextEntry.periodYear, nextEntry.periodMonth, userNote);
         }
         if (nextEntry.type === "quarterly" && nextEntry.periodQuarter) {
-          return generateQuarterlyReport(nextEntry.periodYear, nextEntry.periodQuarter);
+          return generateQuarterlyReport(nextEntry.periodYear, nextEntry.periodQuarter, userNote);
         }
         if (nextEntry.type === "yearly") {
-          return generateYearlyReport(nextEntry.periodYear);
+          return generateYearlyReport(nextEntry.periodYear, userNote);
         }
         return null;
       },
@@ -975,6 +988,7 @@ export function DashboardPeriodReviewPrompts() {
     generateWeeklyReport,
     generateYearlyReport,
     kickoffPending,
+    linkedPendingRecap,
     onboardingComplete,
     pendingRecaps,
     sessionId,
@@ -1113,7 +1127,30 @@ export function DashboardPeriodReviewPrompts() {
       });
   }
 
-  function closePrompt() {
+  async function persistReviewNoteIfNeeded() {
+    if (!candidate || screen !== "review") return true;
+    const currentNote = noteDraft.trim();
+    const savedNote = extractReportUserNote(report) ?? "";
+    if (currentNote === savedNote) return true;
+
+    setNoteSaving(true);
+    setError(null);
+    try {
+      const saved = await candidate.generate(noteDraft);
+      if (!saved) {
+        setError("Could not save your review note yet. Try again in a moment.");
+        return false;
+      }
+      setReport(saved);
+      return true;
+    } finally {
+      setNoteSaving(false);
+    }
+  }
+
+  async function closePrompt() {
+    const noteSaved = await persistReviewNoteIfNeeded();
+    if (!noteSaved) return;
     modalAiEpochRef.current += 1;
     if (candidate) acknowledgePrompt(candidate);
     setCandidate(null);
@@ -1435,8 +1472,10 @@ export function DashboardPeriodReviewPrompts() {
     }
   }
 
-  function handleOpenBoard() {
-    closePrompt();
+  async function handleOpenBoard() {
+    const noteSaved = await persistReviewNoteIfNeeded();
+    if (!noteSaved) return;
+    await closePrompt();
     startTransition(() => {
       router.push(nextBoardPath);
     });
@@ -1507,6 +1546,27 @@ export function DashboardPeriodReviewPrompts() {
         <div className="flex flex-wrap gap-2">
           <InfoPill>{nextPeriodLabel}</InfoPill>
           <InfoPill>{planButtonLabel(activeCandidate.type)}</InfoPill>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Your context"
+        title="What happened that the system should remember?"
+        description="Add the nuance behind this period so later reviews do not have to guess why things moved or slipped."
+        tone="default"
+      >
+        <div className="space-y-3">
+          <textarea
+            value={noteDraft}
+            onChange={(event) => setNoteDraft(event.target.value)}
+            placeholder="Example: The plan looked reasonable, but two urgent obligations cut the middle out of the week, so the missed work was more a capacity problem than a commitment problem."
+            rows={4}
+            className="w-full resize-none rounded-2xl px-4 py-3 text-sm outline-none"
+            style={{ border: "1px solid rgba(0,0,0,0.08)", background: "#fff", color: "#1a1f1e" }}
+          />
+          <p className="text-xs leading-relaxed" style={{ color: "#6f817a" }}>
+            This note is saved to this review and can be folded into later monthly, quarterly, and yearly summaries.
+          </p>
         </div>
       </SectionCard>
 
@@ -2001,7 +2061,9 @@ export function DashboardPeriodReviewPrompts() {
       className="fixed inset-0 z-[90] flex items-end justify-center p-2 sm:items-center sm:p-4"
       style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}
       role="presentation"
-      onClick={closePrompt}
+      onClick={() => {
+        void closePrompt();
+      }}
     >
       <div
         className="flex max-h-[calc(100dvh-1rem)] w-full max-w-[760px] flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
@@ -2055,8 +2117,11 @@ export function DashboardPeriodReviewPrompts() {
 
             <button
               type="button"
-              onClick={closePrompt}
-              className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+              onClick={() => {
+                void closePrompt();
+              }}
+              disabled={noteSaving}
+              className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full disabled:opacity-60"
               style={{ color: "#8a9e97" }}
               aria-label="Close review prompt"
             >
@@ -2119,8 +2184,11 @@ export function DashboardPeriodReviewPrompts() {
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={closePrompt}
-              className="rounded-xl px-5 py-3 text-sm font-semibold"
+              onClick={() => {
+                void closePrompt();
+              }}
+              disabled={noteSaving}
+              className="rounded-xl px-5 py-3 text-sm font-semibold disabled:opacity-60"
               style={{ border: "1.5px solid #e2e8e4", color: "#5a6b65", background: "white" }}
             >
               Close for now
@@ -2130,11 +2198,15 @@ export function DashboardPeriodReviewPrompts() {
               <button
                 type="button"
                 onClick={() => {
-                  setScreen("plan");
-                  setError(null);
-                  setSavedNotice(null);
+                  void (async () => {
+                    const noteSaved = await persistReviewNoteIfNeeded();
+                    if (!noteSaved) return;
+                    setScreen("plan");
+                    setError(null);
+                    setSavedNotice(null);
+                  })();
                 }}
-                disabled={loading}
+                disabled={loading || noteSaving}
                 className="flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white disabled:opacity-60"
                 style={{ background: "#003d2b", boxShadow: "0 2px 12px rgba(0,108,74,0.25)" }}
               >
@@ -2144,8 +2216,11 @@ export function DashboardPeriodReviewPrompts() {
             ) : (
               <button
                 type="button"
-                onClick={handleOpenBoard}
-                className="flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white"
+                onClick={() => {
+                  void handleOpenBoard();
+                }}
+                disabled={noteSaving}
+                className="flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white disabled:opacity-60"
                 style={{ background: "#003d2b", boxShadow: "0 2px 12px rgba(0,108,74,0.25)" }}
               >
                 {openBoardLabel(activeCandidate.type)}
