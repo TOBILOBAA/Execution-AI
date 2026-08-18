@@ -8,6 +8,7 @@ import { getToday } from "@/lib/mockData";
 import { SecondaryTaskRow } from "@/components/dashboard/SecondaryTaskRow";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
 import { HabitsSection } from "@/components/dashboard/HabitsSection";
+import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 
 function formatPlanDateLabel(isoDate: string) {
   try {
@@ -25,6 +26,14 @@ function compactDescription(value?: string, fallback?: string) {
   const copy = (value?.trim() || fallback || "").replace(/\s+/g, " ");
   if (!copy) return "";
   return copy.length > 120 ? `${copy.slice(0, 117).trimEnd()}...` : copy;
+}
+
+function InlineSectionLoader({ title }: { title: string }) {
+  return (
+    <div className="rounded-[24px] bg-[#fafcfb] p-4 sm:p-5">
+      <AppLoadingScreen fullscreen={false} title={title} />
+    </div>
+  );
 }
 
 export default function DashboardHome() {
@@ -156,7 +165,7 @@ export default function DashboardHome() {
                         </div>
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
-                            Daily Streak
+                            Main Goal Streak
                           </p>
                           <div className="mt-1 flex items-end gap-2">
                             <span className="font-headline text-[34px] font-extrabold leading-none tracking-tight" style={{ color: "#1a1f1e" }}>
@@ -166,6 +175,9 @@ export default function DashboardHome() {
                               days
                             </span>
                           </div>
+                          <p className="mt-2 max-w-[190px] text-[11px] leading-5" style={{ color: "#8a9e97" }}>
+                            Counts only when your main goal for the day is completed.
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -203,21 +215,7 @@ export default function DashboardHome() {
 
                 {featuredMainGoal === null ? (
                   showDashboardHydratingState ? (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      {Array.from({ length: 3 }).map((_, index) => (
-                        <div
-                          key={index}
-                          className="rounded-[24px] p-5 animate-pulse"
-                          style={{ background: "#fafcfb", border: "1px solid rgba(0,0,0,0.05)" }}
-                        >
-                          <div className="h-3 w-20 rounded-full" style={{ background: "#e5ece8" }} />
-                          <div className="mt-4 h-6 w-3/4 rounded-full" style={{ background: "#e5ece8" }} />
-                          <div className="mt-3 h-3 w-full rounded-full" style={{ background: "#eef3f0" }} />
-                          <div className="mt-2 h-3 w-5/6 rounded-full" style={{ background: "#eef3f0" }} />
-                          <div className="mt-6 h-9 w-24 rounded-full" style={{ background: "#e5ece8" }} />
-                        </div>
-                      ))}
-                    </div>
+                    <InlineSectionLoader title="Loading today's main goal" />
                   ) : (
                     <div
                       className="rounded-[24px] p-6 text-center sm:p-8"
@@ -370,17 +368,8 @@ export default function DashboardHome() {
               <div className="px-2 pb-3">
                 {todayTasks.length === 0 ? (
                   showDashboardHydratingState ? (
-                    <div className="space-y-3 px-4 py-3">
-                      {Array.from({ length: 3 }).map((_, index) => (
-                        <div
-                          key={index}
-                          className="rounded-2xl px-4 py-4 animate-pulse"
-                          style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.05)" }}
-                        >
-                          <div className="h-3 w-24 rounded-full" style={{ background: "#e5ece8" }} />
-                          <div className="mt-3 h-4 w-2/3 rounded-full" style={{ background: "#eef3f0" }} />
-                        </div>
-                      ))}
+                    <div className="px-3 pb-2">
+                      <InlineSectionLoader title="Loading secondary goals" />
                     </div>
                   ) : (
                     <div
@@ -394,7 +383,7 @@ export default function DashboardHome() {
                         <span className="material-symbols-outlined text-[22px]">checklist</span>
                       </div>
                       <p className="font-headline font-bold text-lg" style={{ color: "#1a1f1e" }}>
-                        No supporting goals planned for this day
+                        No secondary goals planned for this day
                       </p>
                       <p className="mt-2 text-sm max-w-md mx-auto" style={{ color: "#8a9e97" }}>
                         That is okay. Keep the day lighter, let your main goals lead, and use routines to carry the rest.

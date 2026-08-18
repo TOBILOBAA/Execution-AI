@@ -11,6 +11,7 @@ import { useAppStore } from "@/lib/store";
 import { describeSyncError } from "@/lib/apiErrors";
 
 type EditableReviewItem = ApiNextDayReviewItem & { localId: string; yearly_goal_ref?: string };
+type RecoverableEntry = { id: string; title: string; kind: "main" | "task" | "habit" };
 
 interface DailyAIDraft {
   reasoning?: string;
@@ -26,6 +27,11 @@ type PlannerModalState =
   | { type: "habit"; habit?: FoundationalHabit };
 
 const MAX_MAIN_PRIORITIES = 3;
+const REVIEW_DISMISS_KEY_PREFIX = "execution-ai:next-day-review:dismissed";
+
+function makeReviewDismissKey(sessionId: string, today: string, sourceDate: string) {
+  return `${REVIEW_DISMISS_KEY_PREFIX}:${sessionId}:${today}:${sourceDate}`;
+}
 
 function makeLocalId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
@@ -282,6 +288,69 @@ function ReviewSummaryCard({
           ))}
         </div>
       )}
+    </SectionCard>
+  );
+}
+
+function RecoveryCard({
+  items,
+  recoveringKey,
+  onRecover,
+}: {
+  items: RecoverableEntry[];
+  recoveringKey: string | null;
+  onRecover: (item: RecoverableEntry) => void;
+}) {
+  if (!items.length) return null;
+
+  return (
+    <SectionCard
+      eyebrow="Yesterday recovery"
+      title="Did you finish any of these but forget to log them?"
+      description="Confirm them now and they will still count for yesterday."
+      tone="accent"
+    >
+      <div className="space-y-3">
+        {items.map((item) => {
+          const tone =
+            item.kind === "main"
+              ? "Main goal"
+              : item.kind === "task"
+                ? "Secondary goal"
+                : "Routine";
+          const itemKey = `${item.kind}:${item.id}`;
+          const isSaving = recoveringKey === itemKey;
+          return (
+            <div
+              key={itemKey}
+              className="flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between"
+              style={{ background: "rgba(255,255,255,0.82)", border: "1px solid rgba(0,0,0,0.06)" }}
+            >
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#8a9e97" }}>
+                  {tone}
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-snug break-words" style={{ color: "#1a1f1e" }}>
+                  {item.title}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRecover(item)}
+                disabled={isSaving}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.16em]"
+                style={{
+                  background: isSaving ? "rgba(0,0,0,0.08)" : "rgba(0,108,74,0.12)",
+                  color: isSaving ? "#6f817a" : "#006c4a",
+                }}
+              >
+                <span className="material-symbols-outlined text-[16px]">task_alt</span>
+                {isSaving ? "Saving..." : "Count it"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </SectionCard>
   );
 }
@@ -601,6 +670,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
   const [plannerModal, setPlannerModal] = useState<PlannerModalState>(null);
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [recoveringKey, setRecoveringKey] = useState<string | null>(null);
   const [aiNote, setAiNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -608,9 +678,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     if (!sessionId || kickoffPending) return;
     let cancelled = false;
 
-    dashboardApi
-      .getNextDayReview(sessionId, planDate)
-      .then((data) => {
+    const loadReview = async () => {
+      try {
+        const data = await dashboardApi.getNextDayReview(sessionId, planDate);
         if (cancelled) return;
         setReview(data);
         setPriorities([]);
@@ -620,12 +690,17 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
         setMobilePlanView("priorities");
         setAiNote(null);
         setError(null);
-        setOpen(startOpen || data.should_open);
-      })
-      .catch((err) => {
+        const dismissed =
+          typeof window !== "undefined" &&
+          window.localStorage.getItem(makeReviewDismissKey(sessionId, data.today, data.source_date)) === "1";
+        setOpen(startOpen || (data.should_open && !dismissed));
+      } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Could not load next-day review");
-      });
+      }
+    };
+
+    void loadReview();
 
     return () => {
       cancelled = true;
@@ -654,6 +729,25 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
     [review, tasks],
   );
 
+  const recoverableItems = useMemo<RecoverableEntry[]>(
+    () =>
+      review
+        ? [
+            ...review.recovery.main_items.map((item) => ({ ...item, title: item.title, kind: "main" as const })),
+            ...review.recovery.task_items.map((item) => ({ ...item, title: item.title, kind: "task" as const })),
+            ...review.recovery.habit_items.map((item) => ({ id: item.id, title: item.name, kind: "habit" as const })),
+          ]
+        : [],
+    [review],
+  );
+
+  async function refreshReviewState(targetDate: string) {
+    if (!sessionId) return;
+    const nextReview = await dashboardApi.getNextDayReview(sessionId, planDate);
+    setReview(nextReview);
+    await loadDashboard(targetDate);
+  }
+
   if (!open || !review) return null;
 
   const reviewTitle = planningTomorrow ? "Review today, then lock tomorrow in" : "Review yesterday before you begin";
@@ -664,6 +758,34 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
   const planIntro = planningTomorrow
     ? `Build ${formatReviewDateLabel(review.today)} yourself. AI can help only when you ask it to.`
     : `Set up ${formatReviewDateLabel(review.today)} clearly before execution begins.`;
+
+  function dismissCurrentReview() {
+    if (sessionId && review && typeof window !== "undefined") {
+      window.localStorage.setItem(makeReviewDismissKey(sessionId, review.today, review.source_date), "1");
+    }
+    setOpen(false);
+    onClose?.();
+  }
+
+  async function handleRecoverItem(item: RecoverableEntry) {
+    const currentReview = review;
+    if (!sessionId || !currentReview) return;
+    const key = `${item.kind}:${item.id}`;
+    setRecoveringKey(key);
+    setError(null);
+    try {
+      await dashboardApi.approveNextDayRecovery(sessionId, {
+        source_date: currentReview.source_date,
+        item_id: item.id,
+        item_kind: item.kind,
+      });
+      await refreshReviewState(currentReview.today);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update yesterday's record");
+    } finally {
+      setRecoveringKey(null);
+    }
+  }
 
   async function handleApprove() {
     const currentReview = review;
@@ -682,8 +804,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
       });
       await loadDashboard(currentReview.today);
       startTransition(() => {
-        setOpen(false);
-        onClose?.();
+        dismissCurrentReview();
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the plan");
@@ -910,6 +1031,14 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       </div>
                     </SectionCard>
 
+                  {review.recovery.should_prompt ? (
+                    <RecoveryCard
+                      items={recoverableItems}
+                      recoveringKey={recoveringKey}
+                      onRecover={handleRecoverItem}
+                    />
+                  ) : null}
+
                   <div className="space-y-4 md:hidden">
                     <div
                       className="inline-flex rounded-full p-1"
@@ -1046,7 +1175,7 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                     >
                       {[
                         { id: "priorities" as const, label: "Main" },
-                        { id: "tasks" as const, label: "Supporting" },
+                        { id: "tasks" as const, label: "Secondary" },
                         { id: "habits" as const, label: "Routines" },
                       ].map((option) => (
                         <button
@@ -1229,12 +1358,9 @@ export function DashboardNextDayReview({ planDate, startOpen = false, onClose }:
                       Back to review
                     </button>
                   )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOpen(false);
-                        onClose?.();
-                      }}
+                  <button
+                    type="button"
+                    onClick={dismissCurrentReview}
                     className="w-full rounded-xl px-5 py-3 text-sm font-semibold sm:w-auto"
                     style={{ border: "1.5px solid #e2e8e4", color: "#5a6b65", background: "white" }}
                   >

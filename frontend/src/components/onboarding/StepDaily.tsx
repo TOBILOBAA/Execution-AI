@@ -289,13 +289,9 @@ function HabitRow({
 // ─── AI Draft types ────────────────────────────────────────────────────────────
 interface DailyAIDraft {
   reasoning: string;
-  top_priorities: { title: string; description?: string; estimated_effort?: string; tag?: string; weekly_goal_ref?: string | null }[];
-  secondary_tasks: { title: string; description?: string; estimated_effort?: string; tag?: string; weekly_goal_ref?: string | null }[];
+  top_priorities: { title: string; description?: string; estimated_effort?: string; tag?: string }[];
+  secondary_tasks: { title: string; description?: string; estimated_effort?: string; tag?: string }[];
   foundational_habits: string[];
-}
-
-function normalizeGoalTitle(value: string | undefined) {
-  return (value ?? "").trim().toLowerCase();
 }
 
 // ─── Main Step ─────────────────────────────────────────────────────────────────
@@ -318,7 +314,6 @@ export function StepDaily({ onFinish, onBack }: Props) {
     generateDailyPlan,
     approveDailyPlan,
     syncDailySetupToServer,
-    sessionTimezone,
   } = useAppStore(
     useShallow((state) => ({
       dailyPriorities: state.dailyPriorities,
@@ -338,13 +333,11 @@ export function StepDaily({ onFinish, onBack }: Props) {
       generateDailyPlan: state.generateDailyPlan,
       approveDailyPlan: state.approveDailyPlan,
       syncDailySetupToServer: state.syncDailySetupToServer,
-      sessionTimezone: state.sessionTimezone,
     })),
   );
 
-  const todayStr = getToday(sessionTimezone);
-  const todayPriorities = dailyPriorities.filter((p) => p.date === todayStr);
-  const todayTasks = secondaryTasks.filter((t) => t.date === todayStr);
+  const todayPriorities = dailyPriorities.filter((p) => p.date === getToday());
+  const todayTasks = secondaryTasks.filter((t) => t.date === getToday());
   const activeHabits = habits.filter((h) => h.active);
 
   // Modal state
@@ -396,7 +389,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
     setAiLoading(true);
     setAiError(null);
     setAiDraft(null);
-    const result = await generateDailyPlan(todayStr);
+    const result = await generateDailyPlan(getToday());
     if (!result.ok) {
       const banner = useAppStore.getState().syncError;
       const apiDetail =
@@ -427,39 +420,15 @@ export function StepDaily({ onFinish, onBack }: Props) {
 
   const handleAIAccept = async () => {
     if (!aiDraft || aiSelectedCount === 0) return;
-    const priorities: Record<string, unknown>[] = [
-      ...todayPriorities.map((item) => ({
-        title: item.title,
-        description: item.description,
-        weekly_goal_id: item.weeklyGoalId,
-        estimated_effort: item.estimatedMinutes ? `${item.estimatedMinutes} min` : undefined,
-        is_main: true,
-        priority: "high",
-      })),
-      ...todayTasks.map((item) => ({
-        title: item.title,
-        description: item.description,
-        weekly_goal_id: item.weeklyGoalId,
-        estimated_effort: item.estimatedMinutes ? `${item.estimatedMinutes} min` : undefined,
-        is_main: false,
-        priority: "medium",
-      })),
-    ];
-    const existingTitles = new Set(
-      [...todayPriorities, ...todayTasks].map((item) => normalizeGoalTitle(item.title)).filter(Boolean),
-    );
+    const priorities: Record<string, unknown>[] = [];
     aiDraft.top_priorities?.forEach((p, i) => {
-      if (aiRowKeys.has(`p:${i}`) && !existingTitles.has(normalizeGoalTitle(p.title))) {
-        priorities.push({ ...p, is_main: true, priority: "high" });
-      }
+      if (aiRowKeys.has(`p:${i}`)) priorities.push({ ...p, is_main: true, priority: "high" });
     });
     (aiDraft.secondary_tasks ?? []).forEach((t, i) => {
-      if (aiRowKeys.has(`t:${i}`) && !existingTitles.has(normalizeGoalTitle(t.title))) {
-        priorities.push({ ...t, is_main: false });
-      }
+      if (aiRowKeys.has(`t:${i}`)) priorities.push({ ...t, is_main: false });
     });
     setAiAccepting(true);
-    const ok = await approveDailyPlan(todayStr, priorities);
+    const ok = await approveDailyPlan(getToday(), priorities);
     if (ok) {
       setAiDraft(null);
       setAiRowKeys(new Set());
@@ -467,6 +436,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
     setAiAccepting(false);
   };
 
+  const todayStr = getToday();
   const headlineDate = useMemo(() => {
     const d = new Date(`${todayStr}T12:00:00`);
     return {
@@ -478,8 +448,8 @@ export function StepDaily({ onFinish, onBack }: Props) {
 
   const handleFinish = async () => {
     setLeaveError(null);
-    const todayPrioritiesCount = dailyPriorities.filter((p) => p.date === todayStr).length;
-    const todayTasksCount = secondaryTasks.filter((t) => t.date === todayStr).length;
+    const todayPrioritiesCount = dailyPriorities.filter(p => p.date === getToday()).length;
+    const todayTasksCount = secondaryTasks.filter(t => t.date === getToday()).length;
     if (todayPrioritiesCount !== 1) {
       setLeaveError("You need exactly one main priority for today before continuing.");
       return;
@@ -488,7 +458,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
       setLeaveError("You can have at most three secondary tasks for today.");
       return;
     }
-    const ok = await syncDailySetupToServer(todayStr);
+    const ok = await syncDailySetupToServer(getToday());
     const serverPersistenceRequired = isCloudSupabaseConfigured() && !isAuthLocalOnly();
     if (serverPersistenceRequired && (!ok || useAppStore.getState().syncError)) {
       setLeaveError("Daily tasks and habits have not finished saving to the server yet. Fix the sync error above, then try again.");
@@ -506,7 +476,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
             Set up {headlineDate.weekday}, {headlineDate.monthShort} {headlineDate.day}.
           </h1>
           <p className="text-sm leading-relaxed max-w-md mx-auto" style={{ color: "#8a9e97" }}>
-            1 main goal, up to 3 secondary goals. Link each daily goal to the weekly direction it belongs to. Your routines roll forward from Step 2.
+            1 main priority, up to 3 secondary tasks. Each connects to a weekly goal. Your habits roll forward from Step 2.
           </p>
         </div>
 
@@ -520,7 +490,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
               <div>
                 <p className="text-sm font-bold" style={{ color: "#1a1f1e" }}>Generate with AI</p>
                 <p className="text-xs" style={{ color: "#6b7b74" }}>
-                  We&apos;ll use this week&apos;s goals and your routines to suggest a focused day.
+                  We&apos;ll use this week&apos;s goals and your habits to suggest a focused day.
                 </p>
               </div>
             </div>
@@ -841,7 +811,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 tag: data.tag,
                 weeklyGoalId: data.weeklyGoalId,
                 ...(data.description ? { description: data.description } : {}),
-                date: todayStr,
+                date: getToday(),
                 status: "active",
                 completed: false,
                 priority: "high",
@@ -882,7 +852,7 @@ export function StepDaily({ onFinish, onBack }: Props) {
                 tag: data.tag,
                 weeklyGoalId: data.weeklyGoalId,
                 ...(data.description ? { description: data.description } : {}),
-                date: todayStr,
+                date: getToday(),
                 status: "active",
                 completed: false,
                 priority: "medium",
@@ -930,7 +900,36 @@ export function StepDaily({ onFinish, onBack }: Props) {
   );
 }
 
+// ─── Daily AI Guidance Panel ───────────────────────────────────────────────────
+const GUIDANCE_TIPS = [
+  {
+    title: "Minimize Context Switching",
+    body: "Your priorities today require high cognitive load. Batch your Supporting Tasks into a single 30-minute block at 4:00 PM to protect your morning momentum.",
+    tip: "Drink 500ml of water during Priority 01 to maintain peak neural function.",
+    mindset: "Execution is the only form of progress that matters today. Done is better than perfect.",
+  },
+  {
+    title: "Protect Deep Work Time",
+    body: "Schedule your highest-energy priority first. Block the first 90 minutes of your day for focused execution before any meetings or communication.",
+    tip: "Close all notification channels during your Essential Priorities block for maximum output.",
+    mindset: "Clarity precedes action. Know your target before you start moving.",
+  },
+  {
+    title: "Energy Before Tasks",
+    body: "Match tasks to your natural energy curve. Do creative and analytical work in the morning, operational tasks in the afternoon.",
+    tip: "A 10-minute walk between Priority 02 and 03 resets your focus and reduces decision fatigue.",
+    mindset: "Small consistent actions compound into extraordinary results over time.",
+  },
+];
+
 export function DailyAIGuidancePanel() {
+  const [tipIndex, setTipIndex] = useState(0);
+  const tip = GUIDANCE_TIPS[tipIndex];
+
+  const handleRefresh = () => {
+    setTipIndex((prev) => (prev + 1) % GUIDANCE_TIPS.length);
+  };
+
   return (
     <div className="px-7 pt-10 pb-8 space-y-6 h-full overflow-y-auto">
       {/* Header */}
@@ -946,48 +945,47 @@ export function DailyAIGuidancePanel() {
 
       {/* Sections */}
       <div className="space-y-5">
+        {/* Rule of 3 */}
         <div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>looks_one</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Choose One Main Goal For Today</p>
+          <div className="flex items-center gap-1.5 mb-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Daily Focus Rule</p>
           </div>
-          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Your daily main goal should be the clearest and most important thing to finish or advance today.
-          </p>
+          <p className="text-sm font-bold mb-1.5" style={{ color: "#1a1f1e" }}>{tip.title}</p>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>{tip.body}</p>
         </div>
 
-        <div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>tune</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Use Secondary Goals Carefully</p>
-          </div>
-          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Secondary goals should create progress without crowding out the main goal.
-          </p>
+        {/* Execution Tip */}
+        <div
+          className="rounded-xl p-3.5"
+          style={{ background: "#f5f7f6" }}
+        >
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#8a9e97" }}>Execution Tip</p>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>{tip.tip}</p>
         </div>
 
-        <div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="material-symbols-outlined text-[13px]" style={{ color: "#a8b5af" }}>repeat</span>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Let Routines Steady The Day</p>
-          </div>
-          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            Routines are the repeated actions that help you stay disciplined, clear, and consistent.
-          </p>
+        {/* Mindset */}
+        <div
+          className="rounded-xl p-3.5"
+          style={{ background: "#f5f7f6" }}
+        >
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#8a9e97" }}>Mindset</p>
+          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>{tip.mindset}</p>
         </div>
 
-        <div className="rounded-xl p-4 space-y-2.5" style={{ background: "#f4f6f4" }}>
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Example</p>
-          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            <strong style={{ color: "#1a1f1e" }}>Weekly main goal:</strong> Finish this week&apos;s cloud networking and storage modules, and complete one practice test review.
-          </p>
-          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            <strong style={{ color: "#1a1f1e" }}>Daily main goal:</strong> Complete the cloud networking lesson and take notes on key architecture patterns today.
-          </p>
-          <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-            <strong style={{ color: "#1a1f1e" }}>Routine example:</strong> 45 minutes of certification study before the day gets busy.
-          </p>
-        </div>
+        {/* Refresh button */}
+        <button
+          onClick={handleRefresh}
+          className="w-full py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all"
+          style={{
+            border: "1px solid rgba(0,0,0,0.08)",
+            color: "#8a9e97",
+            background: "transparent",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "#f5f7f6"; e.currentTarget.style.color = "#1a1f1e"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#8a9e97"; }}
+        >
+          Refresh Strategy
+        </button>
       </div>
     </div>
   );

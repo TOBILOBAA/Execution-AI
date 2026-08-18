@@ -16,6 +16,10 @@ class DashboardMetrics(BaseModel):
     habits_total_today: int
     weekly_completion_rate: int         # 0-100
     monthly_completion_rate: int        # 0-100
+    yearly_progress: int = 0
+    weekly_goal_progress_by_id: dict[str, int] = {}
+    monthly_goal_progress_by_id: dict[str, int] = {}
+    yearly_goal_progress_by_id: dict[str, int] = {}
 
 
 class DashboardResponse(BaseModel):
@@ -54,3 +58,9 @@ class NextDayReviewItem(BaseModel):
 class NextDayReviewApproveRequest(BaseModel):
     priorities: list[NextDayReviewItem] = []
     tasks: list[NextDayReviewItem] = []
+
+
+class NextDayRecoveryApproveRequest(BaseModel):
+    source_date: str
+    item_id: str
+    item_kind: str

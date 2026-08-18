@@ -247,20 +247,28 @@ export function AddMonthlyGoalModal({
               <span className="sm:hidden">Target Date</span>
               <span className="hidden sm:inline">Target Completion Date</span>
             </label>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative">
+              <span
+                className="material-symbols-outlined pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px]"
+                style={{ color: "#a8b5af" }}
+              >
+                calendar_month
+              </span>
               <input
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full min-w-0 px-4 py-3 rounded-xl border text-[13px] focus:outline-none focus:border-[#006c4a] transition sm:w-auto sm:text-sm"
-                style={{ borderColor: "#e2e8e4", background: "#f7f9f8", color: "#1a1f1e" }}
+                className="w-full min-w-0 rounded-xl pl-10 pr-4 py-3 text-[13px] outline-none transition-all sm:text-sm"
+                style={{ border: "1.5px solid rgba(0,0,0,0.07)", background: "#f7f9f8", color: targetDate ? "#1a1f1e" : "#a8b5af" }}
+                onFocus={(e) => (e.currentTarget.style.border = "1.5px solid #006c4a")}
+                onBlur={(e) => (e.currentTarget.style.border = "1.5px solid rgba(0,0,0,0.07)")}
               />
-              <div className="flex items-start gap-1.5 sm:items-center">
-                <span className="material-symbols-outlined text-[14px]" style={{ color: "#a8b5af" }}>info</span>
-                <span className="text-xs" style={{ color: "#8a9e97" }}>
-                  {daysLeft} days remaining in {monthName}.
-                </span>
-              </div>
+            </div>
+            <div className="mt-3 flex items-start gap-1.5">
+              <span className="material-symbols-outlined text-[14px]" style={{ color: "#a8b5af" }}>info</span>
+              <span className="text-xs" style={{ color: "#8a9e97" }}>
+                {daysLeft} days remaining in {monthName}.
+              </span>
             </div>
           </div>
         </div>

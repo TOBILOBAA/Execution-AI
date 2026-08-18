@@ -18,15 +18,16 @@ from uuid import UUID
 
 from supabase import Client
 
+from app.core.exceptions import ConflictError, NotFoundError
 import app.db.sessions as sessions_db
 from app.utils.date_utils import get_temporal_context, get_week_boundaries, week_number_for
 from app.utils.metrics import (
     compute_weighted_daily_completion,
-    compute_completion_rate,
     compute_habit_streak,
 )
 import app.db.plans as plans_db
 import app.db.habits as habits_db
+import app.db.reports as reports_db
 import app.db.yearly_goals as yg_db
 from app.utils.period_guards import (
     get_session_now,
@@ -371,11 +372,16 @@ def get_dashboard(db: Client, session_id: UUID, plan_date: date | None = None) -
     # ── Execution streak ──────────────────────────────────────────────────────
     streak, best_streak = _compute_execution_streaks(db, session_id, today)
 
-    # ── Weekly/monthly completion rates ───────────────────────────────────────
-    weekly_goals_total = len(weekly_goals)
-    weekly_goals_done = sum(1 for g in weekly_goals if g.get("status") == "completed")
-    monthly_goals_total = len(monthly_goals)
-    monthly_goals_done = sum(1 for g in monthly_goals if g.get("status") == "completed")
+    # ── Linked progress rollups ───────────────────────────────────────────────
+    analytics_rollups = _build_analytics_rollups(
+        db,
+        session_id,
+        reference_day=today,
+        current_year=ctx.current_year,
+        current_month=ctx.current_month,
+        current_week_number=ctx.current_week_number,
+        week_starts_on=week_starts_on,
+    )
 
     for item in all_priorities:
         item["editable"] = is_current_daily_period(db, session_id, date.fromisoformat(item["date"]))
@@ -413,8 +419,12 @@ def get_dashboard(db: Client, session_id: UUID, plan_date: date | None = None) -
             "tasks_total_today": priorities_total,
             "habits_completed_today": habits_completed_today,
             "habits_total_today": habits_total_today,
-            "weekly_completion_rate": compute_completion_rate(weekly_goals_done, weekly_goals_total),
-            "monthly_completion_rate": compute_completion_rate(monthly_goals_done, monthly_goals_total),
+            "weekly_completion_rate": analytics_rollups["weekly_completion_rate"],
+            "monthly_completion_rate": analytics_rollups["monthly_completion_rate"],
+            "yearly_progress": analytics_rollups["yearly_progress"],
+            "weekly_goal_progress_by_id": analytics_rollups["weekly_goal_progress_by_id"],
+            "monthly_goal_progress_by_id": analytics_rollups["monthly_goal_progress_by_id"],
+            "yearly_goal_progress_by_id": analytics_rollups["yearly_goal_progress_by_id"],
         },
         "weekly_objective": _summarize_weekly_objective(weekly_goals),
         "monthly_context_text": _summarize_monthly_context(monthly_goals),
@@ -479,6 +489,26 @@ def get_next_day_review(db: Client, session_id: UUID, plan_date: date | None = N
         len(habits),
     )
 
+    recovery_eligible = target_date == ctx.today
+    recoverable_main = [
+        {"id": item["id"], "title": item["title"]}
+        for item in incomplete_main
+        if item.get("id") and item.get("title")
+    ]
+    recoverable_tasks = [
+        {"id": item["id"], "title": item["title"]}
+        for item in incomplete_tasks
+        if item.get("id") and item.get("title")
+    ]
+    recoverable_habits = [
+        {"id": habit["id"], "name": habit["name"]}
+        for habit in missed_habits
+        if habit.get("id") and habit.get("name")
+    ]
+    should_prompt_recovery = recovery_eligible and not bool(target_plan and target_items) and bool(
+        recoverable_main or recoverable_tasks or recoverable_habits
+    )
+
     should_open = len(target_items) == 0 and (
         bool(source_items) or bool(weekly_goals) or bool(habits)
     )
@@ -486,8 +516,15 @@ def get_next_day_review(db: Client, session_id: UUID, plan_date: date | None = N
     return {
         "today": target_date.isoformat(),
         "source_date": source_date.isoformat(),
-        "should_open": should_open,
+        "should_open": should_open or should_prompt_recovery,
         "already_planned_today": bool(target_plan and target_items),
+        "recovery": {
+            "eligible": recovery_eligible,
+            "should_prompt": should_prompt_recovery,
+            "main_items": recoverable_main,
+            "task_items": recoverable_tasks,
+            "habit_items": recoverable_habits,
+        },
         "yesterday_summary": {
             "completion_rate": source_completion,
             "completed_main_count": len(completed_main),
@@ -527,6 +564,45 @@ def get_next_day_review(db: Client, session_id: UUID, plan_date: date | None = N
             ),
         },
     }
+
+
+def approve_next_day_recovery(
+    db: Client,
+    session_id: UUID,
+    source_date: date,
+    item_id: str,
+    item_kind: str,
+) -> dict:
+    today = get_session_today(db, session_id)
+    if source_date != today - timedelta(days=1):
+        raise ConflictError("Yesterday recovery is only available for the previous day.")
+
+    if item_kind == "habit":
+        habit = habits_db.get_habit(db, UUID(item_id), session_id)
+        if not habit:
+            raise NotFoundError("Habit", item_id)
+        result = habits_db.upsert_habit_log(db, UUID(item_id), session_id, source_date, True)
+        reports_db.mark_daily_report_stale(db, session_id, source_date)
+        return {"kind": item_kind, "id": item_id, "date": source_date.isoformat(), "completed": True, "result": result}
+
+    item = plans_db.get_daily_priority(db, UUID(item_id), session_id)
+    if not item:
+        raise NotFoundError("Daily priority", item_id)
+    if date.fromisoformat(item["date"]) != source_date:
+        raise ConflictError("That item does not belong to the review day you are recovering.")
+
+    updated = plans_db.update_daily_priority(
+        db,
+        UUID(item_id),
+        session_id,
+        {
+            "completed": True,
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    reports_db.mark_daily_report_stale(db, session_id, source_date)
+    return {"kind": item_kind, "id": item_id, "date": source_date.isoformat(), "completed": True, "result": updated}
 
 
 def approve_next_day_review(
@@ -636,6 +712,254 @@ def _compute_weekly_consistency(db: Client, session_id: UUID, week_start: date) 
             continue
         result.append(100 if day in active_days else 0)
     return result
+
+
+def _clamp_progress(value: int | float | None) -> int:
+    try:
+        numeric = int(round(float(value or 0)))
+    except (TypeError, ValueError):
+        numeric = 0
+    return max(0, min(100, numeric))
+
+
+def _average_progress(values: list[int]) -> int:
+    if not values:
+        return 0
+    return round(sum(values) / len(values))
+
+
+def _daterange(start: date, end: date):
+    cursor = start
+    while cursor <= end:
+        yield cursor
+        cursor += timedelta(days=1)
+
+
+def _habit_expected_occurrences(
+    frequency: str | None,
+    start: date,
+    end: date,
+    week_starts_on: str,
+) -> int:
+    if end < start:
+        return 0
+
+    normalized = frequency or "daily"
+    if normalized == "flexible":
+        return 1
+    if normalized == "daily":
+        return (end - start).days + 1
+    if normalized == "weekdays":
+        return sum(1 for day in _daterange(start, end) if day.weekday() < 5)
+    if normalized == "weekends":
+        return sum(1 for day in _daterange(start, end) if day.weekday() >= 5)
+
+    weekly_target = 3 if normalized == "3x_week" else 5 if normalized == "5x_week" else None
+    if weekly_target is None:
+        return (end - start).days + 1
+
+    expected = 0
+    cursor = start
+    while cursor <= end:
+        week_start, week_end = get_week_boundaries(cursor.year, week_number_for(cursor, week_starts_on), week_starts_on)
+        segment_start = max(start, week_start)
+        segment_end = min(end, week_end)
+        expected += min(weekly_target, (segment_end - segment_start).days + 1)
+        cursor = week_end + timedelta(days=1)
+    return expected
+
+
+def _habit_progress_units(
+    habit: dict,
+    logs_by_habit: dict[str, list[dict]],
+    start: date,
+    end: date,
+    week_starts_on: str,
+) -> tuple[float, int]:
+    if end < start:
+        return 0.0, 0
+
+    completed_logs = [
+        log
+        for log in logs_by_habit.get(str(habit["id"]), [])
+        if log.get("completed") and start <= date.fromisoformat(log["date"]) <= end
+    ]
+
+    expected_count = _habit_expected_occurrences(habit.get("frequency"), start, end, week_starts_on)
+    completed_count = len(completed_logs)
+
+    if (habit.get("frequency") or "daily") == "flexible":
+        expected_count = 1
+        completed_count = 1 if completed_count > 0 else 0
+
+    if expected_count <= 0:
+        return 0.0, 0
+
+    return float(min(completed_count, expected_count)), expected_count
+
+
+def _derive_linked_progress(done_units: float, total_units: int, stored_progress: int | float | None) -> int:
+    stored = _clamp_progress(stored_progress)
+    if total_units <= 0:
+        return stored
+    derived = round((done_units / total_units) * 100)
+    return max(stored, _clamp_progress(derived))
+
+
+def _build_analytics_rollups(
+    db: Client,
+    session_id: UUID,
+    *,
+    reference_day: date,
+    current_year: int,
+    current_month: int,
+    current_week_number: int,
+    week_starts_on: str,
+) -> dict:
+    year_start = date(current_year, 1, 1)
+
+    yearly_goals = yg_db.list_yearly_goals(db, session_id, current_year)
+    monthly_goals = plans_db.list_monthly_goals_for_year(db, session_id, current_year)
+    weekly_goals = plans_db.list_weekly_goals_for_year(db, session_id, current_year)
+    priorities_for_year = plans_db.list_daily_priorities_for_range(db, session_id, year_start, reference_day)
+    habits = habits_db.list_habits(db, session_id, active_only=True)
+    habit_logs = habits_db.list_habit_logs_for_session(db, session_id, year_start, reference_day)
+
+    priorities_by_weekly: dict[str, list[dict]] = {}
+    for item in priorities_for_year:
+        weekly_goal_id = item.get("weekly_goal_id")
+        if weekly_goal_id:
+            priorities_by_weekly.setdefault(str(weekly_goal_id), []).append(item)
+
+    logs_by_habit: dict[str, list[dict]] = {}
+    for log in habit_logs:
+        logs_by_habit.setdefault(str(log["habit_id"]), []).append(log)
+
+    habits_by_weekly: dict[str, list[dict]] = {}
+    habits_by_monthly: dict[str, list[dict]] = {}
+    habits_by_yearly: dict[str, list[dict]] = {}
+    for habit in habits:
+        if habit.get("weekly_goal_id"):
+            habits_by_weekly.setdefault(str(habit["weekly_goal_id"]), []).append(habit)
+        if habit.get("monthly_goal_id"):
+            habits_by_monthly.setdefault(str(habit["monthly_goal_id"]), []).append(habit)
+        if habit.get("yearly_goal_id"):
+            habits_by_yearly.setdefault(str(habit["yearly_goal_id"]), []).append(habit)
+
+    weekly_progress_by_id: dict[str, int] = {}
+    for goal in weekly_goals:
+        goal_id = str(goal["id"])
+        goal_week_start, goal_week_end = get_week_boundaries(int(goal["year"]), int(goal["week_number"]), week_starts_on)
+        effective_end = min(reference_day, goal_week_end)
+        if effective_end < goal_week_start:
+            weekly_progress_by_id[goal_id] = _clamp_progress(goal.get("progress"))
+            continue
+
+        linked_priorities = [
+            item
+            for item in priorities_by_weekly.get(goal_id, [])
+            if goal_week_start <= date.fromisoformat(item["date"]) <= effective_end
+        ]
+        completed_priority_count = sum(1 for item in linked_priorities if item.get("completed"))
+        total_priority_count = len(linked_priorities)
+
+        completed_habit_units = 0.0
+        total_habit_units = 0
+        for habit in habits_by_weekly.get(goal_id, []):
+            completed_units, total_units = _habit_progress_units(habit, logs_by_habit, goal_week_start, effective_end, week_starts_on)
+            completed_habit_units += completed_units
+            total_habit_units += total_units
+
+        weekly_progress_by_id[goal_id] = _derive_linked_progress(
+            completed_priority_count + completed_habit_units,
+            total_priority_count + total_habit_units,
+            goal.get("progress"),
+        )
+
+    weekly_goals_by_monthly: dict[str, list[dict]] = {}
+    for goal in weekly_goals:
+        monthly_goal_id = goal.get("monthly_goal_id")
+        if monthly_goal_id:
+            weekly_goals_by_monthly.setdefault(str(monthly_goal_id), []).append(goal)
+
+    monthly_progress_by_id: dict[str, int] = {}
+    for goal in monthly_goals:
+        goal_id = str(goal["id"])
+        goal_month_start = date(int(goal["year"]), int(goal["month"]), 1)
+        goal_month_end = date(int(goal["year"]), int(goal["month"]), calendar.monthrange(int(goal["year"]), int(goal["month"]))[1])
+        effective_end = min(reference_day, goal_month_end)
+        if effective_end < goal_month_start:
+            monthly_progress_by_id[goal_id] = _clamp_progress(goal.get("progress"))
+            continue
+
+        linked_weeklies = weekly_goals_by_monthly.get(goal_id, [])
+        completed_weekly_units = sum(
+            weekly_progress_by_id.get(str(linked["id"]), _clamp_progress(linked.get("progress"))) / 100
+            for linked in linked_weeklies
+        )
+        total_weekly_units = len(linked_weeklies)
+
+        completed_habit_units = 0.0
+        total_habit_units = 0
+        for habit in habits_by_monthly.get(goal_id, []):
+            completed_units, total_units = _habit_progress_units(habit, logs_by_habit, goal_month_start, effective_end, week_starts_on)
+            completed_habit_units += completed_units
+            total_habit_units += total_units
+
+        monthly_progress_by_id[goal_id] = _derive_linked_progress(
+            completed_weekly_units + completed_habit_units,
+            total_weekly_units + total_habit_units,
+            goal.get("progress"),
+        )
+
+    monthly_goals_by_yearly: dict[str, list[dict]] = {}
+    for goal in monthly_goals:
+        yearly_goal_id = goal.get("yearly_goal_id")
+        if yearly_goal_id:
+            monthly_goals_by_yearly.setdefault(str(yearly_goal_id), []).append(goal)
+
+    yearly_progress_by_id: dict[str, int] = {}
+    for goal in yearly_goals:
+        goal_id = str(goal["id"])
+        linked_monthlies = monthly_goals_by_yearly.get(goal_id, [])
+        completed_monthly_units = sum(
+            monthly_progress_by_id.get(str(linked["id"]), _clamp_progress(linked.get("progress"))) / 100
+            for linked in linked_monthlies
+        )
+        total_monthly_units = len(linked_monthlies)
+
+        completed_habit_units = 0.0
+        total_habit_units = 0
+        for habit in habits_by_yearly.get(goal_id, []):
+            completed_units, total_units = _habit_progress_units(habit, logs_by_habit, year_start, reference_day, week_starts_on)
+            completed_habit_units += completed_units
+            total_habit_units += total_units
+
+        yearly_progress_by_id[goal_id] = _derive_linked_progress(
+            completed_monthly_units + completed_habit_units,
+            total_monthly_units + total_habit_units,
+            goal.get("progress"),
+        )
+
+    current_weekly_progress = [
+        progress
+        for goal_id, progress in weekly_progress_by_id.items()
+        if any(str(goal["id"]) == goal_id and int(goal["week_number"]) == current_week_number for goal in weekly_goals)
+    ]
+    current_monthly_progress = [
+        progress
+        for goal_id, progress in monthly_progress_by_id.items()
+        if any(str(goal["id"]) == goal_id and int(goal["month"]) == current_month for goal in monthly_goals)
+    ]
+
+    return {
+        "yearly_progress": _average_progress(list(yearly_progress_by_id.values())),
+        "weekly_goal_progress_by_id": weekly_progress_by_id,
+        "monthly_goal_progress_by_id": monthly_progress_by_id,
+        "yearly_goal_progress_by_id": yearly_progress_by_id,
+        "weekly_completion_rate": _average_progress(current_weekly_progress),
+        "monthly_completion_rate": _average_progress(current_monthly_progress),
+    }
 
 
 def _compute_execution_streaks(db: Client, session_id: UUID, today: date) -> tuple[int, int]:

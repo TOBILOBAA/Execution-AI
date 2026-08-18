@@ -31,9 +31,9 @@ export function YearlyAIGuidancePanel() {
       </div>
       <div className="space-y-5">
         {[
-          { icon: "explore", label: "Choose A Direction That Matters", body: "Your yearly goals should reflect who you want to become, not just what you want to finish." },
-          { icon: "my_location", label: "Write The Outcome Clearly", body: "A strong yearly goal should be specific enough that you can recognize when it is done." },
-          { icon: "stairs", label: "Think In Real Progress", body: "Your yearly goal should be clear enough that it can break down into monthly, weekly, and daily action." },
+          { icon: "filter_1", label: "Start Narrow", body: "Begin with one area that truly matters. A few clear yearly goals are more useful than a long list you won't revisit." },
+          { icon: "my_location", label: "Name The Outcome", body: "\u201CGrow spiritually\u201D is too broad. \u201CFinish a full Bible study plan by November\u201D gives you something concrete to plan toward." },
+          { icon: "volunteer_activism", label: "Keep It Meaningful", body: "Choose goals you will still care about in a difficult month. Strong yearly goals should stay connected to your values, not just your ambition." },
         ].map(({ icon, label, body }) => (
           <div key={label}>
             <div className="flex items-center gap-1.5 mb-1.5">
@@ -44,27 +44,9 @@ export function YearlyAIGuidancePanel() {
           </div>
         ))}
       </div>
-
-      <div className="rounded-xl p-4 space-y-2.5" style={{ background: "#f4f6f4" }}>
-        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#8a9e97" }}>Example</p>
-        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-          <strong style={{ color: "#1a1f1e" }}>Yearly:</strong> Earn the AWS Solutions Architect certification this year.
-        </p>
-        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-          This is clear, measurable, and easy to break into smaller periods.
-        </p>
-      </div>
-
-      <div className="rounded-xl p-4 space-y-2" style={{ background: "rgba(0,108,74,0.05)" }}>
-        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#006c4a" }}>Goal Vs Routine</p>
-        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-          A broad desire like <strong style={{ color: "#1a1f1e" }}>build a closer relationship with God</strong> becomes easier to plan when you make the yearly goal concrete.
-        </p>
-        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-          <strong style={{ color: "#1a1f1e" }}>Goal:</strong> Build a closer relationship with God through a focused study of the life of Jesus this year.
-        </p>
-        <p className="text-xs leading-relaxed" style={{ color: "#6b7b74" }}>
-          <strong style={{ color: "#1a1f1e" }}>Routine:</strong> Prayer each morning, daily scripture reading, and worship during the week.
+      <div className="rounded-xl p-4" style={{ background: "#f4f6f4" }}>
+        <p className="text-xs italic leading-relaxed" style={{ color: "#6b7b74" }}>
+          &ldquo;Setting goals is the first step in turning the invisible into the visible.&rdquo; — Tony Robbins
         </p>
       </div>
     </div>

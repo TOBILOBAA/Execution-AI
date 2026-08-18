@@ -87,20 +87,30 @@ export function SecondaryTaskRow({ task, onToggle, onRemove, onEdit }: Secondary
 
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+            className="hidden h-8 w-8 items-center justify-center rounded-full transition-colors sm:inline-flex"
             style={{ color: "#8a9e97" }}
-            aria-label="Edit supporting goal"
+            aria-label="Edit secondary goal"
           >
             <span className="material-symbols-outlined text-[17px]">edit</span>
           </button>
 
           <button
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] transition-colors sm:hidden"
+            style={{ color: "#d43d3d", background: "rgba(212,61,61,0.08)" }}
+            aria-label="Delete secondary goal"
+          >
+            <span className="material-symbols-outlined text-[15px]">delete</span>
+            Delete
+          </button>
+
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="hidden h-8 w-8 items-center justify-center rounded-full transition-colors sm:inline-flex"
             style={{ color: "#8a9e97" }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = "#8a9e97"; }}
-            aria-label="Delete supporting goal"
+            aria-label="Delete secondary goal"
           >
             <span className="material-symbols-outlined text-[17px]">delete</span>
           </button>
