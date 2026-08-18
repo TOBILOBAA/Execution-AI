@@ -111,29 +111,6 @@ const BUILT_FOR_GROUPS = [
   },
 ];
 
-const SYSTEM_LAYERS = [
-  {
-    label: "Yearly direction",
-    copy: "Set the long-term goals that define what this season is really about.",
-  },
-  {
-    label: "Monthly focus",
-    copy: "Turn direction into a smaller set of active priorities that can realistically move.",
-  },
-  {
-    label: "Weekly commitments",
-    copy: "Define the work that must happen now so momentum stays grounded in real priorities.",
-  },
-  {
-    label: "Daily execution",
-    copy: "Work from a focused day plan instead of reacting to scattered tasks and noise.",
-  },
-  {
-    label: "Reports and reflections",
-    copy: "Review execution patterns over time so improvement is based on evidence, not memory.",
-  },
-];
-
 export default function RootPage() {
   return (
     <main className="min-h-screen bg-[#f8f9fa] text-[#2b3437]">
@@ -162,13 +139,13 @@ export default function RootPage() {
         </nav>
       </div>
 
-      <section className="mx-auto grid max-w-7xl items-center gap-16 px-6 py-14 lg:grid-cols-[0.92fr_1.08fr] lg:py-18">
-        <div>
+      <section className="mx-auto max-w-7xl px-6 py-16 lg:py-24">
+        <div className="max-w-4xl">
           <span className="inline-flex animate-[pulse-dot_1.9s_ease-in-out_infinite] rounded-full border border-[#bfe7d4] bg-[#eef5f0] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.2em] text-[#006c4a] shadow-[0_12px_30px_rgba(0,108,74,0.08)]">
             Beta Access
           </span>
 
-          <h1 className="mt-8 max-w-2xl font-headline text-6xl font-extrabold leading-[0.97] tracking-[-0.05em] text-[#13241d] md:text-7xl">
+          <h1 className="mt-8 max-w-3xl font-headline text-5xl font-extrabold leading-[0.97] tracking-[-0.05em] text-[#13241d] sm:text-6xl md:text-7xl">
             Your goals.
             <br />
             Your behavior.
@@ -176,7 +153,7 @@ export default function RootPage() {
             <span className="text-[#006c4a]">Your growth.</span>
           </h1>
 
-          <p className="mt-7 max-w-[42rem] text-[20px] font-medium leading-[1.78] tracking-[-0.015em] text-[#4e5955]">
+          <p className="mt-7 max-w-3xl text-[18px] font-medium leading-[1.9] tracking-[-0.015em] text-[#4e5955] sm:text-[20px]">
             Execution AI is an AI-powered behavioral intelligence system for long-term goal execution. It connects goals,
             routines, reflections, and historical activity so users can follow through with more clarity and improve how
             they execute over time.
@@ -207,10 +184,10 @@ export default function RootPage() {
             </a>
           </div>
 
-          <div className="mt-10 border-t border-[#eaeff1] pt-5">
+          <div className="mt-12 max-w-3xl border-t border-[#eaeff1] pt-5">
             <p className="text-[13px] font-medium tracking-[-0.01em] text-[#52605b]">Be among the first to experience Execution AI.</p>
 
-            <div className="mt-3 inline-flex max-w-[41rem] rounded-[20px] border border-[#e5ece8] bg-white px-4 py-3 shadow-[0_6px_14px_rgba(23,41,32,0.045)]">
+            <div className="mt-3 inline-flex w-full max-w-[41rem] rounded-[20px] border border-[#e5ece8] bg-white px-4 py-3 shadow-[0_6px_14px_rgba(23,41,32,0.045)]">
               <div className="grid gap-3 sm:grid-cols-3 sm:gap-6">
                 {EARLY_ACCESS_ITEMS.map((item) => (
                   <div
@@ -230,8 +207,6 @@ export default function RootPage() {
             </div>
           </div>
         </div>
-
-        <HeroProductVisual />
       </section>
 
       <section id="features" className="border-y border-[#eaeff1] bg-white py-20">
@@ -461,48 +436,6 @@ export default function RootPage() {
         </div>
       </footer>
     </main>
-  );
-}
-
-function HeroProductVisual() {
-  return (
-    <div className="relative">
-      <div className="absolute -left-8 top-10 hidden h-32 w-32 rounded-full bg-[#85f8c4]/24 blur-3xl lg:block" />
-      <div className="absolute -right-6 bottom-10 hidden h-36 w-36 rounded-full bg-[#006c4a]/20 blur-3xl lg:block" />
-
-      <div className="relative overflow-hidden rounded-[36px] border border-[#e6ece8] bg-white p-6 shadow-[0_34px_80px_rgba(22,39,31,0.15)]">
-        <div className="rounded-[30px] bg-[linear-gradient(180deg,#0c1e17_0%,#10231c_100%)] p-6 text-white lg:p-7">
-          <div className="grid gap-6">
-            <div className="rounded-[26px] border border-white/8 bg-white/[0.04] p-6">
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#85f8c4]">What the system connects</p>
-              <h3 className="mt-4 text-[32px] font-extrabold leading-tight tracking-[-0.04em] text-white">
-                From direction to action to reflection.
-              </h3>
-              <p className="mt-4 max-w-xl text-[15px] leading-7 text-white/70">
-                Instead of showing fake stats, Execution AI keeps the structure simple: connect the layers of planning,
-                capture what actually happened, then learn from the pattern over time.
-              </p>
-            </div>
-
-            <div className="rounded-[26px] border border-white/8 bg-black/10 p-5">
-              <div className="grid gap-4">
-                {SYSTEM_LAYERS.map((item, index) => (
-                  <div key={item.label} className="grid grid-cols-[auto_1fr] gap-4 rounded-[20px] border border-white/6 bg-white/[0.03] p-4">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/[0.04] text-sm font-extrabold text-[#85f8c4]">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <div>
-                      <p className="text-sm font-bold text-white">{item.label}</p>
-                      <p className="mt-1 text-[14px] leading-6 text-white/65">{item.copy}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 
