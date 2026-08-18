@@ -117,29 +117,6 @@ const EARLY_BELIEVERS = [
   },
 ];
 
-const HERO_YEARLY_GOALS = [
-  {
-    category: "Business",
-    title: "Grow Execution AI to 1M users",
-    progress: 84,
-  },
-  {
-    category: "Career",
-    title: "Get AWS Solutions Architect certification",
-    progress: 71,
-  },
-  {
-    category: "Academic",
-    title: "Get thesis approved and defended",
-    progress: 82,
-  },
-  {
-    category: "Spiritual",
-    title: "Build a stronger prayer rhythm",
-    progress: 76,
-  },
-];
-
 export default function RootPage() {
   return (
     <main className="min-h-screen bg-[#f8f9fa] text-[#2b3437]">
@@ -168,8 +145,8 @@ export default function RootPage() {
         </nav>
       </div>
 
-      <section className="mx-auto grid max-w-7xl items-center gap-16 px-6 py-14 lg:grid-cols-[0.92fr_1.08fr] lg:py-18">
-        <div>
+      <section className="mx-auto max-w-7xl px-6 py-16 lg:py-24">
+        <div className="max-w-4xl">
           <span className="inline-flex animate-[pulse-dot_1.9s_ease-in-out_infinite] rounded-full border border-[#bfe7d4] bg-[#eef5f0] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.2em] text-[#006c4a] shadow-[0_12px_30px_rgba(0,108,74,0.08)]">
             Beta access
           </span>
@@ -217,7 +194,7 @@ export default function RootPage() {
               For people intentional about their growth who already set yearly goals and want better follow-through.
             </p>
 
-            <div className="mt-3 inline-flex max-w-[41rem] rounded-[20px] border border-[#e5ece8] bg-white px-4 py-3 shadow-[0_6px_14px_rgba(23,41,32,0.045)]">
+            <div className="mt-3 w-full max-w-[41rem] rounded-[20px] border border-[#e5ece8] bg-white px-4 py-3 shadow-[0_6px_14px_rgba(23,41,32,0.045)]">
               <div className="grid gap-3 sm:grid-cols-3 sm:gap-6">
                 {EARLY_ACCESS_ITEMS.map((item) => (
                   <div
@@ -237,8 +214,6 @@ export default function RootPage() {
             </div>
           </div>
         </div>
-
-        <HeroProductVisual />
       </section>
 
       <section id="features" className="border-y border-[#eaeff1] bg-white py-20">
@@ -473,72 +448,6 @@ export default function RootPage() {
         </div>
       </footer>
     </main>
-  );
-}
-
-function HeroProductVisual() {
-  return (
-    <div className="relative mx-auto w-full max-w-[38rem]">
-      <div className="absolute -left-8 top-10 hidden h-32 w-32 rounded-full bg-[#85f8c4]/24 blur-3xl lg:block" />
-      <div className="absolute -right-6 bottom-10 hidden h-36 w-36 rounded-full bg-[#006c4a]/20 blur-3xl lg:block" />
-
-      <div className="relative overflow-hidden rounded-[36px] border border-[#e6ece8] bg-white p-6 shadow-[0_34px_80px_rgba(22,39,31,0.15)]">
-        <div className="rounded-[30px] bg-[linear-gradient(180deg,#0c1e17_0%,#10231c_100%)] p-6 text-white lg:p-7">
-          <div className="mt-6 rounded-[26px] border border-white/8 bg-white/[0.04] p-5">
-            <div className="flex items-start justify-between gap-4 rounded-[22px] border border-white/8 bg-[radial-gradient(circle_at_35%_30%,rgba(133,248,196,0.16),rgba(255,255,255,0.02)_58%,rgba(255,255,255,0.01)_100%)] p-5">
-              <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/44">Yearly progress</p>
-                <p className="mt-4 text-[74px] font-extrabold leading-none tracking-[-0.08em] text-[#85f8c4]">80%</p>
-                <p className="mt-2 text-[14px] font-semibold uppercase tracking-[0.14em] text-white/58">
-                  completion
-                </p>
-              </div>
-              <span className="rounded-full border border-[#67e2aa]/35 px-3 py-1 text-[10px] font-bold tracking-[0.14em] text-[#85f8c4]">
-                2026
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-6 rounded-[26px] border border-white/8 bg-white/[0.04] p-5">
-            <div className="space-y-4">
-              {HERO_YEARLY_GOALS.map((goal) => (
-                <HeroYearlyGoalRow key={goal.title} {...goal} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function HeroYearlyGoalRow({
-  category,
-  title,
-  progress,
-}: {
-  category: string;
-  title: string;
-  progress: number;
-}) {
-  return (
-    <div className="rounded-[20px] border border-white/7 bg-black/10 p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <span className="inline-flex rounded-full border border-[#67e2aa]/20 bg-white/6 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#85f8c4]">
-            {category}
-          </span>
-          <p className="mt-3 text-[16px] font-semibold leading-6 text-white/88">{title}</p>
-        </div>
-        <span className="text-[18px] font-extrabold tracking-[-0.03em] text-[#85f8c4]">{progress}%</span>
-      </div>
-      <div className="mt-4 h-2.5 rounded-full bg-white/10">
-        <div
-          className="h-2.5 rounded-full bg-[linear-gradient(90deg,#67e2aa_0%,#8df7c7_100%)]"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-    </div>
   );
 }
 
