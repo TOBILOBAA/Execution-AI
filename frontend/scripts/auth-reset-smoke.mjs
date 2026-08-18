@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import { chromium } from "playwright";
 import { createClient } from "@supabase/supabase-js";
+import { buildResendTestEmail } from "./test-email.mjs";
 
 function readEnvFile(filePath) {
   const out = {};
@@ -84,7 +85,7 @@ async function main() {
   });
 
   const stamp = Date.now();
-  const email = `auth-reset-${stamp}@example.com`;
+  const email = buildResendTestEmail("auth-reset", stamp);
   const startingPassword = `Start!${stamp}`;
   const newPassword = `Reset!${stamp}`;
   let authUserId = null;

@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import { chromium } from "playwright";
 import { createClient } from "@supabase/supabase-js";
+import { buildResendTestEmail } from "./test-email.mjs";
 
 function readEnvFile(filePath) {
   const out = {};
@@ -70,7 +71,7 @@ async function main() {
   });
 
   const stamp = Date.now();
-  const email = `onboarding-restore-${stamp}@example.com`;
+  const email = buildResendTestEmail("onboarding-restore", stamp);
   const password = `Restore!${stamp}`;
   let authUserId = null;
   let browser = null;

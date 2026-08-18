@@ -24,6 +24,7 @@ import { isUuid } from "./uuid";
 import type { DashboardMetrics } from "./types";
 import {
   ApiError,
+  authApi,
   categoriesApi,
   yearlyGoalsApi,
   monthlyPlanApi,
@@ -1300,67 +1301,24 @@ export const useAppStore = create<AppState>()(
           return { success: true };
         }
 
-        const { data, error } = await sb.auth.signUp({
-          email: em,
-          password,
-          options: {
-            data: { full_name: name.trim() },
-            emailRedirectTo: buildPublicUrl("/auth/callback"),
-          },
-        });
-        if (error) {
-          const raw = error.message ?? "";
-          if (/confirmation email|sending confirmation/i.test(raw)) {
-            return {
-              success: false,
-              error:
-                "Supabase could not send the confirmation email. Fix it in the Supabase Dashboard: Authentication → Providers → Email — turn off “Confirm email” for local dev, or Project Settings → Authentication → set up Custom SMTP (e.g. Resend). Docs: https://supabase.com/docs/guides/auth/auth-smtp",
-            };
-          }
-          return { success: false, error: raw };
-        }
-        if (!data.user?.email) return { success: false, error: "Sign up failed." };
-
-        if (!data.session) {
+        try {
+          const redirectTo = buildPublicUrl("/auth/callback");
+          await authApi.sendSignupEmail({
+            name: name.trim(),
+            email: em,
+            password,
+            ...(redirectTo ? { redirect_to: redirectTo } : {}),
+          });
           return {
             success: true,
             needsEmailConfirmation: true,
           };
+        } catch (error) {
+          if (error instanceof ApiError) {
+            return { success: false, error: error.message || "Sign up failed." };
+          }
+          return { success: false, error: error instanceof Error ? error.message : "Sign up failed." };
         }
-
-        const u = data.user;
-        const authUser: AuthUser = {
-          id: u.id,
-          name: name.trim(),
-          email: u.email ?? em,
-          plan: "Free",
-        };
-        set({
-          currentUser: authUser,
-          onboardingComplete: false,
-          onboardingStep: 1,
-          kickoffPending: false,
-          monthlyPlanDraft: null,
-          weeklyPlanDraft: null,
-          dailyPlanDraft: null,
-          categories: DEFAULT_CATEGORIES,
-          yearlyGoals: [],
-          monthlyGoals: [],
-          weeklyGoals: [],
-          dailyPriorities: [],
-          secondaryTasks: [],
-          habits: [],
-          metrics: EMPTY_DASHBOARD_METRICS,
-          reports: [],
-          reportsLoading: false,
-          reportsHydrated: false,
-          pendingRecaps: [],
-          syncError: null,
-          authReady: true,
-          workspaceHydrating: true,
-        });
-        await attachBackendAfterAuth(u.id, get, set);
-        return { success: true };
       },
 
       sendEmailOtp: async (email, opts) => {
@@ -1533,23 +1491,22 @@ export const useAppStore = create<AppState>()(
         if (isAuthLocalOnly()) {
           return { success: false, error: "Password reset is not used in local test mode." };
         }
-        const sb = getSupabaseBrowser();
-        if (!sb) {
+        if (!getSupabaseBrowser()) {
           return { success: false, error: "Configure Supabase environment variables to reset passwords." };
         }
-        const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-          redirectTo: buildPublicUrl("/auth/update-password"),
-        });
-        if (error) {
-          const message = describeSupabaseAuthError(error.message);
-          return {
-            success: false,
-            error: isAuthDeliveryFailureMessage(message, error.status)
-              ? `${message} Check Supabase → Authentication → SMTP (Resend API key, sender domain DNS) and the Resend dashboard for errors.`
-              : message,
-          };
+        try {
+          const redirectTo = buildPublicUrl("/auth/update-password");
+          await authApi.sendPasswordResetEmail({
+            email: email.trim().toLowerCase(),
+            ...(redirectTo ? { redirect_to: redirectTo } : {}),
+          });
+          return { success: true };
+        } catch (error) {
+          if (error instanceof ApiError) {
+            return { success: false, error: error.message || "Could not send reset email." };
+          }
+          return { success: false, error: error instanceof Error ? error.message : "Could not send reset email." };
         }
-        return { success: true };
       },
 
       // ── Backend session ──────────────────────────────────────────────────────

@@ -4,8 +4,8 @@ const APP_URL = "/auth";
 
 const FEATURE_PILLS = [
   "Behavior Intelligence",
-  "Smart Planning",
-  "Accountability That Works",
+  "Linked Goal System",
+  "Reflective Reporting",
 ];
 
 const FEATURE_CARDS = [
@@ -93,24 +93,44 @@ const EARLY_ACCESS_ITEMS = [
   { icon: "schedule", line1: "100% free", line2: "during beta" },
 ];
 
-const EARLY_BELIEVERS = [
+const BUILT_FOR_GROUPS = [
   {
-    name: "Daniel K.",
-    role: "Founder",
-    copy: "Execution AI helps me focus on what actually matters. It feels less like a planner and more like a system that pushes me to follow through.",
-    avatar: "DK",
+    title: "Founders and operators",
+    copy: "People juggling long-range direction with day-to-day execution who need a system that keeps priorities connected.",
+    icon: "rocket_launch",
   },
   {
-    name: "Aisha M.",
-    role: "Graduate student",
-    copy: "The structure finally connects my long-term goals to what I am doing today. That is the first time a tool has made my planning feel coherent.",
-    avatar: "AM",
+    title: "Students and researchers",
+    copy: "People working through complex seasons who want to translate big academic or personal goals into consistent weekly action.",
+    icon: "school",
   },
   {
-    name: "Marcus T.",
-    role: "Operator",
-    copy: "The behavior angle is what makes it different. It is not just telling me what to do. It is showing me how I actually work.",
-    avatar: "MT",
+    title: "Builders improving follow-through",
+    copy: "Anyone who already sets goals but wants clearer insight into what is moving, what is drifting, and how their behavior is shaping results.",
+    icon: "psychology",
+  },
+];
+
+const SYSTEM_LAYERS = [
+  {
+    label: "Yearly direction",
+    copy: "Set the long-term goals that define what this season is really about.",
+  },
+  {
+    label: "Monthly focus",
+    copy: "Turn direction into a smaller set of active priorities that can realistically move.",
+  },
+  {
+    label: "Weekly commitments",
+    copy: "Define the work that must happen now so momentum stays grounded in real priorities.",
+  },
+  {
+    label: "Daily execution",
+    copy: "Work from a focused day plan instead of reacting to scattered tasks and noise.",
+  },
+  {
+    label: "Reports and reflections",
+    copy: "Review execution patterns over time so improvement is based on evidence, not memory.",
   },
 ];
 
@@ -129,7 +149,7 @@ export default function RootPage() {
             <a href="#features" className="transition-colors hover:text-[#10261d]">Features</a>
             <a href="#how" className="transition-colors hover:text-[#10261d]">How It Works</a>
             <a href="#why" className="transition-colors hover:text-[#10261d]">Why Execution AI</a>
-            <a href="#believers" className="transition-colors hover:text-[#10261d]">Early Believers</a>
+            <a href="#who" className="transition-colors hover:text-[#10261d]">Who It&apos;s For</a>
           </div>
 
           <a
@@ -157,8 +177,9 @@ export default function RootPage() {
           </h1>
 
           <p className="mt-7 max-w-[42rem] text-[20px] font-medium leading-[1.78] tracking-[-0.015em] text-[#4e5955]">
-            Execution AI helps ambitious builders turn long-range direction into structured daily execution with linked planning,
-            AI support, and visibility into the patterns shaping progress.
+            Execution AI is an AI-powered behavioral intelligence system for long-term goal execution. It connects goals,
+            routines, reflections, and historical activity so users can follow through with more clarity and improve how
+            they execute over time.
           </p>
 
           <div className="mt-7 flex flex-wrap gap-4 text-sm font-semibold text-[#586064]">
@@ -221,15 +242,15 @@ export default function RootPage() {
                 What is Execution AI?
               </p>
               <h2 className="mt-4 font-headline text-4xl font-extrabold leading-tight tracking-[-0.04em] text-[#13241d]">
-                Your personal system for
+                Behavioral intelligence for
                 <br />
-                <span className="text-[#006c4a]">execution and growth.</span>
+                <span className="text-[#006c4a]">long-term execution.</span>
               </h2>
             </div>
 
             <p className="max-w-lg text-lg leading-8 text-[#586064]">
-              Execution AI is not just another planner. It helps you structure your goals, execute intentionally, understand your
-              behavioral patterns, and improve how you follow through over time.
+              Execution AI goes beyond planning. It helps users connect long-range goals to daily action, understand execution
+              patterns over time, and make better decisions about how they work.
             </p>
           </div>
 
@@ -308,9 +329,15 @@ export default function RootPage() {
               <p className="mt-4 max-w-md text-sm leading-7 text-white/76">
                 Execution AI helps you spot the rhythms, routines, and friction points that shape whether goals actually move.
               </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <InteractiveMetric value="72%" label="Goal alignment" />
-                <InteractiveMetric value="85%" label="Consistency" />
+              <div className="mt-6 space-y-3 text-sm text-white/78">
+                <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/8 p-4">
+                  <span className="material-symbols-outlined text-[18px] text-[#85f8c4]">check_circle</span>
+                  <span>Connected goal layers make it easier to see what is actually moving and what is drifting.</span>
+                </div>
+                <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/8 p-4">
+                  <span className="material-symbols-outlined text-[18px] text-[#85f8c4]">check_circle</span>
+                  <span>Reports and reflections turn execution history into insight instead of leaving it buried in memory.</span>
+                </div>
               </div>
             </div>
           </div>
@@ -384,33 +411,26 @@ export default function RootPage() {
         </div>
       </section>
 
-      <section id="believers" className="py-20">
+      <section id="who" className="py-20">
         <div className="mx-auto max-w-7xl px-6 text-center">
-          <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-[#006c4a]">Early believers</p>
+          <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-[#006c4a]">Who it&apos;s for</p>
           <h2 className="mt-4 text-4xl font-extrabold tracking-[-0.04em] text-[#13241d] md:text-5xl">
-            People already see the
-            <span className="text-[#006c4a]"> direction.</span>
+            Built for people who take
+            <span className="text-[#006c4a]"> execution seriously.</span>
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-[#586064]">
-            Execution AI is still early, but the signal is clear: the combination of structured planning and behavioral insight is resonating.
+            Execution AI is for people who already care about goals and consistency, but want a clearer system for turning
+            direction into follow-through and understanding what is affecting progress.
           </p>
 
           <div className="mt-12 grid gap-6 md:grid-cols-3">
-            {EARLY_BELIEVERS.map((item) => (
-              <div key={item.name} className="interactive-card flex h-full flex-col rounded-[30px] border border-[#e6ece8] bg-white p-7 text-left shadow-[0_18px_42px_rgba(22,39,31,0.05)] transition-all hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(22,39,31,0.1)]">
-                <div className="flex items-center gap-1 text-[#006c4a]">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <span key={index} className="material-symbols-outlined filled text-[18px]">star</span>
-                  ))}
+            {BUILT_FOR_GROUPS.map((item) => (
+              <div key={item.title} className="interactive-card flex h-full flex-col rounded-[30px] border border-[#e6ece8] bg-white p-7 text-left shadow-[0_18px_42px_rgba(22,39,31,0.05)] transition-all hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(22,39,31,0.1)]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef5f0] text-[#006c4a] shadow-sm">
+                  <span className="material-symbols-outlined text-[24px]">{item.icon}</span>
                 </div>
-                <p className="mt-5 flex-1 text-[16px] leading-8 text-[#586064]">&ldquo;{item.copy}&rdquo;</p>
-                <div className="mt-8 flex items-center gap-4">
-                  <AvatarBadge label={item.avatar} />
-                  <div>
-                    <p className="text-lg font-extrabold tracking-[-0.03em] text-[#1a2722]">{item.name}</p>
-                    <p className="mt-1 text-sm font-medium text-[#6c7873]">{item.role}</p>
-                  </div>
-                </div>
+                <h3 className="mt-6 text-[24px] font-extrabold tracking-[-0.03em] text-[#1a2722]">{item.title}</h3>
+                <p className="mt-4 flex-1 text-[16px] leading-8 text-[#586064]">{item.copy}</p>
               </div>
             ))}
           </div>
@@ -424,7 +444,7 @@ export default function RootPage() {
             <p className="mt-4 text-sm leading-7 text-white/70">Your system for clarity, focus, accountability, and execution.</p>
           </div>
 
-          <Footer title="Product" items={[{ label: "Features", href: "#features" }, { label: "How It Works", href: "#how" }, { label: "Early Believers", href: "#believers" }]} />
+          <Footer title="Product" items={[{ label: "Features", href: "#features" }, { label: "How It Works", href: "#how" }, { label: "Who It's For", href: "#who" }]} />
           <Footer title="Company" items={[{ label: "Privacy Policy", href: "/privacy" }, { label: "Terms of Service", href: "/terms" }, { label: "Contact", href: "mailto:hello@executionai.me" }]} />
 
           <div>
@@ -452,133 +472,36 @@ function HeroProductVisual() {
 
       <div className="relative overflow-hidden rounded-[36px] border border-[#e6ece8] bg-white p-6 shadow-[0_34px_80px_rgba(22,39,31,0.15)]">
         <div className="rounded-[30px] bg-[linear-gradient(180deg,#0c1e17_0%,#10231c_100%)] p-6 text-white lg:p-7">
-          <div className="grid gap-5 lg:grid-cols-2">
-            <HeroStatCard
-              title="Yearly alignment"
-              eyebrow="Career expansion"
-              value="72%"
-              copy="You are staying aligned with your highest priority goals this year."
-            />
-            <BehaviorReviewCard />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+          <div className="grid gap-6">
+            <div className="rounded-[26px] border border-white/8 bg-white/[0.04] p-6">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#85f8c4]">What the system connects</p>
+              <h3 className="mt-4 text-[32px] font-extrabold leading-tight tracking-[-0.04em] text-white">
+                From direction to action to reflection.
+              </h3>
+              <p className="mt-4 max-w-xl text-[15px] leading-7 text-white/70">
+                Instead of showing fake stats, Execution AI keeps the structure simple: connect the layers of planning,
+                capture what actually happened, then learn from the pattern over time.
+              </p>
+            </div>
 
-function HeroStatCard({
-  title,
-  eyebrow,
-  value,
-  copy,
-}: {
-  title: string;
-  eyebrow: string;
-  value: string;
-  copy: string;
-}) {
-  return (
-    <div className="rounded-[26px] border border-white/8 bg-white/[0.04] p-6 text-white">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/42">{title}</p>
-          <p className="mt-3 text-sm font-medium text-white/62">{eyebrow}</p>
-        </div>
-        <span className="rounded-full border border-[#67e2aa]/40 px-3 py-1 text-[11px] font-bold tracking-[0.14em] text-[#85f8c4]">
-          2025
-        </span>
-      </div>
-      <p className="mt-4 text-[56px] font-extrabold leading-none tracking-[-0.05em] text-white">{value}</p>
-      <div className="mt-4 h-2 rounded-full bg-white/10">
-        <div className="h-2 w-[72%] rounded-full bg-[linear-gradient(90deg,#67e2aa_0%,#8df7c7_100%)]" />
-      </div>
-      <p className="mt-4 text-[15px] leading-7 text-white/62">{copy}</p>
-      <div className="mt-6 space-y-4 border-t border-white/8 pt-5">
-        {[
-          ["Career", "72%", "work"],
-          ["Health", "60%", "favorite"],
-          ["Finance", "68%", "monetization_on"],
-          ["Growth", "85%", "menu_book"],
-        ].map(([label, progress, icon]) => (
-          <div key={label} className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-            <span className="material-symbols-outlined text-[18px] text-[#85f8c4]">{icon}</span>
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-white/82">{label}</p>
-              <div className="h-2 rounded-full bg-white/10">
-                <div
-                  className="h-2 rounded-full bg-[linear-gradient(90deg,#67e2aa_0%,#8df7c7_100%)]"
-                  style={{ width: progress }}
-                />
+            <div className="rounded-[26px] border border-white/8 bg-black/10 p-5">
+              <div className="grid gap-4">
+                {SYSTEM_LAYERS.map((item, index) => (
+                  <div key={item.label} className="grid grid-cols-[auto_1fr] gap-4 rounded-[20px] border border-white/6 bg-white/[0.03] p-4">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/[0.04] text-sm font-extrabold text-[#85f8c4]">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold text-white">{item.label}</p>
+                      <p className="mt-1 text-[14px] leading-6 text-white/65">{item.copy}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-            <span className="text-sm font-semibold text-[#85f8c4]">{progress}</span>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function BehaviorReviewCard() {
-  return (
-    <div className="rounded-[26px] border border-white/8 bg-white/[0.04] p-6 text-white">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/42">Behavior review</p>
-          <p className="mt-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#85f8c4]">Observation</p>
         </div>
-        <span className="flex h-16 w-16 items-center justify-center rounded-full border border-white/8 bg-white/[0.03] text-[#85f8c4]">
-          <span className="material-symbols-outlined text-[28px]">neurology</span>
-        </span>
       </div>
-      <div className="mt-4 rounded-[20px] border border-white/8 bg-black/10 p-5">
-        <div className="flex items-center gap-2 text-[#8df7c7]">
-          <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-          <span className="text-[11px] font-extrabold uppercase tracking-[0.16em]">Behavior pattern</span>
-        </div>
-        <p className="mt-4 text-[15px] font-medium leading-7 text-white/82">
-          From recent weeks, we&apos;ve noticed you complete more of your day when you keep the plan to one main task and one secondary goal.
-        </p>
-        <ul className="mt-4 space-y-2 text-[15px] text-white/76">
-          <li className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[16px] text-[#85f8c4]">check_circle</span>
-            1 main goal
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[16px] text-[#85f8c4]">check_circle</span>
-            1–2 secondary goals
-          </li>
-        </ul>
-      </div>
-      <div className="mt-5 border-t border-white/8 pt-5">
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#85f8c4]">Recommendation</p>
-        <p className="mt-3 text-[15px] leading-7 text-white/68">
-          Keep tomorrow lighter and protect your first deep work block before adding extra tasks.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function InteractiveMetric({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/8 p-4">
-      <p className="text-[28px] font-extrabold tracking-[-0.04em] text-[#85f8c4]">{value}</p>
-      <p className="mt-1 text-sm font-medium text-white/72">{label}</p>
-    </div>
-  );
-}
-
-function AvatarBadge({ label }: { label: string }) {
-  return (
-    <div className="relative h-14 w-14 overflow-hidden rounded-full ring-1 ring-[#dce6e1]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_28%,#d8f5e8_0%,#71cba5_36%,#0f241c_100%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(255,255,255,0.16),transparent_45%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-7 bg-[linear-gradient(180deg,transparent,rgba(4,17,13,0.44))]" />
-      <span className="absolute inset-0 flex items-center justify-center text-sm font-extrabold tracking-[0.08em] text-white">
-        {label}
-      </span>
     </div>
   );
 }

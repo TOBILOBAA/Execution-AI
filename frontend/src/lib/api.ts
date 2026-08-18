@@ -120,6 +120,11 @@ export interface Session {
   handled_recaps?: string[];
 }
 
+export interface ApiAuthEmailResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface ApiRecapQueueEntry {
   type: "weekly" | "monthly" | "quarterly" | "yearly";
   period_year: number;
@@ -447,6 +452,16 @@ export const sessionsApi = {
     },
   ) =>
     patch<Session>(`/session/${sessionId}`, updates),
+};
+
+// ─── Auth delivery ───────────────────────────────────────────────────────────
+
+export const authApi = {
+  sendSignupEmail: (data: { name: string; email: string; password: string; redirect_to?: string }) =>
+    post<ApiAuthEmailResponse>("/auth/signup-email", data),
+
+  sendPasswordResetEmail: (data: { email: string; redirect_to?: string }) =>
+    post<ApiAuthEmailResponse>("/auth/password-reset-email", data),
 };
 
 // ─── Categories ───────────────────────────────────────────────────────────────

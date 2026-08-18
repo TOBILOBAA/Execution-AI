@@ -45,6 +45,17 @@ class Settings(BaseSettings):
     )
     report_cutoff_hour: int = 18  # 18:00 UTC default
 
+    # Email delivery (used for auth + notification flows)
+    notification_public_base_url: str = ""
+    notification_email_from: str = ""
+    notification_email_reply_to: str = ""
+    notification_smtp_host: str = ""
+    notification_smtp_port: int = 465
+    notification_smtp_user: str = ""
+    notification_smtp_password: str = ""
+    notification_smtp_starttls: bool = False
+    notification_smtp_ssl: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:
