@@ -117,6 +117,13 @@ const EARLY_BELIEVERS = [
   },
 ];
 
+const HERO_SIGNAL_CHAIN = [
+  { label: "Yearly goal", value: "Launch Execution AI beta" },
+  { label: "Monthly focus", value: "Polish onboarding and reports" },
+  { label: "Weekly sprint", value: "Ship the live landing update" },
+  { label: "Today", value: "Publish and gather early feedback" },
+];
+
 export default function RootPage() {
   return (
     <main className="min-h-screen bg-[#f8f9fa] text-[#2b3437]">
@@ -145,7 +152,7 @@ export default function RootPage() {
         </nav>
       </div>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:py-24">
+      <section className="mx-auto max-w-7xl px-6 py-16 lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-12 lg:py-24">
         <div className="max-w-4xl">
           <span className="inline-flex animate-[pulse-dot_1.9s_ease-in-out_infinite] rounded-full border border-[#bfe7d4] bg-[#eef5f0] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.2em] text-[#006c4a] shadow-[0_12px_30px_rgba(0,108,74,0.08)]">
             Beta access
@@ -214,6 +221,8 @@ export default function RootPage() {
             </div>
           </div>
         </div>
+
+        <ExecutionSignalCard />
       </section>
 
       <section id="features" className="border-y border-[#eaeff1] bg-white py-20">
@@ -457,6 +466,67 @@ function InteractiveMetric({ value, label }: { value: string; label: string }) {
       <p className="text-[28px] font-extrabold tracking-[-0.04em] text-[#85f8c4]">{value}</p>
       <p className="mt-1 text-sm font-medium text-white/72">{label}</p>
     </div>
+  );
+}
+
+function ExecutionSignalCard() {
+  return (
+    <aside className="relative mt-12 lg:mt-4">
+      <div className="absolute inset-x-8 top-12 h-32 rounded-full bg-[#85f8c4]/20 blur-3xl" aria-hidden="true" />
+
+      <div className="relative overflow-hidden rounded-[32px] border border-[#dce9e2] bg-[linear-gradient(180deg,#ffffff_0%,#f5faf7_100%)] p-6 shadow-[0_24px_60px_rgba(19,36,29,0.09)]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(133,248,196,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.55),transparent_36%)]" />
+
+        <div className="relative">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#006c4a]">
+            Execution signal
+          </p>
+          <h3 className="mt-3 text-[28px] font-extrabold tracking-[-0.04em] text-[#13241d]">
+            Momentum looks strong.
+          </h3>
+
+          <p className="mt-4 max-w-sm text-[15px] leading-7 text-[#53615c]">
+            A compact view of how Execution AI links yearly direction to today&apos;s action and explains whether the user is moving well.
+          </p>
+
+          <div className="mt-6 rounded-[24px] border border-[#dfe9e4] bg-[#fdfefe] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#6b7b75]">
+                  Current read
+                </p>
+                <p className="mt-2 text-[16px] font-bold tracking-[-0.02em] text-[#183227]">
+                  Your best weeks start with one clear main goal.
+                </p>
+              </div>
+
+              <div className="shrink-0 rounded-2xl bg-[#0f241c] px-4 py-3 text-center text-white shadow-[0_18px_30px_rgba(15,36,28,0.16)]">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#85f8c4]">Signal</p>
+                <p className="mt-1 text-[24px] font-extrabold tracking-[-0.04em]">84%</p>
+              </div>
+            </div>
+
+            <div className="mt-4 h-2 rounded-full bg-[#dbe8e1]">
+              <div className="h-2 w-[84%] rounded-full bg-[linear-gradient(90deg,#0f241c_0%,#006c4a_52%,#85f8c4_100%)]" />
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {HERO_SIGNAL_CHAIN.map((item, index) => (
+              <div key={item.label} className="flex items-start gap-3 rounded-[20px] border border-[#e4ece7] bg-white/80 px-4 py-3">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eef5f0] text-[11px] font-extrabold text-[#006c4a]">
+                  {index + 1}
+                </span>
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#7a8782]">{item.label}</p>
+                  <p className="mt-1 text-[14px] font-semibold leading-6 text-[#22302a]">{item.value}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </aside>
   );
 }
 
